@@ -30,3 +30,5 @@ cmake-build-debug/
 
 # Thumbnails
 ._*
+build/
+*.txt
