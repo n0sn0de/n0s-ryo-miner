@@ -187,9 +187,9 @@ void minethd::work_main()
 	// start with root algorithm and switch later if fork version is reached
 	auto miner_algo = ::jconf::inst()->GetCurrentCoinSelection().GetDescription(1).GetMiningAlgoRoot();
 
-	cpu::minethd::cn_on_new_job set_job;
+	cpu::minethd::cn_on_new_job set_job = nullptr;
 
-	cpu::minethd::func_multi_selector<1>(&cpu_ctx, set_job, ::jconf::inst()->HaveHardwareAes(), true /*bNoPrefetch*/, miner_algo);
+	cpu::minethd::func_selector(&cpu_ctx, ::jconf::inst()->HaveHardwareAes(), true /*bNoPrefetch*/, miner_algo);
 
 	uint8_t version = 0;
 	size_t lastPoolId = 0;

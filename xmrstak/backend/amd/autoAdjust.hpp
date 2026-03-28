@@ -78,13 +78,7 @@ class autoAdjust
 
 		constexpr size_t byteToMiB = 1024u * 1024u;
 
-		auto neededAlgorithms = ::jconf::inst()->GetCurrentCoinSelection().GetAllAlgorithms();
-
-		size_t hashMemSize = 0;
-		for(const auto algo : neededAlgorithms)
-		{
-			hashMemSize = std::max(hashMemSize, algo.Mem());
-		}
+		size_t hashMemSize = CN_MEMORY;
 
 		std::string conf;
 		for(auto& ctx : devVec)
@@ -110,19 +104,7 @@ class autoAdjust
 				}
 			}
 
-			// check if cryptonight_monero_v8 is selected for the user or dev pool
-			bool useCryptonight_v8 = (std::find(neededAlgorithms.begin(), neededAlgorithms.end(), cryptonight_monero_v8) != neededAlgorithms.end());
-
-			// true for all cryptonight_heavy derivates since we check the user and dev pool
-			bool useCryptonight_heavy = std::find(neededAlgorithms.begin(), neededAlgorithms.end(), cryptonight_heavy) != neededAlgorithms.end();
-
-			// true for cryptonight_gpu as main user pool algorithm
-			bool useCryptonight_gpu = ::jconf::inst()->GetCurrentCoinSelection().GetDescription(1).GetMiningAlgo() == cryptonight_gpu;
-
-			bool useCryptonight_r = ::jconf::inst()->GetCurrentCoinSelection().GetDescription(1).GetMiningAlgo() == cryptonight_r;
-
-			bool useCryptonight_r_wow = ::jconf::inst()->GetCurrentCoinSelection().GetDescription(1).GetMiningAlgo() == cryptonight_r_wow;
-
+			// cryptonight_gpu is the only supported algorithm
 			// 8 threads per block (this is a good value for the most gpus)
 			uint32_t default_workSize = 8;
 			size_t minFreeMem = 128u * byteToMiB;
@@ -149,8 +131,7 @@ class autoAdjust
 				 */
 				maxThreads = 2024u;
 
-				if(useCryptonight_gpu)
-					default_workSize = 16u;
+				default_workSize = 16u;
 			}
 
 			// NVIDIA optimizations
@@ -163,53 +144,26 @@ class autoAdjust
 				minFreeMem = 512u * byteToMiB;
 			}
 
-			// set strided index to default
-			ctx.stridedIndex = 1;
+			// cryptonight_gpu: contiguous scratchpad, no strided index
+			ctx.stridedIndex = 0;
 
 			// nvidia performance is very bad if the scratchpad is not contiguous
 			if(ctx.isNVIDIA)
 				ctx.stridedIndex = 0;
 
-			// use chunked (4x16byte) scratchpad for all backends. Default `mem_chunk` is `2`
-			if(useCryptonight_v8 || useCryptonight_r || useCryptonight_r_wow)
-				ctx.stridedIndex = 2;
-			else if(useCryptonight_heavy)
-				ctx.stridedIndex = 3;
-
-			if(hashMemSize < CN_MEMORY)
-			{
-				size_t factor = CN_MEMORY / hashMemSize;
-				// increase all intensity relative to the original scratchpad size
-				maxThreads *= factor;
-			}
-
-			uint32_t numUnroll = 8;
+			uint32_t numUnroll = 1;
 			uint32_t numThreads = 1u;
 
-			if(useCryptonight_gpu)
-			{
-				// 6 waves per compute unit are a good value (based on profiling)
-				// @todo check again after all optimizations
-				maxThreads = ctx.computeUnits * 6 * 8;
-				ctx.stridedIndex = 0;
-				// do not change unroll for AMD RX5700 but set 2 threads per gpu
-				if(ctx.name.compare("gfx1010") == 0)
-					numThreads = 2;
-				else
-					numUnroll = 1;
-			}
+			// 6 waves per compute unit are a good value (based on profiling)
+			maxThreads = ctx.computeUnits * 6 * 8;
+			// do not change unroll for AMD RX5700 but set 2 threads per gpu
+			if(ctx.name.compare("gfx1010") == 0)
+				numThreads = 2;
 
 			// keep 128MiB memory free (value is randomly chosen) from the max available memory
 			const size_t maxAvailableFreeMem = ctx.freeMem - minFreeMem;
 
 			size_t memPerThread = std::min(ctx.maxMemPerAlloc, maxAvailableFreeMem);
-
-			if(ctx.isAMD && !useCryptonight_gpu)
-			{
-				numThreads = 2;
-				size_t memDoubleThread = maxAvailableFreeMem / numThreads;
-				memPerThread = std::min(memPerThread, memDoubleThread);
-			}
 
 			// 240byte extra memory is used per thread for meta data
 			size_t perThread = hashMemSize + 240u;
