@@ -1,0 +1,39 @@
+# n0s-cngpu — Release Build
+# Builds a portable (generic) CPU-only binary.
+# Usage: docker build -f containers/Containerfile.release --build-arg DISTRO=noble -t n0s-cngpu-release .
+
+ARG DISTRO=noble
+FROM docker.io/library/ubuntu:${DISTRO}
+
+ARG DISTRO
+
+LABEL org.opencontainers.image.description="n0s-cngpu release build (Ubuntu ${DISTRO})"
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    libmicrohttpd-dev \
+    libssl-dev \
+    libhwloc-dev \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY . /src
+WORKDIR /src/build-release
+
+RUN cmake .. \
+    -DCUDA_ENABLE=OFF \
+    -DOpenCL_ENABLE=OFF \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DXMR-STAK_COMPILE=generic \
+    -DMICROHTTPD_ENABLE=ON \
+    && make -j$(nproc)
+
+# Smoke tests
+RUN test -f bin/n0s-cngpu \
+    && bin/n0s-cngpu --help | grep -q "n0s-cngpu" \
+    && bin/n0s-cngpu --version | grep -q "n0s-cngpu" \
+    && bin/n0s-cngpu --version | grep -q "1.0.0" \
+    && echo "=== RELEASE BUILD VERIFIED: ${DISTRO} ==="

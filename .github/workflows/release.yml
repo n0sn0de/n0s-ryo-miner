@@ -33,16 +33,16 @@ jobs:
       - name: Build release binary in container
         run: |
           docker build \
-            -f containers/Containerfile.${{ matrix.distro }} \
+            -f containers/Containerfile.release \
+            --build-arg DISTRO=${{ matrix.distro }} \
             -t n0s-cngpu-release:${{ matrix.distro }} \
-            --build-arg CMAKE_BUILD_TYPE=Release \
             .
 
       - name: Extract binary from container
         run: |
           CONTAINER_ID=$(docker create n0s-cngpu-release:${{ matrix.distro }})
           mkdir -p dist
-          docker cp "$CONTAINER_ID:/src/build-test/bin/n0s-cngpu" dist/n0s-cngpu
+          docker cp "$CONTAINER_ID:/src/build-release/bin/n0s-cngpu" dist/n0s-cngpu
           docker rm "$CONTAINER_ID"
 
       - name: Package release tarball
