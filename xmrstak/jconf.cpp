@@ -1,4 +1,7 @@
 /*
+  * Copyright (C) 2017-2019 fireice-uk, psychocrypt
+  * Copyright (C) 2026 n0sn0de contributors
+  *
   * This program is free software: you can redistribute it and/or modify
   * it under the terms of the GNU General Public License as published by
   * the Free Software Foundation, either version 3 of the License, or
@@ -305,10 +308,8 @@ jconf::slow_mem_cfg jconf::GetSlowMemSetting()
 
 std::string jconf::GetMiningCoin()
 {
-	if(xmrstak::params::inst().currency.length() > 0)
-		return xmrstak::params::inst().currency;
-	else
-		return prv->configValues[sCurrency]->GetString();
+	// n0s-cngpu: always cryptonight_gpu regardless of config or CLI args
+	return "cryptonight_gpu";
 }
 
 void jconf::GetAlgoList(std::string& list)
@@ -599,31 +600,8 @@ bool jconf::parse_config(const char* sFilename, const char* sFilenamePools)
 	}
 #endif // _WIN32
 
-	std::string ctmp = GetMiningCoin();
-	std::transform(ctmp.begin(), ctmp.end(), ctmp.begin(), ::tolower);
-
-	if(ctmp.length() == 0)
-	{
-		printer::inst()->print_msg(L0, "You need to specify the coin that you want to mine.");
-		return false;
-	}
-
-	for(size_t i = 0; i < coin_algo_size; i++)
-	{
-		if(ctmp == coins[i].coin_name)
-		{
-			currentCoin = coins[i];
-			break;
-		}
-	}
-
-	if(currentCoin.GetDescription(1).GetMiningAlgo() == invalid_algo)
-	{
-		std::string cl;
-		GetAlgoList(cl);
-		printer::inst()->print_msg(L0, "Unrecognised coin '%s', your options are:\n%s", ctmp.c_str(), cl.c_str());
-		return false;
-	}
+	// n0s-cngpu: hardcoded to cryptonight_gpu — no coin selection needed
+	currentCoin = coins[0]; // cryptonight_gpu entry
 
 	return true;
 }

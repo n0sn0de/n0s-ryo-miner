@@ -1,4 +1,4 @@
-CMakeFiles/xmr-stak.dir/xmrstak/cli/cli-miner.cpp.o: \
+CMakeFiles/n0s-cngpu.dir/xmrstak/cli/cli-miner.cpp.o: \
  /home/nitro/xmr-stak/xmrstak/cli/cli-miner.cpp \
  /usr/include/stdc-predef.h \
  /home/nitro/xmr-stak/./xmrstak/backend/backendConnector.hpp \

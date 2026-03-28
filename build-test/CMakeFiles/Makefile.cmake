@@ -145,5 +145,5 @@ set(CMAKE_DEPEND_INFO_FILES
   "CMakeFiles/xmr-stak-asm.dir/DependInfo.cmake"
   "CMakeFiles/xmr-stak-c.dir/DependInfo.cmake"
   "CMakeFiles/xmr-stak-backend.dir/DependInfo.cmake"
-  "CMakeFiles/xmr-stak.dir/DependInfo.cmake"
+  "CMakeFiles/n0s-cngpu.dir/DependInfo.cmake"
   )

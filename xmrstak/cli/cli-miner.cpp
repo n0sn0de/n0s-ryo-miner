@@ -1,4 +1,7 @@
 /*
+  * Copyright (C) 2017-2019 fireice-uk, psychocrypt
+  * Copyright (C) 2026 n0sn0de contributors
+  *
   * This program is free software: you can redistribute it and/or modify
   * it under the terms of the GNU General Public License as published by
   * the Free Software Foundation, either version 3 of the License, or
@@ -105,7 +108,6 @@ void help()
 	cout << "  -r, --rigid RIGID          rig identifier for pool-side statistics (needs pool support)" << endl;
 	cout << "  -p, --pass PASSWD          pool password, in the most cases x or empty \"\"" << endl;
 	cout << "  --use-nicehash             the pool should run in nicehash mode" << endl;
-	cout << "  --currency NAME            currency to mine" << endl;
 	cout << endl;
 #ifdef _WIN32
 	cout << "Environment variables:\n"
@@ -114,12 +116,10 @@ void help()
 	cout << "                	            for non UAC execution" << endl;
 	cout << endl;
 #endif
-	std::string algos;
-	jconf::GetAlgoList(algos);
-	cout << "Supported coin options: " << endl
-		 << algos << endl;
+	cout << "Algorithm: CryptoNight-GPU (hardcoded)" << endl;
 	cout << "Version: " << get_version_str_short() << endl;
-	cout << "Brought to by fireice_uk and psychocrypt under GPLv3." << endl;
+	cout << "n0s-cngpu - CryptoNight-GPU miner for RYO Currency" << endl;
+	cout << "Forked from xmr-stak by fireice_uk and psychocrypt - GPLv3" << endl;
 }
 
 bool read_yes_no(const char* str, std::string default_value = "")
@@ -149,7 +149,7 @@ std::string get_multipool_entry(bool& final)
 			  << std::endl;
 
 	std::string pool;
-	std::cout << "- Pool address: e.g. " << jconf::GetDefaultPool(xmrstak::params::inst().currency.c_str()) << std::endl;
+	std::cout << "- Pool address: e.g. pool.ryo-currency.com:3333" << std::endl;
 	std::cin >> pool;
 
 	std::string userName;
@@ -218,22 +218,9 @@ void do_guided_pool_config()
 	configTpl.set(std::string(tpl));
 	bool prompted = false;
 
-	auto currency = params::inst().currency;
-	if(currency.empty() || !jconf::IsOnAlgoList(currency))
-	{
-		prompt_once(prompted);
-
-		std::string tmp;
-		while(tmp.empty() || !jconf::IsOnAlgoList(tmp))
-		{
-			std::string list;
-			jconf::GetAlgoList(list);
-			std::cout << "- Please enter the currency that you want to mine: " << std::endl;
-			std::cout << list << std::endl;
-			std::cin >> tmp;
-		}
-		currency = tmp;
-	}
+	// n0s-cngpu: hardcoded to cryptonight_gpu — no coin selection needed
+	auto currency = std::string("cryptonight_gpu");
+	params::inst().currency = currency;
 
 	auto pool = params::inst().poolURL;
 	bool userSetPool = true;
@@ -242,7 +229,7 @@ void do_guided_pool_config()
 		prompt_once(prompted);
 
 		userSetPool = false;
-		std::cout << "- Pool address: e.g. " << jconf::GetDefaultPool(xmrstak::params::inst().currency.c_str()) << std::endl;
+		std::cout << "- Pool address: e.g. pool.ryo-currency.com:3333" << std::endl;
 		std::cin >> pool;
 	}
 
@@ -568,6 +555,7 @@ int main(int argc, char* argv[])
 		}
 		else if(opName.compare("--currency") == 0)
 		{
+			// n0s-cngpu: --currency is accepted but ignored (hardcoded to cryptonight_gpu)
 			++i;
 			if(i >= argc)
 			{
@@ -575,7 +563,7 @@ int main(int argc, char* argv[])
 				win_exit();
 				return 1;
 			}
-			params::inst().currency = argv[i];
+			printer::inst()->print_msg(L1, "Note: --currency is ignored. n0s-cngpu only supports cryptonight_gpu.");
 		}
 		else if(opName.compare("-o") == 0 || opName.compare("--url") == 0)
 		{
@@ -858,13 +846,14 @@ int main(int argc, char* argv[])
 	printer::inst()->print_str("-------------------------------------------------------------------\n");
 	printer::inst()->print_str(get_version_str_short().c_str());
 	printer::inst()->print_str("\n\n");
-	printer::inst()->print_str("Brought to you by fireice_uk and psychocrypt under GPLv3.\n");
-	printer::inst()->print_str("Based on CPU mining code by wolf9466 (heavily optimized by fireice_uk).\n");
+	printer::inst()->print_str("n0s-cngpu - CryptoNight-GPU miner for RYO Currency\n");
+	printer::inst()->print_str("Forked from xmr-stak by fireice_uk and psychocrypt - GPLv3\n");
+	printer::inst()->print_str("Based on CPU mining code by wolf9466 (heavily optimized by fireice_uk)\n");
 #ifndef CONF_NO_CUDA
-	printer::inst()->print_str("Based on NVIDIA mining code by KlausT and psychocrypt.\n");
+	printer::inst()->print_str("Based on NVIDIA mining code by KlausT and psychocrypt\n");
 #endif
 #ifndef CONF_NO_OPENCL
-	printer::inst()->print_str("Based on OpenCL mining code by wolf9466.\n");
+	printer::inst()->print_str("Based on OpenCL mining code by wolf9466\n");
 #endif
 	printer::inst()->print_str("-------------------------------------------------------------------\n");
 	printer::inst()->print_str("You can use following keys to display reports:\n");
@@ -872,17 +861,8 @@ int main(int argc, char* argv[])
 	printer::inst()->print_str("'r' - results\n");
 	printer::inst()->print_str("'c' - connection\n");
 	printer::inst()->print_str("-------------------------------------------------------------------\n");
-	printer::inst()->print_str("Upcoming xmr-stak-gui is sponsored by:\n");
-	printer::inst()->print_str("   #####   ______               ____\n");
-	printer::inst()->print_str(" ##     ## | ___ \\             /  _ \\\n");
-	printer::inst()->print_str("#    _    #| |_/ /_   _   ___  | / \\/ _   _  _ _  _ _  ___  _ __    ___  _   _\n");
-	printer::inst()->print_str("#   |_|   #|    /| | | | / _ \\ | |   | | | || '_|| '_|/ _ \\| '_ \\  / __|| | | |\n");
-	printer::inst()->print_str("#         #| |\\ \\| |_| || (_) || \\_/\\| |_| || |  | | |  __/| | | || (__ | |_| |\n");
-	printer::inst()->print_str(" ##     ## \\_| \\_|\\__, | \\___/ \\____/ \\__,_||_|  |_|  \\___||_| |_| \\___| \\__, |\n");
-	printer::inst()->print_str("   #####           __/ |                                                  __/ |\n");
-	printer::inst()->print_str("                  |___/   https://ryo-currency.com                       |___/\n\n");
-	printer::inst()->print_str("This currency is a way for us to implement the ideas that we were unable to in\n");
-	printer::inst()->print_str("Monero. See https://github.com/fireice-uk/cryptonote-speedup-demo for details.\n");
+	printer::inst()->print_str("RYO Currency - Privacy-focused cryptocurrency\n");
+	printer::inst()->print_str("https://ryo-currency.com\n");
 	printer::inst()->print_str("-------------------------------------------------------------------\n");
 	printer::inst()->print_msg(L0, "Mining coin: %s", ::jconf::inst()->GetCurrentCoinSelection().GetDescription(1).GetMiningAlgo().Name().c_str());
 
