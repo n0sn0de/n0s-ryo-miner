@@ -72,6 +72,10 @@ declare -A RESULTS
 PASS=0
 FAIL=0
 
+# Helper to increment counters safely (arithmetic returns 1 when result is 0, which trips set -e)
+inc_pass() { PASS=$((PASS + 1)); }
+inc_fail() { FAIL=$((FAIL + 1)); }
+
 build_and_test() {
     local distro="$1"
     local variant="${2:-cpu}"  # cpu or opencl
@@ -110,7 +114,7 @@ build_and_test() {
 
         echo -e "${GREEN}PASS${NC}  ${test_key} (${elapsed}s)"
         RESULTS[$test_key]="PASS (${elapsed}s)"
-        ((PASS++))
+        inc_pass
     else
         local end_time
         end_time=$(date +%s)
@@ -118,7 +122,7 @@ build_and_test() {
 
         echo -e "${RED}FAIL${NC}  ${test_key} (${elapsed}s)"
         RESULTS[$test_key]="FAIL (${elapsed}s)"
-        ((FAIL++))
+        inc_fail
     fi
 
     # Clean up image if requested
