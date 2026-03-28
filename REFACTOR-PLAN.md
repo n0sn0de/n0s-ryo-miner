@@ -79,14 +79,14 @@ Deferred items:
 ## Phase 2: Rebrand to n0s-cngpu (Days 4-6)
 **Branch:** `phase2/rebrand`
 
-### Task 2.1: Project Identity
-- [ ] Rename CMake project: `project(n0s-cngpu)`
-- [ ] Update `version.cpp`:
+### Task 2.1: Project Identity ✅ COMPLETE (Session 5-6)
+- [x] Rename CMake project: `project(n0s-cngpu)`
+- [x] Update `version.cpp`:
   - `XMR_STAK_NAME` → `N0S_CNGPU_NAME "n0s-cngpu"`
   - `XMR_STAK_VERSION` → `N0S_CNGPU_VERSION "1.0.0"`
   - Update version macros throughout
-- [ ] Rename binary output from `xmr-stak` to `n0s-cngpu`
-- [ ] Update all user-facing strings (startup banner, HTTP dashboard title, error messages)
+- [x] Rename binary output from `xmr-stak` to `n0s-cngpu`
+- [x] Update all user-facing strings (startup banner, HTTP dashboard title, error messages, UAC prompts)
 
 ### Task 2.2: License Compliance
 - [ ] Keep GPLv3 LICENSE file (inherited, required)
@@ -246,7 +246,7 @@ Deferred items:
 |-------|--------|--------|-------|
 | Phase 1: Fee Removal & Code Purge | 🟢 | `phase1/fee-removal-cleanup` | Complete (runtime restricted) |
 | Phase 1.5: Deep Algorithm Cleanup | 🔴 | (deferred) | Optional future work |
-| Phase 2: Rebrand | 🟡 | `phase2/rebrand` | **START NEXT SESSION** |
+| Phase 2: Rebrand | 🟡 | `phase2/rebrand` | Task 2.1 ✅ — Next: Task 2.2 (license) |
 | Phase 3: Podman Test Harness | 🔴 | `phase3/test-harness` | After Phase 2 |
 | Phase 4: CI/CD Pipeline | 🔴 | `phase4/ci-cd` | Depends on Phase 3 |
 | Phase 5: Documentation | 🔴 | `phase5/docs` | Can start during Phase 3 |
@@ -254,7 +254,9 @@ Deferred items:
 ### Session Notes
 _(Updated by cron sessions as work progresses)_
 
-**2026-03-28 16:34 (Session 4):** Phase 1 complete. Runtime restricted to cryptonight_gpu only via coins[] array strip. Deep algorithm cleanup deferred to optional Phase 1.5 due to complexity. Moving to Phase 2 (rebrand) next session.
+**2026-03-28 16:45 (Session 6):** Phase 2 Task 2.1 complete. All user-facing branding updated to n0s-cngpu (HTTP dashboard, UAC messages, binary name defaults). Build verified. Next: Task 2.2 (license compliance).
+
+**2026-03-28 16:34 (Session 4-5):** Phase 1 complete. Started Phase 2 Task 2.1 (project identity). CMake renamed, binary output updated, version strings set to 1.0.0, startup banner rebranded.
 
 **2026-03-28 16:00 (Session 1-3):** Initial plan created. Codebase audited:
 - ~40K lines of C/C++ code

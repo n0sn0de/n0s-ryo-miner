@@ -11,23 +11,23 @@ A cron job fires every 20 minutes. Each session:
 ---
 
 ## Current Task
-**Phase 2, Task 2.1: Project Identity (IN PROGRESS)**
+**Phase 2, Task 2.2: License Compliance (NEXT)**
 
 ## Next Steps
-**Phase 2.1 partial complete:** Basic rebrand done, more user-facing strings to update
-1. ✅ CMake project name updated
-2. ✅ Binary output renamed to n0s-cngpu
-3. ✅ Version strings updated (1.0.0)
-4. ✅ Startup banner updated
-5. ✅ Build verified working
+**Phase 2.1 COMPLETE ✅** All user-facing branding updated to n0s-cngpu
 
-**Remaining for Task 2.1:**
-- Update HTTP dashboard title/headers
-- Update error messages with xmr-stak references
-- Search for any remaining "xmr-stak" strings in user-facing output
+**Phase 2.2 (License Compliance) - Next Session:**
+1. Keep GPLv3 LICENSE file (inherited, required)
+2. Update copyright headers: add `Copyright (C) 2026 n0sn0de contributors`
+3. Keep original copyright: `Copyright (C) 2017-2019 fireice-uk, psychocrypt`
+4. Update THIRD-PARTY-LICENSES:
+   - Keep all existing entries
+   - Add note about fork lineage
+5. Add NOTICE file documenting the fork relationship per GPLv3 §5
 
-**Next subtasks (Phase 2):**
-- Task 2.2: License compliance (copyright headers, NOTICE file)
+**Remaining Phase 2 tasks:**
+- Task 2.3: Configuration simplification (remove coin selection)
+- Task 2.4: Clean up legacy branding in configs
 - Task 2.3: Configuration simplification (remove coin selection)
 - Task 2.4: Clean up legacy branding in configs
 
@@ -37,6 +37,36 @@ A cron job fires every 20 minutes. Each session:
 _(none yet)_
 
 ## Session Log
+
+### Session 6 — 2026-03-28 16:45 CDT (Phase 2 Task 2.1 Complete)
+✅ **Completed:**
+- **Phase 2 Task 2.1: Project Identity (COMPLETE)**
+  * Updated HTTP dashboard header: "XMR-Stak Monero Miner" → "n0s-cngpu Miner"
+  * Updated UAC elevation message: xmr-stak → n0s-cngpu
+  * Updated params.hpp binaryName default: xmr-stak → n0s-cngpu
+  * Added build-cpu/ to .gitignore
+  * Build verified working (CPU-only)
+  * All user-facing branding now consistent
+
+**Files modified:**
+- xmrstak/http/webdesign.cpp: dashboard header
+- xmrstak/misc/uac.cpp: UAC message
+- xmrstak/params.hpp: binary name default
+- .gitignore: exclude build directories
+
+**Branch:** `phase2/rebrand` (pushed to origin)
+**Commit:** 54d8c28 "Phase 2 Task 2.1 complete: Update remaining user-facing strings"
+
+**Task 2.1 Status:** ✅ COMPLETE
+- All CMake project names updated
+- Binary renamed to n0s-cngpu
+- Version strings set to 1.0.0
+- Startup banner rebranded
+- HTTP dashboard rebranded
+- UAC/error messages updated
+- Build verified working
+
+**Next session:** Phase 2 Task 2.2 — License Compliance (copyright headers, NOTICE file)
 
 ### Session 5 — 2026-03-28 16:54 CDT (Phase 2 Rebrand Started)
 ✅ **Completed:**
