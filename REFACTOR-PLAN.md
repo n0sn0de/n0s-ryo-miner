@@ -88,14 +88,14 @@ Deferred items:
 - [x] Rename binary output from `xmr-stak` to `n0s-cngpu`
 - [x] Update all user-facing strings (startup banner, HTTP dashboard title, error messages, UAC prompts)
 
-### Task 2.2: License Compliance
-- [ ] Keep GPLv3 LICENSE file (inherited, required)
-- [ ] Update copyright headers: add `Copyright (C) 2026 n0sn0de contributors`
-- [ ] Keep original copyright: `Copyright (C) 2017-2019 fireice-uk, psychocrypt`
-- [ ] Update THIRD-PARTY-LICENSES:
+### Task 2.2: License Compliance ✅ COMPLETE (Session 7)
+- [x] Keep GPLv3 LICENSE file (inherited, required)
+- [x] Update copyright headers: add `Copyright (C) 2026 n0sn0de contributors`
+- [x] Keep original copyright: `Copyright (C) 2017-2019 fireice-uk, psychocrypt`
+- [x] Update THIRD-PARTY-LICENSES:
   - Keep all existing entries (tsiv/KlausT NVIDIA, wolf9466 AMD, RapidJSON, PicoSHA2, cpputil)
-  - Add note about fork lineage
-- [ ] Add NOTICE file documenting the fork relationship per GPLv3 §5
+  - Added xmr-stak upstream fork lineage entry
+- [x] Add NOTICE file documenting the fork relationship per GPLv3 §5
 
 ### Task 2.3: Source Tree Reorganization
 - [ ] Rename `xmrstak/` directory → `n0scngpu/` (or keep as-is with namespace change — TBD based on build complexity)
@@ -246,13 +246,15 @@ Deferred items:
 |-------|--------|--------|-------|
 | Phase 1: Fee Removal & Code Purge | 🟢 | `phase1/fee-removal-cleanup` | Complete (runtime restricted) |
 | Phase 1.5: Deep Algorithm Cleanup | 🔴 | (deferred) | Optional future work |
-| Phase 2: Rebrand | 🟡 | `phase2/rebrand` | Task 2.1 ✅ — Next: Task 2.2 (license) |
+| Phase 2: Rebrand | 🟡 | `phase2/rebrand` | Task 2.1 ✅, 2.2 ✅ — Next: Task 2.3 (source tree) |
 | Phase 3: Podman Test Harness | 🔴 | `phase3/test-harness` | After Phase 2 |
 | Phase 4: CI/CD Pipeline | 🔴 | `phase4/ci-cd` | Depends on Phase 3 |
 | Phase 5: Documentation | 🔴 | `phase5/docs` | Can start during Phase 3 |
 
 ### Session Notes
 _(Updated by cron sessions as work progresses)_
+
+**2026-03-28 17:00 (Session 7):** Phase 2 Task 2.2 complete. Copyright headers added to 22 source files, NOTICE file created, THIRD-PARTY-LICENSES updated. Build verified. Next: Task 2.3 (source tree reorg) or 2.4 (config simplification).
 
 **2026-03-28 16:45 (Session 6):** Phase 2 Task 2.1 complete. All user-facing branding updated to n0s-cngpu (HTTP dashboard, UAC messages, binary name defaults). Build verified. Next: Task 2.2 (license compliance).
 

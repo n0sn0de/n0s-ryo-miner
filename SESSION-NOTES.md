@@ -11,32 +11,44 @@ A cron job fires every 20 minutes. Each session:
 ---
 
 ## Current Task
-**Phase 2, Task 2.2: License Compliance (NEXT)**
+**Phase 2, Task 2.3: Source Tree Reorganization (NEXT)**
 
 ## Next Steps
-**Phase 2.1 COMPLETE ✅** All user-facing branding updated to n0s-cngpu
+**Phase 2.2 COMPLETE ✅** License compliance done — copyright headers, NOTICE, THIRD-PARTY-LICENSES
 
-**Phase 2.2 (License Compliance) - Next Session:**
-1. Keep GPLv3 LICENSE file (inherited, required)
-2. Update copyright headers: add `Copyright (C) 2026 n0sn0de contributors`
-3. Keep original copyright: `Copyright (C) 2017-2019 fireice-uk, psychocrypt`
-4. Update THIRD-PARTY-LICENSES:
-   - Keep all existing entries
-   - Add note about fork lineage
-5. Add NOTICE file documenting the fork relationship per GPLv3 §5
+**Phase 2.3 (Source Tree Reorganization) - Next Session:**
+1. **Decision:** Keep `xmrstak/` namespace as-is for now (lower risk). Directory rename deferred.
+2. Consider renaming `xmrstak/` → `n0scngpu/` only if time/risk allows
+3. If skipping full rename, mark as deferred and move to Task 2.4
 
-**Remaining Phase 2 tasks:**
-- Task 2.3: Configuration simplification (remove coin selection)
-- Task 2.4: Clean up legacy branding in configs
-- Task 2.3: Configuration simplification (remove coin selection)
-- Task 2.4: Clean up legacy branding in configs
-
-**Next session action:** Continue Task 2.1 — update HTTP dashboard and remaining user-facing strings
+**Phase 2.4 (Configuration Simplification) - After 2.3:**
+1. Simplify `jconf.cpp` — remove coin selection entirely, hardcode cn_gpu
+2. Remove "currency" config field (or make it read-only/ignored)
+3. Clean up the interactive setup wizard in `cli-miner.cpp` — remove coin choice
+4. Simplify pool configuration
+5. Update default pool suggestion to ryo-currency pool
 
 ## Blockers
 _(none yet)_
 
 ## Session Log
+
+### Session 7 — 2026-03-28 17:00 CDT (Phase 2 Task 2.2 Complete)
+✅ **Completed:**
+- **Phase 2 Task 2.2: License Compliance (COMPLETE)**
+  * Added dual copyright headers to all 22 GPL source files
+  * Original: `Copyright (C) 2017-2019 fireice-uk, psychocrypt`
+  * Fork: `Copyright (C) 2026 n0sn0de contributors`
+  * Created NOTICE file documenting fork relationship per GPLv3 §5
+  * Updated THIRD-PARTY-LICENSES with xmr-stak upstream lineage entry
+  * GPLv3 LICENSE file retained (required, inherited)
+  * Build verified working (CPU-only)
+
+**Files modified:** 22 source files (copyright headers) + NOTICE (new) + THIRD-PARTY-LICENSES (updated)
+**Branch:** `phase2/rebrand` (pushed to origin)
+**Commit:** e8450c9 "Phase 2 Task 2.2: License compliance"
+
+**Next session:** Phase 2 Task 2.3 — Source Tree Reorganization (or skip to 2.4 Config Simplification)
 
 ### Session 6 — 2026-03-28 16:45 CDT (Phase 2 Task 2.1 Complete)
 ✅ **Completed:**
