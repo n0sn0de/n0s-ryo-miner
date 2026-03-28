@@ -99,10 +99,13 @@ configVal oConfigValues[] = {
 
 constexpr size_t iConfigCnt = (sizeof(oConfigValues) / sizeof(oConfigValues[0]));
 
+// STRIPPED: Only cryptonight_gpu supported. All other algorithms removed for n0s-cngpu.
+// Algorithm enum stubs remain in cryptonight.hpp for compile-time compatibility with CPU backend.
 xmrstak::coin_selection coins[] = {
 	// name, userpool, devpool, default_pool_suggestion
 	{"cryptonight_gpu", {POW(cryptonight_gpu)}, {POW(cryptonight_gpu)}, "pool.ryo-currency.com:3333"},
-	{"ryo", {POW(cryptonight_gpu)}, {POW(cryptonight_gpu)}, "pool.ryo-currency.com:3333"}};
+	{"ryo", {POW(cryptonight_gpu)}, {POW(cryptonight_gpu)}, "pool.ryo-currency.com:3333"}
+};
 
 constexpr size_t coin_algo_size = (sizeof(coins) / sizeof(coins[0]));
 

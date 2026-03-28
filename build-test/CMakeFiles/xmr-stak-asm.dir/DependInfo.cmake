@@ -19,7 +19,7 @@ set(CMAKE_TARGET_DEFINITIONS_ASM
   "CONF_NO_CUDA"
   "CONF_NO_OPENCL"
   "GIT_BRANCH=phase1/fee-removal-cleanup"
-  "GIT_COMMIT_HASH=5a8af97"
+  "GIT_COMMIT_HASH=3db0212"
   )
 
 # The include file search paths:
