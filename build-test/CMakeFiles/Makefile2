@@ -66,7 +66,7 @@ CMAKE_BINARY_DIR = /home/nitro/xmr-stak/build-test
 all: CMakeFiles/xmr-stak-asm.dir/all
 all: CMakeFiles/xmr-stak-c.dir/all
 all: CMakeFiles/xmr-stak-backend.dir/all
-all: CMakeFiles/xmr-stak.dir/all
+all: CMakeFiles/n0s-cngpu.dir/all
 .PHONY : all
 
 # The main recursive "preinstall" target.
@@ -77,7 +77,7 @@ preinstall:
 clean: CMakeFiles/xmr-stak-asm.dir/clean
 clean: CMakeFiles/xmr-stak-c.dir/clean
 clean: CMakeFiles/xmr-stak-backend.dir/clean
-clean: CMakeFiles/xmr-stak.dir/clean
+clean: CMakeFiles/n0s-cngpu.dir/clean
 .PHONY : clean
 
 #=============================================================================
@@ -136,8 +136,8 @@ CMakeFiles/xmr-stak-c.dir/clean:
 # Target rules for target CMakeFiles/xmr-stak-backend.dir
 
 # All Build rule for target.
-CMakeFiles/xmr-stak-backend.dir/all: CMakeFiles/xmr-stak-asm.dir/all
 CMakeFiles/xmr-stak-backend.dir/all: CMakeFiles/xmr-stak-c.dir/all
+CMakeFiles/xmr-stak-backend.dir/all: CMakeFiles/xmr-stak-asm.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/xmr-stak-backend.dir/build.make CMakeFiles/xmr-stak-backend.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/xmr-stak-backend.dir/build.make CMakeFiles/xmr-stak-backend.dir/build
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/nitro/xmr-stak/build-test/CMakeFiles --progress-num=6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28 "Built target xmr-stak-backend"
@@ -160,32 +160,32 @@ CMakeFiles/xmr-stak-backend.dir/clean:
 .PHONY : CMakeFiles/xmr-stak-backend.dir/clean
 
 #=============================================================================
-# Target rules for target CMakeFiles/xmr-stak.dir
+# Target rules for target CMakeFiles/n0s-cngpu.dir
 
 # All Build rule for target.
-CMakeFiles/xmr-stak.dir/all: CMakeFiles/xmr-stak-asm.dir/all
-CMakeFiles/xmr-stak.dir/all: CMakeFiles/xmr-stak-c.dir/all
-CMakeFiles/xmr-stak.dir/all: CMakeFiles/xmr-stak-backend.dir/all
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/xmr-stak.dir/build.make CMakeFiles/xmr-stak.dir/depend
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/xmr-stak.dir/build.make CMakeFiles/xmr-stak.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/nitro/xmr-stak/build-test/CMakeFiles --progress-num=1,2 "Built target xmr-stak"
-.PHONY : CMakeFiles/xmr-stak.dir/all
+CMakeFiles/n0s-cngpu.dir/all: CMakeFiles/xmr-stak-c.dir/all
+CMakeFiles/n0s-cngpu.dir/all: CMakeFiles/xmr-stak-asm.dir/all
+CMakeFiles/n0s-cngpu.dir/all: CMakeFiles/xmr-stak-backend.dir/all
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/n0s-cngpu.dir/build.make CMakeFiles/n0s-cngpu.dir/depend
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/n0s-cngpu.dir/build.make CMakeFiles/n0s-cngpu.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/nitro/xmr-stak/build-test/CMakeFiles --progress-num=1,2 "Built target n0s-cngpu"
+.PHONY : CMakeFiles/n0s-cngpu.dir/all
 
 # Build rule for subdir invocation for target.
-CMakeFiles/xmr-stak.dir/rule: cmake_check_build_system
+CMakeFiles/n0s-cngpu.dir/rule: cmake_check_build_system
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/nitro/xmr-stak/build-test/CMakeFiles 34
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/xmr-stak.dir/all
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/n0s-cngpu.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/nitro/xmr-stak/build-test/CMakeFiles 0
-.PHONY : CMakeFiles/xmr-stak.dir/rule
+.PHONY : CMakeFiles/n0s-cngpu.dir/rule
 
 # Convenience name for target.
-xmr-stak: CMakeFiles/xmr-stak.dir/rule
-.PHONY : xmr-stak
+n0s-cngpu: CMakeFiles/n0s-cngpu.dir/rule
+.PHONY : n0s-cngpu
 
 # clean rule for target.
-CMakeFiles/xmr-stak.dir/clean:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/xmr-stak.dir/build.make CMakeFiles/xmr-stak.dir/clean
-.PHONY : CMakeFiles/xmr-stak.dir/clean
+CMakeFiles/n0s-cngpu.dir/clean:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/n0s-cngpu.dir/build.make CMakeFiles/n0s-cngpu.dir/clean
+.PHONY : CMakeFiles/n0s-cngpu.dir/clean
 
 #=============================================================================
 # Special targets to cleanup operation of make.

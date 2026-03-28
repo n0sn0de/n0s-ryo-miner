@@ -201,17 +201,17 @@ xmr-stak-backend/fast:
 .PHONY : xmr-stak-backend/fast
 
 #=============================================================================
-# Target rules for targets named xmr-stak
+# Target rules for targets named n0s-cngpu
 
 # Build rule for target.
-xmr-stak: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 xmr-stak
-.PHONY : xmr-stak
+n0s-cngpu: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 n0s-cngpu
+.PHONY : n0s-cngpu
 
 # fast build rule for target.
-xmr-stak/fast:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/xmr-stak.dir/build.make CMakeFiles/xmr-stak.dir/build
-.PHONY : xmr-stak/fast
+n0s-cngpu/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/n0s-cngpu.dir/build.make CMakeFiles/n0s-cngpu.dir/build
+.PHONY : n0s-cngpu/fast
 
 xmrstak/backend/backendConnector.o: xmrstak/backend/backendConnector.cpp.o
 .PHONY : xmrstak/backend/backendConnector.o
@@ -594,7 +594,7 @@ xmrstak/cli/cli-miner.o: xmrstak/cli/cli-miner.cpp.o
 
 # target to build an object file
 xmrstak/cli/cli-miner.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/xmr-stak.dir/build.make CMakeFiles/xmr-stak.dir/xmrstak/cli/cli-miner.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/n0s-cngpu.dir/build.make CMakeFiles/n0s-cngpu.dir/xmrstak/cli/cli-miner.cpp.o
 .PHONY : xmrstak/cli/cli-miner.cpp.o
 
 xmrstak/cli/cli-miner.i: xmrstak/cli/cli-miner.cpp.i
@@ -602,7 +602,7 @@ xmrstak/cli/cli-miner.i: xmrstak/cli/cli-miner.cpp.i
 
 # target to preprocess a source file
 xmrstak/cli/cli-miner.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/xmr-stak.dir/build.make CMakeFiles/xmr-stak.dir/xmrstak/cli/cli-miner.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/n0s-cngpu.dir/build.make CMakeFiles/n0s-cngpu.dir/xmrstak/cli/cli-miner.cpp.i
 .PHONY : xmrstak/cli/cli-miner.cpp.i
 
 xmrstak/cli/cli-miner.s: xmrstak/cli/cli-miner.cpp.s
@@ -610,7 +610,7 @@ xmrstak/cli/cli-miner.s: xmrstak/cli/cli-miner.cpp.s
 
 # target to generate assembly for a file
 xmrstak/cli/cli-miner.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/xmr-stak.dir/build.make CMakeFiles/xmr-stak.dir/xmrstak/cli/cli-miner.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/n0s-cngpu.dir/build.make CMakeFiles/n0s-cngpu.dir/xmrstak/cli/cli-miner.cpp.s
 .PHONY : xmrstak/cli/cli-miner.cpp.s
 
 xmrstak/http/httpd.o: xmrstak/http/httpd.cpp.o
@@ -913,7 +913,7 @@ help:
 	@echo "... install/strip"
 	@echo "... list_install_components"
 	@echo "... rebuild_cache"
-	@echo "... xmr-stak"
+	@echo "... n0s-cngpu"
 	@echo "... xmr-stak-asm"
 	@echo "... xmr-stak-backend"
 	@echo "... xmr-stak-c"

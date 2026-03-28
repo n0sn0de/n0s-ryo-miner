@@ -18,8 +18,8 @@ set(CMAKE_TARGET_DEFINITIONS_ASM
   "BACKEND_TYPE=cpu"
   "CONF_NO_CUDA"
   "CONF_NO_OPENCL"
-  "GIT_BRANCH=phase1/fee-removal-cleanup"
-  "GIT_COMMIT_HASH=3db0212"
+  "GIT_BRANCH=phase2/rebrand"
+  "GIT_COMMIT_HASH=0a47af6"
   )
 
 # The include file search paths:
