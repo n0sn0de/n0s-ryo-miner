@@ -1,0 +1,35 @@
+# n0s-cngpu OpenCL build test — Ubuntu 24.04 (Noble Numbat)
+# Tests that OpenCL backend compiles (no GPU needed at build time)
+FROM docker.io/library/ubuntu:24.04
+
+LABEL org.opencontainers.image.description="n0s-cngpu OpenCL build test (Ubuntu 24.04)"
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    libmicrohttpd-dev \
+    libssl-dev \
+    libhwloc-dev \
+    ocl-icd-opencl-dev \
+    opencl-headers \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY . /src
+WORKDIR /src/build-test
+
+RUN cmake .. \
+    -DCUDA_ENABLE=OFF \
+    -DOpenCL_ENABLE=ON \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DMICROHTTPD_ENABLE=ON \
+    && make -j$(nproc)
+
+# Smoke tests (OpenCL build — binary exists, branding correct)
+RUN test -f bin/n0s-cngpu \
+    && bin/n0s-cngpu --help | grep -q "n0s-cngpu" \
+    && bin/n0s-cngpu --version | grep -q "n0s-cngpu" \
+    && bin/n0s-cngpu --version | grep -q "1.0.0" \
+    && echo "=== SMOKE TEST PASSED: noble-opencl ==="

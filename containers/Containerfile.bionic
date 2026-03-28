@@ -1,0 +1,33 @@
+# n0s-cngpu build test — Ubuntu 18.04 (Bionic Beaver)
+# GCC 7, CMake 3.10 — oldest supported LTS
+FROM docker.io/library/ubuntu:18.04
+
+LABEL org.opencontainers.image.description="n0s-cngpu CPU-only build test (Ubuntu 18.04)"
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    libmicrohttpd-dev \
+    libssl-dev \
+    libhwloc-dev \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY . /src
+WORKDIR /src/build-test
+
+RUN cmake .. \
+    -DCUDA_ENABLE=OFF \
+    -DOpenCL_ENABLE=OFF \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DMICROHTTPD_ENABLE=ON \
+    && make -j$(nproc)
+
+# Smoke tests
+RUN test -f bin/n0s-cngpu \
+    && bin/n0s-cngpu --help | grep -q "n0s-cngpu" \
+    && bin/n0s-cngpu --version | grep -q "n0s-cngpu" \
+    && bin/n0s-cngpu --version | grep -q "1.0.0" \
+    && echo "=== SMOKE TEST PASSED: bionic ==="

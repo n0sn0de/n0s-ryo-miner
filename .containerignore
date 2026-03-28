@@ -1,0 +1,18 @@
+# Ignore build directories to keep container context lean
+build/
+build-*/
+.git/
+*.o
+*.a
+*.so
+*.log
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Session files (not needed in container)
+SESSION-NOTES.md
+REFACTOR-PLAN.md
