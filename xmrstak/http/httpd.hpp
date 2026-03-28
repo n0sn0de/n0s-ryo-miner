@@ -3,6 +3,12 @@
 #include <stdlib.h>
 #include <microhttpd.h>
 
+// MHD_Result was added in libmicrohttpd 0.9.71.
+// Older versions (Ubuntu 18.04/20.04) use int for callback return types.
+#if !defined(MHD_VERSION) || MHD_VERSION < 0x00097100
+typedef int MHD_Result;
+#endif
+
 struct MHD_Daemon;
 struct MHD_Connection;
 
