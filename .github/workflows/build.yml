@@ -1,0 +1,55 @@
+# n0s-cngpu — Build & Smoke Test
+# Runs on every push to master and every pull request targeting master.
+# Matrix: 4 Ubuntu LTS (CPU-only) + 2 OpenCL variants.
+
+name: Build
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  # ──────────────────────────────────────────────
+  # CPU-only builds across all supported Ubuntu LTS
+  # ──────────────────────────────────────────────
+  cpu-only:
+    name: CPU · ${{ matrix.distro }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [bionic, focal, jammy, noble]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build & smoke test (Containerfile.${{ matrix.distro }})
+        run: |
+          docker build \
+            -f containers/Containerfile.${{ matrix.distro }} \
+            -t n0s-cngpu-test:${{ matrix.distro }} \
+            .
+
+  # ──────────────────────────────────────────────
+  # OpenCL builds (compile-only — no GPU needed)
+  # ──────────────────────────────────────────────
+  opencl:
+    name: OpenCL · ${{ matrix.distro }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [jammy-opencl, noble-opencl]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build & smoke test (Containerfile.${{ matrix.distro }})
+        run: |
+          docker build \
+            -f containers/Containerfile.${{ matrix.distro }} \
+            -t n0s-cngpu-test:${{ matrix.distro }} \
+            .

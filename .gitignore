@@ -34,3 +34,5 @@ build/
 *.txt
 build-cpu/
 build-test/
+build-release/
+dist/

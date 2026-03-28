@@ -1,0 +1,128 @@
+# n0s-cngpu — Release Build & Publish
+# Triggered on version tag push (v*). Builds release binaries for all
+# supported Ubuntu LTS versions, packages them, and creates a GitHub release.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write  # needed to create releases and upload assets
+
+jobs:
+  # ──────────────────────────────────────────────
+  # Build release binary for each distro
+  # ──────────────────────────────────────────────
+  build:
+    name: Build · ${{ matrix.distro }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        distro: [bionic, focal, jammy, noble]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build release binary in container
+        run: |
+          docker build \
+            -f containers/Containerfile.${{ matrix.distro }} \
+            -t n0s-cngpu-release:${{ matrix.distro }} \
+            --build-arg CMAKE_BUILD_TYPE=Release \
+            .
+
+      - name: Extract binary from container
+        run: |
+          CONTAINER_ID=$(docker create n0s-cngpu-release:${{ matrix.distro }})
+          mkdir -p dist
+          docker cp "$CONTAINER_ID:/src/build-test/bin/n0s-cngpu" dist/n0s-cngpu
+          docker rm "$CONTAINER_ID"
+
+      - name: Package release tarball
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          DISTRO="${{ matrix.distro }}"
+          PKG_NAME="n0s-cngpu-${VERSION}-ubuntu-${DISTRO}-amd64"
+          mkdir -p "staging/${PKG_NAME}"
+          cp dist/n0s-cngpu "staging/${PKG_NAME}/"
+          cp LICENSE "staging/${PKG_NAME}/"
+          cp NOTICE "staging/${PKG_NAME}/" 2>/dev/null || true
+          # Create a minimal README for the release
+          cat > "staging/${PKG_NAME}/README.txt" <<EOF
+          n0s-cngpu ${VERSION} — CryptoNight-GPU Miner
+          Built for Ubuntu ${DISTRO} (amd64)
+
+          Usage:
+            ./n0s-cngpu --help
+            ./n0s-cngpu -o pool.ryo-currency.com:3333 -u YOUR_WALLET -p x
+
+          License: GPLv3 (see LICENSE)
+          Source:  https://github.com/n0sn0de/xmr-stak
+          EOF
+          cd staging
+          tar czf "../${PKG_NAME}.tar.gz" "${PKG_NAME}"
+          cd ..
+          sha256sum "${PKG_NAME}.tar.gz" > "${PKG_NAME}.tar.gz.sha256"
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.distro }}
+          path: |
+            n0s-cngpu-*.tar.gz
+            n0s-cngpu-*.tar.gz.sha256
+
+  # ──────────────────────────────────────────────
+  # Create GitHub Release with all artifacts
+  # ──────────────────────────────────────────────
+  publish:
+    name: Publish Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -la artifacts/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            artifacts/n0s-cngpu-*.tar.gz
+            artifacts/n0s-cngpu-*.tar.gz.sha256
+          body: |
+            ## n0s-cngpu ${{ github.ref_name }}
+
+            CryptoNight-GPU miner for RYO Currency.
+
+            ### Downloads
+            Each tarball contains the binary, LICENSE, and a README.
+            Verify integrity with the `.sha256` checksum files.
+
+            ### Supported Platforms
+            - Ubuntu 18.04 (Bionic) — GCC 7
+            - Ubuntu 20.04 (Focal) — GCC 9
+            - Ubuntu 22.04 (Jammy) — GCC 11
+            - Ubuntu 24.04 (Noble) — GCC 13
+
+            ### Quick Start
+            ```bash
+            tar xzf n0s-cngpu-*-ubuntu-noble-amd64.tar.gz
+            cd n0s-cngpu-*
+            ./n0s-cngpu -o pool.ryo-currency.com:3333 -u YOUR_WALLET -p x
+            ```
