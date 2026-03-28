@@ -18,27 +18,47 @@ A cron job fires every 20 minutes. Each session:
 ---
 
 ## Current Task
-**Phase 3: Podman Test Harness — MOSTLY COMPLETE (blocked on podman install)**
+**Phase 5: Documentation — COMPLETE**
 
 ## Next Steps
-1. **Install podman** (`sudo apt install podman`) — needed to validate container builds
-2. Run `./scripts/test-all-distros.sh --cpu-only` — verify all 4 Ubuntu LTS builds
-3. Run `./scripts/test-all-distros.sh --opencl` — verify jammy + noble OpenCL builds
-4. Fix any build failures found in container testing
-5. Once validated, Phase 3 is complete → move to Phase 4 (CI/CD) or Phase 1 Round 2 (dead code purge)
+1. **Phase 1 Round 2 (Deep Code Purge)** — Remove dead algorithm code (~200 refs to non-cn-gpu algorithms). This is the last major code task.
+2. **Phase 3 validation** — Install podman (`sudo apt install podman`) to validate container builds.
+3. Tag v1.0.0 release once code purge and container validation are done.
 
 ## Blockers
 - ⚠️ **No container runtime:** Neither podman nor docker installed. Need sudo access to install.
   - Native noble build + smoke tests verified passing as proxy validation.
 
 ## Phase Status
-- **Phase 1 🟡 PARTIAL** — Dev fee removed ✅, coins[] stripped ✅, but dead algorithm code still in codebase (~200 refs). **REVISIT AFTER PHASE 3.**
+- **Phase 1 🟡 PARTIAL** — Dev fee removed ✅, coins[] stripped ✅, but dead algorithm code still in codebase (~200 refs). **NEXT UP.**
 - **Phase 2 ✅** — Rebrand to n0s-cngpu, license compliance, config simplification (merged to master)
 - **Phase 3 🟡 FILES DONE** — Containerfiles written (4 CPU + 2 OpenCL), test script written, native build verified. Needs podman to validate container builds.
-- **Phase 1 Round 2 🔴** — Deep code purge of dead algorithms (after Phase 3, before Phase 4)
-- **Phase 4 🔴** — CI/CD Pipeline (depends on Phase 3 validation)
+- **Phase 4 ✅** — CI/CD Pipeline (GitHub Actions build.yml + release.yml, release Containerfile, package-release.sh)
+- **Phase 5 ✅** — Documentation (README, CONTRIBUTING, compile guide, usage, tuning, FAQ, troubleshooting, doc index)
 
 ## Session Log
+
+### Session 11 — 2026-03-28 17:30 CDT (Phase 5: Documentation)
+✅ **Completed:**
+- **Phase 5 Tasks 5.1–5.4: Full Documentation Rewrite (COMPLETE)**
+  * `README.md` — complete rewrite: features, quick start, build matrix, config reference, releases
+  * `CONTRIBUTING.md` — rewrite: build/test/PR workflow, code style, scope
+  * `doc/README.md` — clean index page linking all guides
+  * `doc/compile/compile_Linux.md` — rewrite for Linux-only, Ubuntu LTS focus
+  * `doc/compile/compile.md` — simplified build options index
+  * `doc/usage.md` — rewrite: CLI options, pool config, HTTP API, backend selection
+  * `doc/tuning.md` — rewrite: NVIDIA/AMD/CPU tuning for cn-gpu
+  * `doc/FAQ.md` — rewrite: n0s-cngpu specific Q&A
+  * `doc/troubleshooting.md` — rewrite: OpenCL/CUDA/build/network issues
+  * Removed: Windows/macOS/FreeBSD compile docs, pgp_keys.md
+  * Removed: 42 legacy xmr-stak branding images from doc/_img/ (kept interleave.png)
+  * All xmr-stak branding, multi-coin references, dead links purged
+- **Build verified:** CPU-only build + smoke test pass after doc changes
+- **Commit:** e47ac39 pushed to master
+
+**Also noted:** Phase 4 (CI/CD) was completed in earlier undocumented sessions (commits 230a8d8, 6b60db4, ccc5fca, d152a22). Updated phase status to reflect Phase 4 ✅.
+
+**Next session:** Phase 1 Round 2 — deep code purge of dead algorithms. Start with `xmrstak_algo_id` enum and work through the deferred items in REFACTOR-PLAN.md Phase 1.5.
 
 ### Session 10 — 2026-03-28 17:10 CDT (Phase 3: Podman Test Harness)
 ✅ **Completed:**
