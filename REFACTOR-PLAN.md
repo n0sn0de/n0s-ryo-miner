@@ -116,42 +116,49 @@ Deferred items:
 ---
 
 ## Phase 3: Podman Test Harness (Days 7-10)
-**Branch:** `phase3/test-harness`
+**Branch:** Work done on `master` (containers/ and scripts/ committed in 3d6c68f)
 
-### Task 3.1: Containerized Build Testing
-- [ ] Create `containers/` directory
-- [ ] Write Containerfiles for each Ubuntu LTS:
+### Task 3.1: Containerized Build Testing ✅ COMPLETE (Session 10)
+- [x] Create `containers/` directory
+- [x] Write Containerfiles for each Ubuntu LTS:
   - `Containerfile.bionic` (18.04) — GCC 7, CMake 3.10
   - `Containerfile.focal` (20.04) — GCC 9, CMake 3.16
   - `Containerfile.jammy` (22.04) — GCC 11/12, CMake 3.22
   - `Containerfile.noble` (24.04) — GCC 13/14, CMake 3.28
-- [ ] Each Containerfile:
-  - Installs build deps (libmicrohttpd-dev, libssl-dev, cmake, build-essential, libhwloc-dev, ocl-icd-opencl-dev)
-  - Copies source
+- [x] Each Containerfile:
+  - Installs build deps (libmicrohttpd-dev, libssl-dev, cmake, build-essential, libhwloc-dev)
+  - Copies source via COPY (respects .containerignore)
   - Builds CPU-only (`-DOpenCL_ENABLE=OFF -DCUDA_ENABLE=OFF`)
-  - Runs basic smoke test (binary exists, `--help` works, version string correct)
-- [ ] Write `scripts/test-all-distros.sh`:
-  - Builds all 4 container images via podman
-  - Reports pass/fail per distro
-  - Supports parallel builds
+  - Runs smoke tests (binary exists, `--help` grep, `--version` grep for name + version)
+- [x] Native build + smoke tests verified on noble (24.04): all pass
+- [x] `.containerignore` / `.dockerignore` added to exclude build artifacts
 
-### Task 3.2: GPU Backend Build Testing
-- [ ] Add OpenCL variant Containerfiles (at least for jammy + noble with ROCm)
-- [ ] `Containerfile.noble-opencl` — install ROCm OpenCL dev headers
-- [ ] Test that OpenCL backend compiles (compilation only — no GPU passthrough in containers)
-- [ ] Add CUDA variant Containerfiles (at least for focal + jammy + noble)
-- [ ] `Containerfile.noble-cuda` — install CUDA toolkit dev headers
-- [ ] Test that CUDA backend compiles (compilation only — no GPU in containers)
+### Task 3.2: GPU Backend Build Testing ✅ PARTIAL (Session 10)
+- [x] Add OpenCL variant Containerfiles for jammy + noble
+  - `Containerfile.jammy-opencl` — ocl-icd-opencl-dev + opencl-headers
+  - `Containerfile.noble-opencl` — ocl-icd-opencl-dev + opencl-headers
+- [x] OpenCL builds compile-only (no GPU passthrough needed)
+- [ ] CUDA variant Containerfiles — DEFERRED (requires NVIDIA repo GPG keys + large toolkit install; better handled in Phase 4 CI/CD with proper GPU runners)
 
-### Task 3.3: Test Runner Script
-- [ ] `scripts/test-all-distros.sh` — master test orchestrator
-  - `--cpu-only` — test CPU-only builds across all distros
+### Task 3.3: Test Runner Script ✅ COMPLETE (Session 10)
+- [x] `scripts/test-all-distros.sh` — master test orchestrator
+  - `--cpu-only` — test CPU-only builds across all distros (default)
   - `--opencl` — test OpenCL builds on supported distros
   - `--all` — run everything
-  - Outputs results in a clean table
+  - `--parallel` — parallel builds
+  - `--distro X` — filter to single distro
+  - `--clean` — remove images after run
+  - Auto-detects podman or docker
+  - Outputs colored pass/fail results with timing
   - Non-zero exit on any failure
 
-**Validation:** `./scripts/test-all-distros.sh --all` passes on all 4 Ubuntu LTS versions.
+### Task 3.4: Container Runtime Validation ⚠️ BLOCKED
+- **Blocker:** Neither podman nor docker installed on dev machine (no sudo access to install)
+- Native noble build verified passing as proxy validation
+- **Action needed:** Jason to install podman (`sudo apt install podman`) then run: `./scripts/test-all-distros.sh --cpu-only`
+- Once podman is available, validate all 4 CPU distros + 2 OpenCL distros
+
+**Validation:** Native noble build + smoke tests pass ✅. Container builds need podman/docker install to validate.
 
 ---
 
@@ -245,7 +252,7 @@ Deferred items:
 |-------|--------|--------|-------|
 | Phase 1: Fee Removal & Code Purge | 🟡 | merged to master | Task 1.1 ✅ fee removed. Task 1.2 PARTIAL — coins[] stripped but dead algo code remains (~200 refs). Task 1.3 not started. **REVISIT AFTER PHASE 3.** |
 | Phase 2: Rebrand | 🟢 | merged to master | Task 2.1 ✅, 2.2 ✅, 2.3 ⏭️ deferred, 2.4 ✅ |
-| Phase 3: Podman Test Harness | 🔴 | — | **CURRENT** — create from master |
+| Phase 3: Podman Test Harness | 🟡 | `master` | Files complete, needs podman install to validate container builds |
 | Phase 1 (Round 2): Deep Code Purge | 🔴 | — | After Phase 3. Remove dead algo code from cryptonight.hpp, cryptonight_aesni.h, minethd.cpp, gpu.cpp, NVIDIA kernels |
 | Phase 4: CI/CD Pipeline | 🔴 | — | Depends on Phase 3 |
 | Phase 5: Documentation | 🔴 | — | Can start during Phase 4 |

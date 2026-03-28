@@ -18,28 +18,53 @@ A cron job fires every 20 minutes. Each session:
 ---
 
 ## Current Task
-**Phase 3: Podman Test Harness — NOT STARTED**
+**Phase 3: Podman Test Harness — MOSTLY COMPLETE (blocked on podman install)**
 
 ## Next Steps
-1. Create branch `phase3/test-harness` from master
-2. Create `containers/` directory
-3. Write Containerfiles for Ubuntu LTS: bionic (18.04), focal (20.04), jammy (22.04), noble (24.04)
-4. Each builds CPU-only (`-DOpenCL_ENABLE=OFF -DCUDA_ENABLE=OFF`) and runs smoke test
-5. Write `scripts/test-all-distros.sh` orchestrator
-6. Start with noble (24.04) as first target — matches our dev machine
-7. Test locally with `podman build`, verify pass/fail
-8. When all 4 distros pass, merge to master, delete branch
+1. **Install podman** (`sudo apt install podman`) — needed to validate container builds
+2. Run `./scripts/test-all-distros.sh --cpu-only` — verify all 4 Ubuntu LTS builds
+3. Run `./scripts/test-all-distros.sh --opencl` — verify jammy + noble OpenCL builds
+4. Fix any build failures found in container testing
+5. Once validated, Phase 3 is complete → move to Phase 4 (CI/CD) or Phase 1 Round 2 (dead code purge)
 
 ## Blockers
-_(none)_
+- ⚠️ **No container runtime:** Neither podman nor docker installed. Need sudo access to install.
+  - Native noble build + smoke tests verified passing as proxy validation.
 
 ## Phase Status
-- **Phase 1 🟡 PARTIAL** — Dev fee removed ✅, coins[] stripped ✅, but dead algorithm code still in codebase (~200 refs across cryptonight.hpp, cryptonight_aesni.h, minethd.cpp, gpu.cpp, NVIDIA kernels). **REVISIT AFTER PHASE 3.**
+- **Phase 1 🟡 PARTIAL** — Dev fee removed ✅, coins[] stripped ✅, but dead algorithm code still in codebase (~200 refs). **REVISIT AFTER PHASE 3.**
 - **Phase 2 ✅** — Rebrand to n0s-cngpu, license compliance, config simplification (merged to master)
-- **Phase 3 🔴 NEXT** — Podman test harness
+- **Phase 3 🟡 FILES DONE** — Containerfiles written (4 CPU + 2 OpenCL), test script written, native build verified. Needs podman to validate container builds.
 - **Phase 1 Round 2 🔴** — Deep code purge of dead algorithms (after Phase 3, before Phase 4)
+- **Phase 4 🔴** — CI/CD Pipeline (depends on Phase 3 validation)
 
 ## Session Log
+
+### Session 10 — 2026-03-28 17:10 CDT (Phase 3: Podman Test Harness)
+✅ **Completed:**
+- **Phase 3 Task 3.1: Containerized Build Testing (COMPLETE)**
+  * Verified containers/ directory with Containerfiles already committed on master (3d6c68f)
+  * 4 CPU-only Containerfiles: bionic (18.04), focal (20.04), jammy (22.04), noble (24.04)
+  * Each installs build deps, builds CPU-only, runs 4-part smoke test
+  * `.containerignore` + `.dockerignore` exclude build artifacts from context
+  * Native build + smoke tests verified on noble: all pass
+- **Phase 3 Task 3.2: GPU Backend Build Testing (PARTIAL)**
+  * 2 OpenCL Containerfiles: jammy-opencl, noble-opencl (ocl-icd + headers)
+  * CUDA Containerfiles deferred to Phase 4 (requires NVIDIA repo setup)
+- **Phase 3 Task 3.3: Test Runner Script (COMPLETE)**
+  * `scripts/test-all-distros.sh` — full-featured orchestrator
+  * Supports: --cpu-only, --opencl, --all, --parallel, --distro, --clean, --help
+  * Auto-detects podman/docker, colored output, timing, non-zero exit on failure
+  * Bash syntax validated, --help works without runtime
+- **Phase 3 Task 3.4: Container Validation (BLOCKED)**
+  * Neither podman nor docker installed; no sudo access
+  * Native noble build verified as proxy validation
+
+**Blocker:** Need `sudo apt install podman` to validate container builds.
+**Updated:** REFACTOR-PLAN.md with accurate Phase 3 status.
+**Native validation:** CPU-only build on noble (24.04) — cmake + make + 4 smoke tests all pass.
+
+**Next session:** If podman available, run container validation. Otherwise, skip to Phase 4 (CI/CD with GitHub Actions) or Phase 1 Round 2 (dead algorithm code purge — doesn't require containers).
 
 ### Session 9 — 2026-03-28 17:12 CDT (Branch Consolidation)
 - Jason requested branch review
