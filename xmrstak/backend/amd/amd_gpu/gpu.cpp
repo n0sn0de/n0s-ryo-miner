@@ -16,7 +16,6 @@
   * along with this program.  If not, see <http://www.gnu.org/licenses/>.
   */
 
-#include "xmrstak/backend/amd/OclCryptonightR_gen.hpp"
 #include "xmrstak/backend/cryptonight.hpp"
 #include "xmrstak/jconf.hpp"
 #include "xmrstak/net/msgstruct.hpp"
@@ -127,20 +126,9 @@ size_t InitOpenCLGpu(cl_context opencl_ctx, GpuContext* ctx, const char* source_
 	}
 
 	auto neededAlgorithms = ::jconf::inst()->GetCurrentCoinSelection().GetAllAlgorithms();
-	bool useCryptonight_gpu = std::find(neededAlgorithms.begin(), neededAlgorithms.end(), cryptonight_gpu) != neededAlgorithms.end();
 
-	if(useCryptonight_gpu)
-	{
-		// work cn_1 we use 16x more threads than configured by the user
-		MaximumWorkSize /= 16;
-	}
-	else
-	{
-		/* Some kernel spawn 8 times more threads than the user is configuring.
-		 * To give the user the correct maximum work size we divide the hardware specific max by 8.
-		 */
-		MaximumWorkSize /= 8;
-	}
+	// cryptonight_gpu uses 16x more threads than configured by the user
+	MaximumWorkSize /= 16;
 	printer::inst()->print_msg(L1, "Device %lu work size %lu / %lu.", ctx->deviceIdx, ctx->workSize, MaximumWorkSize);
 
 	if(ctx->workSize > MaximumWorkSize)
@@ -267,31 +255,8 @@ size_t InitOpenCLGpu(cl_context opencl_ctx, GpuContext* ctx, const char* source_
 		int hashIterations = miner_algo.Iter();
 
 		size_t mem_chunk_exp = 1u << ctx->memChunk;
-		size_t strided_index = ctx->stridedIndex;
-		/* Adjust the config settings to a valid combination
-		 * this is required if the dev pool is mining monero
-		 * but the user tuned there settings for another currency
-		 */
-		if(miner_algo == cryptonight_monero_v8 || miner_algo == cryptonight_v8_reversewaltz)
-		{
-			if(ctx->memChunk < 2)
-				mem_chunk_exp = 1u << 2;
-			if(strided_index == 1)
-				strided_index = 0;
-		}
-
-		if(miner_algo == cryptonight_gpu)
-		{
-			strided_index = 0;
-		}
-
-		if(miner_algo == cryptonight_r || miner_algo == cryptonight_r_wow)
-		{
-			if(ctx->memChunk < 2)
-				mem_chunk_exp = 1u << 2;
-			if(strided_index == 1)
-				strided_index = 0;
-		}
+		// cryptonight_gpu: contiguous scratchpad
+		size_t strided_index = 0;
 
 		// if intensity is a multiple of worksize than comp mode is not needed
 		int needCompMode = ctx->compMode && ctx->rawIntensity % ctx->workSize != 0 ? 1 : 0;
@@ -318,8 +283,7 @@ size_t InitOpenCLGpu(cl_context opencl_ctx, GpuContext* ctx, const char* source_
 #endif
 		options += " -DIS_WINDOWS_OS=" + std::to_string(isWindowsOs);
 
-		if(miner_algo == cryptonight_gpu)
-			options += " -cl-fp32-correctly-rounded-divide-sqrt";
+		options += " -cl-fp32-correctly-rounded-divide-sqrt";
 
 		/* create a hash for the compile time cache
 		 * used data:
@@ -466,26 +430,16 @@ size_t InitOpenCLGpu(cl_context opencl_ctx, GpuContext* ctx, const char* source_
 			}
 		}
 
+		// cryptonight_gpu kernel names
 		std::vector<std::string> KernelNames = {"cn2", "Blake", "Groestl", "JH", "Skein"};
-		if(miner_algo == cryptonight_gpu)
-		{
-			KernelNames.insert(KernelNames.begin(), "cn1_cn_gpu");
-			KernelNames.insert(KernelNames.begin(), "cn0_cn_gpu");
-		}
-		else
-		{
-			KernelNames.insert(KernelNames.begin(), "cn1");
-			KernelNames.insert(KernelNames.begin(), "cn0");
-		}
+		KernelNames.insert(KernelNames.begin(), "cn1_cn_gpu");
+		KernelNames.insert(KernelNames.begin(), "cn0_cn_gpu");
 
 		// append algorithm number to kernel name
 		for(int k = 0; k < 3; k++)
 			KernelNames[k] += std::to_string(miner_algo);
 
-		if(miner_algo == cryptonight_gpu)
-		{
-			KernelNames.push_back(std::string("cn00_cn_gpu") + std::to_string(miner_algo));
-		}
+		KernelNames.push_back(std::string("cn00_cn_gpu") + std::to_string(miner_algo));
 
 		for(int i = 0; i < KernelNames.size(); ++i)
 		{
@@ -929,52 +883,7 @@ size_t XMRSetJob(GpuContext* ctx, uint8_t* input, size_t input_len, uint64_t tar
 		}
 	}
 
-	// CN1 Kernel
-
-	if((miner_algo == cryptonight_r) || (miner_algo == cryptonight_r_wow))
-	{
-
-		uint32_t PRECOMPILATION_DEPTH = 1;
-		constexpr uint64_t height_chunk_size = 25;
-		uint64_t height_offset = (height / height_chunk_size) * height_chunk_size;
-
-		// Get new kernel
-		cl_program program = xmrstak::amd::CryptonightR_get_program(ctx, miner_algo, height_offset, height_chunk_size, PRECOMPILATION_DEPTH);
-
-		if(program != ctx->ProgramCryptonightR || ctx->last_block_height != height)
-		{
-			cl_int ret;
-			std::string kernel_name = "cn1_cryptonight_r_" + std::to_string(height);
-			cl_kernel kernel = clCreateKernel(program, kernel_name.c_str(), &ret);
-
-			if(ret != CL_SUCCESS)
-			{
-				printer::inst()->print_msg(LDEBUG, "CryptonightR: clCreateKernel returned error %s", err_to_str(ret));
-			}
-			else
-			{
-				cl_kernel old_kernel = Kernels[1];
-				if(old_kernel)
-					clReleaseKernel(old_kernel);
-				Kernels[1] = kernel;
-			}
-			ctx->ProgramCryptonightR = program;
-			ctx->last_block_height = height;
-			printer::inst()->print_msg(LDEBUG, "Set height %llu", height);
-
-			// Precompile next program in background
-			for(int i = 1; i <= PRECOMPILATION_DEPTH; ++i)
-				xmrstak::amd::CryptonightR_get_program(ctx, miner_algo, height_offset + i * height_chunk_size, height_chunk_size, PRECOMPILATION_DEPTH, true);
-
-			printer::inst()->print_msg(LDEBUG, "Thread #%zu updated CryptonightR", ctx->deviceIdx);
-		}
-		else
-		{
-			printer::inst()->print_msg(LDEBUG, "Thread #%zu found CryptonightR", ctx->deviceIdx);
-		}
-	}
-
-	// Scratchpads
+	// CN1 Kernel - Scratchpads
 	if((ret = clSetKernelArg(Kernels[1], 0, sizeof(cl_mem), ctx->ExtraBuffers + 0)) != CL_SUCCESS)
 	{
 		printer::inst()->print_msg(L1, "Error %s when calling clSetKernelArg for kernel 1, argument 0.", err_to_str(ret));
@@ -995,16 +904,6 @@ size_t XMRSetJob(GpuContext* ctx, uint8_t* input, size_t input_len, uint64_t tar
 		return (ERR_OCL_API);
 	}
 
-	if(miner_algo == cryptonight_monero || miner_algo == cryptonight_aeon || miner_algo == cryptonight_ipbc || miner_algo == cryptonight_stellite || miner_algo == cryptonight_masari || miner_algo == cryptonight_bittube2)
-	{
-		// Input
-		if((ret = clSetKernelArg(Kernels[1], 3, sizeof(cl_mem), &ctx->InputBuffer)) != CL_SUCCESS)
-		{
-			printer::inst()->print_msg(L1, "Error %s when calling clSetKernelArg for kernel 1, argument 4(input buffer).", err_to_str(ret));
-			return ERR_OCL_API;
-		}
-	}
-
 	// CN3 Kernel
 	// Scratchpads
 	if((ret = clSetKernelArg(Kernels[2], 0, sizeof(cl_mem), ctx->ExtraBuffers + 0)) != CL_SUCCESS)
@@ -1020,102 +919,25 @@ size_t XMRSetJob(GpuContext* ctx, uint8_t* input, size_t input_len, uint64_t tar
 		return ERR_OCL_API;
 	}
 
-	if(miner_algo == cryptonight_gpu)
+	// Output
+	if((ret = clSetKernelArg(Kernels[2], 2, sizeof(cl_mem), &ctx->OutputBuffer)) != CL_SUCCESS)
 	{
-		// Output
-		if((ret = clSetKernelArg(Kernels[2], 2, sizeof(cl_mem), &ctx->OutputBuffer)) != CL_SUCCESS)
-		{
-			printer::inst()->print_msg(L1, "Error %s when calling clSetKernelArg for kernel %d, argument %d.", err_to_str(ret), 2, 2);
-			return ERR_OCL_API;
-		}
-
-		// Target
-		if((ret = clSetKernelArg(Kernels[2], 3, sizeof(cl_ulong), &target)) != CL_SUCCESS)
-		{
-			printer::inst()->print_msg(L1, "Error %s when calling clSetKernelArg for kernel %d, argument %d.", err_to_str(ret), 2, 3);
-			return ERR_OCL_API;
-		}
-
-		// Threads
-		if((ret = clSetKernelArg(Kernels[2], 4, sizeof(cl_uint), &numThreads)) != CL_SUCCESS)
-		{
-			printer::inst()->print_msg(L1, "Error %s when calling clSetKernelArg for kernel 2, argument 4.", err_to_str(ret));
-			return (ERR_OCL_API);
-		}
+		printer::inst()->print_msg(L1, "Error %s when calling clSetKernelArg for kernel %d, argument %d.", err_to_str(ret), 2, 2);
+		return ERR_OCL_API;
 	}
-	else
+
+	// Target
+	if((ret = clSetKernelArg(Kernels[2], 3, sizeof(cl_ulong), &target)) != CL_SUCCESS)
 	{
-		// Branch 0
-		if((ret = clSetKernelArg(Kernels[2], 2, sizeof(cl_mem), ctx->ExtraBuffers + 2)) != CL_SUCCESS)
-		{
-			printer::inst()->print_msg(L1, "Error %s when calling clSetKernelArg for kernel 2, argument 2.", err_to_str(ret));
-			return ERR_OCL_API;
-		}
+		printer::inst()->print_msg(L1, "Error %s when calling clSetKernelArg for kernel %d, argument %d.", err_to_str(ret), 2, 3);
+		return ERR_OCL_API;
+	}
 
-		// Branch 1
-		if((ret = clSetKernelArg(Kernels[2], 3, sizeof(cl_mem), ctx->ExtraBuffers + 3)) != CL_SUCCESS)
-		{
-			printer::inst()->print_msg(L1, "Error %s when calling clSetKernelArg for kernel 2, argument 3.", err_to_str(ret));
-			return ERR_OCL_API;
-		}
-
-		// Branch 2
-		if((ret = clSetKernelArg(Kernels[2], 4, sizeof(cl_mem), ctx->ExtraBuffers + 4)) != CL_SUCCESS)
-		{
-			printer::inst()->print_msg(L1, "Error %s when calling clSetKernelArg for kernel 2, argument 4.", err_to_str(ret));
-			return ERR_OCL_API;
-		}
-
-		// Branch 3
-		if((ret = clSetKernelArg(Kernels[2], 5, sizeof(cl_mem), ctx->ExtraBuffers + 5)) != CL_SUCCESS)
-		{
-			printer::inst()->print_msg(L1, "Error %s when calling clSetKernelArg for kernel 2, argument 5.", err_to_str(ret));
-			return ERR_OCL_API;
-		}
-
-		// Threads
-		if((ret = clSetKernelArg(Kernels[2], 6, sizeof(cl_uint), &numThreads)) != CL_SUCCESS)
-		{
-			printer::inst()->print_msg(L1, "Error %s when calling clSetKernelArg for kernel 2, argument 6.", err_to_str(ret));
-			return (ERR_OCL_API);
-		}
-
-		for(int i = 0; i < 4; ++i)
-		{
-			// States
-			if((ret = clSetKernelArg(Kernels[i + 3], 0, sizeof(cl_mem), ctx->ExtraBuffers + 1)) != CL_SUCCESS)
-			{
-				printer::inst()->print_msg(L1, "Error %s when calling clSetKernelArg for kernel %d, argument %d.", err_to_str(ret), i + 3, 0);
-				return ERR_OCL_API;
-			}
-
-			// Nonce buffer
-			if((ret = clSetKernelArg(Kernels[i + 3], 1, sizeof(cl_mem), ctx->ExtraBuffers + (i + 2))) != CL_SUCCESS)
-			{
-				printer::inst()->print_msg(L1, "Error %s when calling clSetKernelArg for kernel %d, argument %d.", err_to_str(ret), i + 3, 1);
-				return ERR_OCL_API;
-			}
-
-			// Output
-			if((ret = clSetKernelArg(Kernels[i + 3], 2, sizeof(cl_mem), &ctx->OutputBuffer)) != CL_SUCCESS)
-			{
-				printer::inst()->print_msg(L1, "Error %s when calling clSetKernelArg for kernel %d, argument %d.", err_to_str(ret), i + 3, 2);
-				return ERR_OCL_API;
-			}
-
-			// Target
-			if((ret = clSetKernelArg(Kernels[i + 3], 3, sizeof(cl_ulong), &target)) != CL_SUCCESS)
-			{
-				printer::inst()->print_msg(L1, "Error %s when calling clSetKernelArg for kernel %d, argument %d.", err_to_str(ret), i + 3, 3);
-				return ERR_OCL_API;
-			}
-
-			if((clSetKernelArg(Kernels[i + 3], 4, sizeof(cl_uint), &numThreads)) != CL_SUCCESS)
-			{
-				printer::inst()->print_msg(L1, "Error %s when calling clSetKernelArg for kernel %d, argument %d.", err_to_str(ret), i + 3, 4);
-				return (ERR_OCL_API);
-			}
-		}
+	// Threads
+	if((ret = clSetKernelArg(Kernels[2], 4, sizeof(cl_uint), &numThreads)) != CL_SUCCESS)
+	{
+		printer::inst()->print_msg(L1, "Error %s when calling clSetKernelArg for kernel 2, argument 4.", err_to_str(ret));
+		return (ERR_OCL_API);
 	}
 
 	return ERR_SUCCESS;
@@ -1255,7 +1077,7 @@ size_t XMRRunJob(GpuContext* ctx, cl_uint* HashOutput, const xmrstak_algo& miner
 
 	size_t tmpNonce = ctx->Nonce;
 
-	if(miner_algo == cryptonight_gpu)
+	// cryptonight_gpu kernel dispatch
 	{
 		size_t thd = 64;
 		size_t intens = g_intensity * thd;
@@ -1274,32 +1096,12 @@ size_t XMRRunJob(GpuContext* ctx, cl_uint* HashOutput, const xmrstak_algo& miner
 			return ERR_OCL_API;
 		}
 	}
-	else
-	{
-		if((ret = clEnqueueNDRangeKernel(ctx->CommandQueues, Kernels[1], 1, &tmpNonce, &g_thd, &w_size, 0, NULL, NULL)) != CL_SUCCESS)
-		{
-			printer::inst()->print_msg(L1, "Error %s when calling clEnqueueNDRangeKernel for kernel %d.", err_to_str(ret), 1);
-			return ERR_OCL_API;
-		}
-	}
 
 	size_t  NonceT[2] = {0, ctx->Nonce}, gthreadsT[2] = {8, g_thd}, lthreadsT[2] = {8 , w_size};
 	if((ret = clEnqueueNDRangeKernel(ctx->CommandQueues, Kernels[2], 2, NonceT, gthreadsT, lthreadsT, 0, NULL, NULL)) != CL_SUCCESS)
 	{
 		printer::inst()->print_msg(L1, "Error %s when calling clEnqueueNDRangeKernel for kernel %d.", err_to_str(ret), 2);
 			return ERR_OCL_API;
-	}
-
-	if(miner_algo != cryptonight_gpu)
-	{
-		for(int i = 0; i < 4; ++i)
-		{
-			if((ret = clEnqueueNDRangeKernel(ctx->CommandQueues, Kernels[i + 3], 1, &tmpNonce, &g_thd, &w_size, 0, NULL, NULL)) != CL_SUCCESS)
-			{
-				printer::inst()->print_msg(L1, "Error %s when calling clEnqueueNDRangeKernel for kernel %d.", err_to_str(ret), i + 3);
-				return ERR_OCL_API;
-			}
-		}
 	}
 
 	// this call is blocking therefore the access to the results without cl_finish is fine

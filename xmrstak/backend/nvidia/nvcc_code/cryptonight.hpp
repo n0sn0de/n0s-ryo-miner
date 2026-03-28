@@ -39,10 +39,6 @@ typedef struct
 	size_t total_device_memory;
 
 	CUcontext cuContext;
-	CUmodule module = nullptr;
-	CUfunction kernel = nullptr;
-	uint64_t kernel_height = 0;
-	xmrstak_algo cached_algo = {xmrstak_algo_id::invalid_algo};
 } nvid_ctx;
 
 extern "C"

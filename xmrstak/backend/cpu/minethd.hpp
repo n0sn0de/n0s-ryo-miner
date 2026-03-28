@@ -29,24 +29,10 @@ class minethd : public iBackend
 
 	static cryptonight_ctx* minethd_alloc_ctx();
 
-	template <size_t N>
-	static void func_multi_selector(cryptonight_ctx**, minethd::cn_on_new_job& on_new_job,
-		bool bHaveAes, bool bNoPrefetch, const xmrstak_algo& algo, const std::string& asm_version_str = "off");
-
   private:
 	minethd(miner_work& pWork, size_t iNo, int iMultiway, bool no_prefetch, int64_t affinity, const std::string& asm_version);
 
-	template <uint32_t N>
-	void multiway_work_main();
-
-	template <size_t N>
-	void prep_multiway_work(uint8_t* bWorkBlob, uint32_t** piNonce);
-
 	void work_main();
-	void double_work_main();
-	void triple_work_main();
-	void quad_work_main();
-	void penta_work_main();
 
 	uint64_t iJobNo;
 
