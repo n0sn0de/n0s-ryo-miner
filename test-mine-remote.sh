@@ -5,7 +5,7 @@ set -e
 REMOTE="${REMOTE:-nos2}"
 POOL="${POOL:-192.168.50.186:3333}"
 TIMEOUT="${TIMEOUT:-40}"
-REPO_URL="https://github.com/n0sn0de/xmr-stak.git"
+REPO_URL="https://github.com/n0sn0de/n0s-ryo-miner.git"
 
 # Resolve remote home directory dynamically
 # Use printf to avoid capturing ssh-agent noise
@@ -14,7 +14,7 @@ if [ -z "$REMOTE_HOME" ]; then
     echo "❌ Could not resolve remote HOME for $REMOTE"
     exit 1
 fi
-REMOTE_DIR="${REMOTE_HOME}/xmr-stak-test"
+REMOTE_DIR="${REMOTE_HOME}/n0s-ryo-miner"
 
 echo "====================================="
 echo "Remote NVIDIA Mining Test"

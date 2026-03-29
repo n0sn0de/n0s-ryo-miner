@@ -5,8 +5,8 @@ set -e
 REMOTE="nosnode"
 POOL="${POOL:-192.168.50.186:3333}"
 TIMEOUT="${TIMEOUT:-45}"
-REPO_URL="https://github.com/n0sn0de/xmr-stak.git"
-REMOTE_DIR="/home/nosnode/xmr-stak-test"
+REPO_URL="https://github.com/n0sn0de/n0s-ryo-miner.git"
+REMOTE_DIR="/home/nosnode/n0s-ryo-miner"
 
 echo "====================================="
 echo "nosnode CUDA 12.6 Test"
