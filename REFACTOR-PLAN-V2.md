@@ -186,15 +186,25 @@ enum xmrstak_algo_id {
 - CUDA extra: 820 → 585 lines (-29%)
 - **Total kernel code: 3357 → 2015 lines (-40%)**
 
-### 2.2: Clean Up Enum (Deferred)
+### 2.2: Clean Up Algorithm Enum — ✅ COMPLETE
 
-**Only after all kernel code is stripped:**
-- Reduce enum to `{invalid_algo = 0, cryptonight_gpu = 13}`
-- Keep `= 13` explicit to maintain ABI
-- Update OpenCL `#define cryptonight_gpu 13`
-- Verify CUDA `-DALGO=13` still matches
+**Results:**
+- ✅ Reduced `xmrstak_algo_id` from 22 entries → 2: `invalid_algo = 0`, `cryptonight_gpu = 13`
+- ✅ Explicit `= 13` preserved for ABI contract (OpenCL `#define`, CUDA `-DALGO=`)
+- ✅ Simplified `POW()` from 18-element array lookup to direct return
+- ✅ Simplified `get_algo_name()` from dual-array lookup to simple switch
+- ✅ Removed dead algo branches from: `gpu.cpp`, `backendConnector.cpp`, `minethd.cpp`
+- ✅ Replaced dead algo template references with `invalid_algo` in `cryptonight_aesni.h`
+- ✅ Simplified `func_multi_selector` from 16-entry switch+64-entry function table to 4-entry GPU-only table
+- ✅ Removed CryptonightR switch/case duplicates in OpenCL/CUDA codegen
+- ✅ Added explicit template instantiations for `.so` plugin symbol resolution
+- ✅ Kept `CN_ITER`/`CN_MASK` constants for ASM patching code compatibility
 
-**Status:** Can proceed, but deferred to Phase 3 to minimize risk
+**Code reduction:** 9 files changed, -658 lines net
+
+**Test results:**
+- AMD RX 9070 XT: 150+ shares accepted, 0 rejected ✅
+- NVIDIA GTX 1070 Ti: 90+ shares accepted, 0 rejected ✅
 
 ---
 
