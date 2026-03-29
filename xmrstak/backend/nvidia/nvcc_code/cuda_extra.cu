@@ -1,3 +1,17 @@
+/**
+ * cuda_extra.cu — CUDA device init, Phase 1 (prepare), and Phase 5 (finalize)
+ *
+ * Contains the "bookend" kernels and host-side GPU management:
+ *
+ *   Phase 1 (prepare): Keccak hash → AES key expansion → initial state setup
+ *   Phase 5 (finalize): AES compression → final Keccak → target comparison
+ *
+ *   Device management: Enumeration, init, memory allocation, capability checks
+ *
+ * The extern "C" functions are the ABI between the CUDA shared library
+ * (libxmrstak_cuda_backend.so) and the main miner binary.
+ */
+
 #include "xmrstak/jconf.hpp"
 #include <algorithm>
 #include <cuda.h>
@@ -74,6 +88,15 @@ __device__ __forceinline__ void cryptonight_aes_set_key(uint32_t* __restrict__ k
 	}
 }
 
+/**
+ * Phase 1 Kernel: Prepare hash state from input
+ *
+ * For each nonce:
+ *   1. Copy input blob and patch nonce at offset 39
+ *   2. Keccak-1600 → 200-byte state
+ *   3. AES-256 key expansion → key1 (from state[0:32]) and key2 (from state[32:64])
+ *   4. XOR state halves → ctx_a and ctx_b (initial values for Phase 3)
+ */
 template <xmrstak_algo_id ALGO>
 __global__ void cryptonight_extra_gpu_prepare(int threads, uint32_t* __restrict__ d_input, uint32_t len, uint32_t startNonce, uint32_t* __restrict__ d_ctx_state, uint32_t* __restrict__ d_ctx_state2, uint32_t* __restrict__ d_ctx_a, uint32_t* __restrict__ d_ctx_b, uint32_t* __restrict__ d_ctx_key1, uint32_t* __restrict__ d_ctx_key2)
 {
@@ -124,6 +147,18 @@ __device__ __forceinline__ void mix_and_propagate(uint32_t* state)
 		(state + 4 * 7)[x] = (state + 4 * 7)[x] ^ tmp0[x];
 }
 
+/**
+ * Phase 5 Kernel: Finalize hash and check against target
+ *
+ * For each hash:
+ *   1. Load state from Phase 4 output
+ *   2. 16 rounds of AES pseudo-round + mix_and_propagate
+ *   3. Final Keccak-f permutation
+ *   4. Compare hash against difficulty target
+ *   5. If below target, atomically store nonce in result buffer
+ *
+ * cn_gpu outputs directly: no extra_hashes branch (blake/groestl/jh/skein).
+ */
 template <xmrstak_algo_id ALGO>
 __global__ void cryptonight_extra_gpu_final(int threads, uint64_t target, uint32_t* __restrict__ d_res_count, uint32_t* __restrict__ d_res_nonce, uint32_t* __restrict__ d_ctx_state, uint32_t* __restrict__ d_ctx_key2)
 {
