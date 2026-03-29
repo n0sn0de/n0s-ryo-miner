@@ -47,38 +47,30 @@
 
 ---
 
-### 1.2: Remove CPU Backend
+### 1.2: Remove CPU Mining Backend ✅ COMPLETE
 
-**Why this is safe:** CPU backend is completely isolated in `xmrstak/backend/cpu/`. GPU backends don't depend on it.
+> **⚠️ CORRECTION (discovered during implementation):**
+> The original plan stated "CPU backend is completely isolated in `xmrstak/backend/cpu/`. GPU backends don't depend on it." **This is wrong.**
+>
+> Both GPU backends (AMD & NVIDIA) heavily depend on `cpu/crypto/` and `cpu/minethd.*`:
+> - `cryptonight.h`, `cryptonight_aesni.h` — hash verification
+> - `minethd::minethd_alloc_ctx()` — crypto context allocation
+> - `minethd::thd_setaffinity()` — thread pinning
+> - `minethd::func_multi_selector()` — hash function dispatch
+> - `hwlocMemory.hpp` — NUMA-aware memory allocation
+> - `variant4_random_math.h` — CryptonightR math (used by GPU CryptonightR codegen)
+>
+> **Resolution:** Only the CPU *mining threads* were removed, not the shared crypto library.
+> The `xmrstak/backend/cpu/` directory stays as shared infrastructure for GPU backends.
 
-#### 1.2.1: Delete CPU Source Tree
-```bash
-rm -rf xmrstak/backend/cpu/
-```
-- Includes: `minethd.cpp`, `crypto/`, all CPU mining code
-- Test: Verify build succeeds with `-DCPU_ENABLE=OFF` (already default)
-- **Risk:** Low — backend is isolated
+#### What was actually done:
+- Hardcoded `CONF_NO_CPU` in CMake (removed `CPU_ENABLE` option entirely)
+- Removed `--noCPU` and `--cpu FILE` CLI options
+- Removed `useCPU` param from `params.hpp`
+- Removed CPU thread_starter block from `backendConnector.cpp`
+- Updated test scripts (removed `--noCPU` flag, added branch-aware remote deploy)
 
-#### 1.2.2: Remove CPU CMake Logic
-- `xmrstak/backend/CMakeLists.txt`: remove CPU backend options
-- `CMakeLists.txt`: remove `-DCPU_ENABLE` flag entirely
-- Test: Clean build, check no CPU references remain
-- **Risk:** Low — cmake is declarative
-
-#### 1.2.3: Remove CPU Config & CLI Options
-- `xmrstak/backend/cpu/jconf.*`: delete
-- `xmrstak/cli/cli-miner.cpp`: remove `--noCPU`, `--cpu FILE` options
-- `xmrstak/params.hpp`: remove CPU-related params
-- Test: `./n0s-ryo-miner --help` shows no CPU options
-- **Risk:** Medium — affects CLI parsing
-
-#### 1.2.4: Remove CPU from Executor
-- `xmrstak/backend/globalStates.cpp`: remove CPU thread management
-- `xmrstak/backend/executor.*`: remove CPU backend init
-- Test: `./test-both.sh` (GPU-only operation)
-- **Risk:** Medium — affects runtime initialization
-
-**Test milestone:** `./test-both.sh` with CPU backend completely removed
+**Test results:** AMD 104 shares ✅ | NVIDIA 44 shares ✅
 
 ---
 
