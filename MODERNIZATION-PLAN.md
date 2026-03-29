@@ -98,14 +98,24 @@ Add a compat header `cuda_compat.hpp` with version-gated shims:
 
 ---
 
-## Phase 3.2: CMake Modernization
+## Phase 3.2: CMake Modernization — ✅ COMPLETE
 
 ### Tasks:
-- [ ] 3.2.1: Raise cmake_minimum_required to 3.18 (for native CUDA language support)
-- [ ] 3.2.2: Migrate from `find_package(CUDA)` + `cuda_add_library()` to CMake native CUDA
-- [ ] 3.2.3: Use `CMAKE_CUDA_ARCHITECTURES` instead of manual gencode flags
-- [ ] 3.2.4: Upgrade C++ standard from C++11 to C++17
-- [ ] 3.2.5: Clean up dead CMake paths (Fermi/Kepler guards, CUDA <8 workarounds, APPLE/MSVC cruft)
+- [x] 3.2.1: Raise cmake_minimum_required to 3.18 ✅
+- [ ] 3.2.2: Migrate to CMake native CUDA (deferred — find_package(CUDA) works, low ROI)
+- [ ] 3.2.3: Use CMAKE_CUDA_ARCHITECTURES (deferred — same reason)
+- [x] 3.2.4: Upgrade C++ standard from C++11 to C++17 ✅
+- [x] 3.2.5: Clean up dead CMake paths, dead compiler guards, MSVC/Windows cruft ✅
+
+### Results:
+- CMakeLists.txt: 550+ → ~280 lines (-270 lines, -49%)
+- Fixed arch validation bug (was checking CUDA_ARCH not CUDA_ARCH_ELEM)
+- NVCC now compiles with -std=c++17
+- Minimum GCC raised from 5.1 to 7.0
+
+**Test results:**
+- AMD RX 9070 XT: 75 shares ✅
+- NVIDIA GTX 1070 Ti (CUDA 11.8): 60 shares ✅
 
 ### Why:
 - `find_package(CUDA)` / `cuda_add_library()` are deprecated since CMake 3.10
@@ -127,20 +137,23 @@ Add a compat header `cuda_compat.hpp` with version-gated shims:
 
 ---
 
-## Phase 3.4: Dead Code Removal (Remaining)
+## Phase 3.4: Dead Code Removal — ✅ COMPLETE
 
-Files/code that exist but are dead after Phase 2 cleanup:
+**Results:** 17 files deleted, -7,141 lines
 
-- [ ] `xmrstak/backend/nvidia/CudaCryptonightR_gen.cpp/hpp` — CryptonightR runtime codegen (dead)
-- [ ] `xmrstak/backend/amd/OclCryptonightR_gen.cpp/hpp` — CryptonightR OpenCL codegen (dead)
-- [ ] `xmrstak/backend/cpu/crypto/variant4_random_math.h` — CryptonightR math (dead)
-- [ ] `xmrstak/backend/cpu/crypto/CryptonightR_gen.cpp` — CryptonightR CPU codegen (dead)
-- [ ] `xmrstak/backend/cpu/crypto/asm/cnR/` — CryptonightR ASM templates (dead)
-- [ ] `xmrstak/backend/nvidia/nvcc_code/cuda_fast_div_heavy.hpp` — heavy algo helper (dead)
-- [ ] `xmrstak/backend/nvidia/nvcc_code/cuda_fast_int_math_v2.hpp` — v2 algo helper (dead)
-- [ ] `xmrstak/backend/amd/amd_gpu/opencl/fast_div_heavy.cl` — heavy OpenCL helper (dead)
-- [ ] `xmrstak/backend/amd/amd_gpu/opencl/fast_int_math_v2.cl` — v2 OpenCL helper (dead)
-- [ ] `.appveyor.yml`, `.travis.yml` — dead CI configs (we don't use these)
+- [x] CryptonightR codegen (CUDA, OpenCL, CPU) — all removed
+- [x] CryptonightR ASM templates — all removed
+- [x] variant4_random_math.h — removed
+- [x] cuda_fast_div_heavy.hpp, cuda_fast_int_math_v2.hpp — removed
+- [x] fast_div_heavy.cl, fast_int_math_v2.cl — removed
+- [x] .appveyor.yml, .travis.yml — removed
+- [x] cn_r_ctx struct and all references — eliminated
+- [x] CN_R_RANDOM_MATH macro — stubbed (dead path)
+- [x] Cryptonight_R_generator template — removed
+
+**Test results:**
+- AMD RX 9070 XT: 76 shares ✅
+- NVIDIA GTX 1070 Ti (CUDA 11.8): 59 shares ✅
 
 ---
 
