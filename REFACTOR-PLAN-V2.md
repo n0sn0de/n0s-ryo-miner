@@ -89,29 +89,28 @@
 
 ---
 
-### 1.4: Hardcode Algorithm to CryptoNight-GPU
+### 1.4: Hardcode Algorithm to CryptoNight-GPU ✅ COMPLETE
 
-**Why this is safe:** Runtime restriction only, keeps enum intact for OpenCL/CUDA compatibility.
+> **Discovery:** Steps 1.4.1–1.4.3 were combined into a single commit because they're
+> tightly coupled — the coins array IS the pool config, and the CLI feeds into it.
+> Splitting them would leave broken intermediate states. One atomic change was the right call.
 
-#### 1.4.1: Remove Algorithm Selection UI
-- `xmrstak/cli/cli-miner.cpp`: remove `--currency` option
-- Hardcode: `POW(cryptonight_gpu)` always
-- Test: Binary still runs, no need to specify `--currency`
-- **Risk:** Low — UI only
+#### What was actually done:
+- Removed `--currency` from help text; kept CLI flag as deprecated (backward-compat, prints warning)
+- Hardcoded `params::inst().currency = "cryptonight_gpu"` as default
+- Removed interactive currency selection prompt from guided config
+- Reduced `coins[]` array in `jconf.cpp` from 30+ entries to just 2: `cryptonight_gpu` and `ryo`
+- Simplified `pools.tpl` template (removed massive dead algorithm documentation)
+- Removed `--currency cryptonight_gpu` from test scripts (now default, not needed)
 
-#### 1.4.2: Simplify Pool Config
-- `xmrstak/net/jpsock.cpp`: remove multi-algo pool switching logic
-- Single algo: always cn_gpu, no runtime selection
-- Test: Pool connection works
-- **Risk:** Medium — affects network layer
+> **Correction to original plan:**
+> - 1.4.2 said to modify `jpsock.cpp` for pool switching — **not needed**. The pool switching
+>   logic in `jpsock.cpp` works via `coin_selection` struct which now only has cn_gpu entries.
+>   No code changes needed in the network layer.
+> - 1.4.3 said coins array was in `cryptonight.hpp` — **it's actually in `jconf.cpp`**.
+>   The `cryptonight.hpp` file has the algorithm enum, not the coins array.
 
-#### 1.4.3: Remove Coins Array
-- `xmrstak/backend/cryptonight.hpp`: `coins[]` array → delete or stub
-- Keep `POW(cryptonight_gpu)` function
-- Test: `./test-both.sh`
-- **Risk:** Low — already runtime-restricted
-
-**Test milestone:** `./test-both.sh` with hardcoded cn_gpu
+**Test results:** AMD 78 shares ✅ | NVIDIA 51 shares ✅
 
 ---
 
@@ -204,9 +203,9 @@ git diff HEAD~1 --stat  # Review what actually changed
 | Change | Risk | Mitigation |
 |--------|------|------------|
 | Binary rename | Low | Test build output |
-| Remove CPU backend | Low | Backend is isolated |
-| Remove CLI options | Medium | Test `--help`, verify GPU flags work |
-| Hardcode algorithm | Medium | Test pool connection |
+| Remove CPU backend | Medium | ~~Backend is isolated~~ CPU crypto is shared! Only removed CPU mining threads |
+| Remove CLI options | ✅ Done | `--currency` deprecated with backward-compat |
+| Hardcode algorithm | ✅ Done | coins[] reduced, default hardcoded, tests pass |
 | HTTP daemon (keep) | None | No changes |
 | Enum intact (Phase 1) | None | Explicitly preserving |
 | Strip kernel code (Phase 2) | **HIGH** | One file at a time, test after each |
@@ -234,13 +233,14 @@ git push origin master --force
 ## Success Criteria
 
 **Phase 1 Complete When:**
-- ✅ Binary named `n0s-ryo-miner`
-- ✅ Banners show "n0s-ryo-miner" and "RYO Currency"
-- ✅ CPU backend completely removed
-- ✅ Algorithm hardcoded to cn_gpu (no `--currency` flag needed)
-- ✅ `./test-both.sh` passes consistently
-- ✅ No dead code warnings in build
-- ✅ README updated with new name/usage
+- ✅ Binary named `n0s-ryo-miner` (Phase 1.1.1)
+- ✅ Banners show "n0s-ryo-miner" and "RYO Currency" (Phase 1.1.3)
+- ✅ CPU mining threads removed (Phase 1.2 — note: crypto lib stays as shared infra)
+- ✅ HTTP daemon kept as-is (Phase 1.3)
+- ✅ Algorithm hardcoded to cn_gpu, `--currency` deprecated (Phase 1.4)
+- ✅ `./test-both.sh` passes consistently (AMD + NVIDIA verified each phase)
+- ⬜ No dead code warnings in build (minor — some warnings remain)
+- ⬜ README updated with new name/usage
 
 **Phase 2 Complete When:**
 - ✅ OpenCL/CUDA kernels stripped to cn_gpu only

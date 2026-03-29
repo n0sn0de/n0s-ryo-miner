@@ -22,12 +22,13 @@ ssh $REMOTE "rm -rf $REMOTE_DIR && git clone -b $BRANCH $REPO_URL $REMOTE_DIR 2>
 
 # Build (NVIDIA only, no AMD)
 echo "Building on remote..."
-ssh $REMOTE "export PATH=/usr/local/cuda-11.8/bin:\$PATH && \
+ssh $REMOTE "set -e && export PATH=/usr/local/cuda-11.8/bin:\$PATH && \
   export LD_LIBRARY_PATH=/usr/local/cuda-11.8/lib64:\$LD_LIBRARY_PATH && \
   cd $REMOTE_DIR && rm -rf build && mkdir build && cd build && \
   cmake .. -DCUDA_ENABLE=ON -DOpenCL_ENABLE=OFF -DMICROHTTPD_ENABLE=OFF \
-    -DCUDA_ARCH='61' -DCMAKE_BUILD_TYPE=Release && \
-  cmake --build . -j\$(nproc) 2>&1 | tail -5"
+    -DCUDA_ARCH='61' -DCMAKE_BUILD_TYPE=Release >/dev/null 2>&1 && \
+  cmake --build . -j\$(nproc) 2>&1 | tail -5 && \
+  test -f bin/n0s-ryo-miner"
 
 if [ $? -ne 0 ]; then
     echo "❌ REMOTE BUILD FAILED"
