@@ -2,7 +2,7 @@
 
 **High-Level Strategy for the Foundational C++ Rewrite**
 
-*Status: Planning — not yet started*
+*Status: Phase R1 ✅ Phase R2 ✅ — Phase R3 next*
 
 ---
 
@@ -251,3 +251,30 @@ R1 is the most critical — without the validation harness, we're flying blind. 
 ---
 
 *This plan respects the complexity of GPU kernel code. We're not rewriting for the sake of rewriting — we're making the code ours so we can reason about it, optimize it, and maintain it confidently.*
+
+---
+
+## Session Log
+
+### Session 1 (2026-03-29)
+
+**Completed:**
+- ✅ Repo rename remediation: Updated git remotes on nitro, nos2, nosnode
+- ✅ Renamed local directories: `~/xmr-stak` → `~/n0s-ryo-miner` on all 3 machines
+- ✅ Fixed test scripts (test-nosnode.sh, test-mine-remote.sh) with new URL/paths
+- ✅ **Phase R1: Validation Harness** — `tests/cn_gpu_harness.cpp`
+  - Standalone tool, no runtime dependencies (jconf stubbed)
+  - 3 golden test vectors verified bit-exact on all 3 machines
+  - `--hex` mode for arbitrary hashing, `--dump` mode for phase-by-phase dumps
+  - ~60ms per hash on CPU (AVX2)
+- ✅ **Phase R2: Algorithm Constants** — `n0s/algorithm/cn_gpu.hpp`
+  - All constants extracted with documentation: scratchpad, iterations, mask, shuffle pattern, thread constants, IEEE 754 masks
+  - Verified bit-exact against original code via `tests/test_constants.cpp`
+- ✅ Verified full miner builds on nos2 (CUDA 11.8/GTX 1060) and nosnode (CUDA 12.6/RTX 2070)
+
+**Notes for next session:**
+- Phase R3 (shared crypto cleanup) is next — clean up Keccak/AES, remove multi-algo dispatch
+- The `Cryptonight_hash_gpu::hash()` path skips extra_hashes branch — outputs first 32 bytes of hash_state directly
+- The macro nightmare in `cryptonight_aesni.h` (CN_STEP1..5, REPEAT macros) is dead code for cn_gpu — only `Cryptonight_hash_gpu` is used
+- Consider: can we integrate `n0s/algorithm/cn_gpu.hpp` into the existing CUDA/OpenCL kernels progressively, or save that for Phase R4/R5?
+- The `xmrstak_algo` struct and `POW()` function are used everywhere — thin wrapper first, then migrate callers
