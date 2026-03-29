@@ -74,6 +74,40 @@ __device__ __forceinline__ void cryptonight_aes_set_key(uint32_t* __restrict__ k
 	}
 }
 
+template <xmrstak_algo_id ALGO>
+__global__ void cryptonight_extra_gpu_prepare(int threads, uint32_t* __restrict__ d_input, uint32_t len, uint32_t startNonce, uint32_t* __restrict__ d_ctx_state, uint32_t* __restrict__ d_ctx_state2, uint32_t* __restrict__ d_ctx_a, uint32_t* __restrict__ d_ctx_b, uint32_t* __restrict__ d_ctx_key1, uint32_t* __restrict__ d_ctx_key2)
+{
+	int thread = (blockDim.x * blockIdx.x + threadIdx.x);
+
+	if(thread >= threads)
+		return;
+
+	uint32_t ctx_state[50];
+	uint32_t ctx_a[4];
+	uint32_t ctx_b[4];
+	uint32_t ctx_key1[40];
+	uint32_t ctx_key2[40];
+	uint32_t input[32];
+
+	memcpy(input, d_input, len);
+	uint32_t nonce = startNonce + thread;
+	for(int i = 0; i < sizeof(uint32_t); ++i)
+		(((char*)input) + 39)[i] = ((char*)(&nonce))[i];
+
+	cn_keccak((uint8_t*)input, len, (uint8_t*)ctx_state);
+	cryptonight_aes_set_key(ctx_key1, ctx_state);
+	cryptonight_aes_set_key(ctx_key2, ctx_state + 8);
+
+	XOR_BLOCKS_DST(ctx_state, ctx_state + 8, ctx_a);
+	XOR_BLOCKS_DST(ctx_state + 4, ctx_state + 12, ctx_b);
+	memcpy(d_ctx_a + thread * 4, ctx_a, 4 * 4);
+	memcpy(d_ctx_b + thread * 4, ctx_b, 4 * 4);
+
+	memcpy(d_ctx_key1 + thread * 40, ctx_key1, 40 * 4);
+	memcpy(d_ctx_key2 + thread * 40, ctx_key2, 40 * 4);
+	memcpy(d_ctx_state + thread * 50, ctx_state, 50 * 4);
+}
+
 __device__ __forceinline__ void mix_and_propagate(uint32_t* state)
 {
 	uint32_t tmp0[4];
@@ -91,168 +125,48 @@ __device__ __forceinline__ void mix_and_propagate(uint32_t* state)
 }
 
 template <xmrstak_algo_id ALGO>
-__global__ void cryptonight_extra_gpu_prepare(int threads, uint32_t* __restrict__ d_input, uint32_t len, uint32_t startNonce, uint32_t* __restrict__ d_ctx_state, uint32_t* __restrict__ d_ctx_state2, uint32_t* __restrict__ d_ctx_a, uint32_t* __restrict__ d_ctx_b, uint32_t* __restrict__ d_ctx_key1, uint32_t* __restrict__ d_ctx_key2)
-{
-	int thread = (blockDim.x * blockIdx.x + threadIdx.x);
-	__shared__ uint32_t sharedMemory[1024];
-
-	if(ALGO == cryptonight_heavy || ALGO == cryptonight_haven || ALGO == cryptonight_bittube2 || ALGO == cryptonight_superfast)
-	{
-		cn_aes_gpu_init(sharedMemory);
-		__syncthreads();
-	}
-	if(thread >= threads)
-		return;
-
-	uint32_t ctx_state[50];
-	uint32_t ctx_a[4];
-	uint32_t ctx_b[4];
-	uint32_t ctx_key1[40];
-	uint32_t ctx_key2[40];
-	uint32_t input[32];
-
-	memcpy(input, d_input, len);
-	//*((uint32_t *)(((char *)input) + 39)) = startNonce + thread;
-	uint32_t nonce = startNonce + thread;
-	for(int i = 0; i < sizeof(uint32_t); ++i)
-		(((char*)input) + 39)[i] = ((char*)(&nonce))[i]; //take care of pointer alignment
-
-	cn_keccak((uint8_t*)input, len, (uint8_t*)ctx_state);
-	cryptonight_aes_set_key(ctx_key1, ctx_state);
-	cryptonight_aes_set_key(ctx_key2, ctx_state + 8);
-
-	XOR_BLOCKS_DST(ctx_state, ctx_state + 8, ctx_a);
-	XOR_BLOCKS_DST(ctx_state + 4, ctx_state + 12, ctx_b);
-	memcpy(d_ctx_a + thread * 4, ctx_a, 4 * 4);
-	if(ALGO == cryptonight_monero_v8 || ALGO == cryptonight_v8_reversewaltz)
-	{
-		memcpy(d_ctx_b + thread * 16, ctx_b, 4 * 4);
-		// bx1
-		XOR_BLOCKS_DST(ctx_state + 16, ctx_state + 20, ctx_b);
-		memcpy(d_ctx_b + thread * 16 + 4, ctx_b, 4 * 4);
-		// division_result
-		memcpy(d_ctx_b + thread * 16 + 2 * 4, ctx_state + 24, 4 * 2);
-		// sqrt_result
-		memcpy(d_ctx_b + thread * 16 + 2 * 4 + 2, ctx_state + 26, 4 * 2);
-	}
-	else if(ALGO == cryptonight_r_wow || ALGO == cryptonight_r)
-	{
-		memcpy(d_ctx_b + thread * 16, ctx_b, 4 * 4);
-		// bx1
-		XOR_BLOCKS_DST(ctx_state + 16, ctx_state + 20, ctx_b);
-		memcpy(d_ctx_b + thread * 16 + 4, ctx_b, 4 * 4);
-		// r0, r1, r2, r3
-		memcpy(d_ctx_b + thread * 16 + 2 * 4, ctx_state + 24, 4 * 8);
-	}
-	else
-		memcpy(d_ctx_b + thread * 4, ctx_b, 4 * 4);
-
-	memcpy(d_ctx_key1 + thread * 40, ctx_key1, 40 * 4);
-	memcpy(d_ctx_key2 + thread * 40, ctx_key2, 40 * 4);
-	memcpy(d_ctx_state + thread * 50, ctx_state, 50 * 4);
-
-	if(ALGO == cryptonight_heavy || ALGO == cryptonight_haven || ALGO == cryptonight_bittube2 || ALGO == cryptonight_superfast)
-	{
-
-		for(int i = 0; i < 16; i++)
-		{
-			for(size_t t = 4; t < 12; ++t)
-			{
-				cn_aes_pseudo_round_mut(sharedMemory, ctx_state + 4u * t, ctx_key1);
-			}
-			// scipt first 4 * 128bit blocks = 4 * 4 uint32_t values
-			mix_and_propagate(ctx_state + 4 * 4);
-		}
-		// double buffer to move manipulated state into phase1
-		memcpy(d_ctx_state2 + thread * 50, ctx_state, 50 * 4);
-	}
-}
-
-template <xmrstak_algo_id ALGO>
 __global__ void cryptonight_extra_gpu_final(int threads, uint64_t target, uint32_t* __restrict__ d_res_count, uint32_t* __restrict__ d_res_nonce, uint32_t* __restrict__ d_ctx_state, uint32_t* __restrict__ d_ctx_key2)
 {
 	const int thread = blockDim.x * blockIdx.x + threadIdx.x;
 
 	__shared__ uint32_t sharedMemory[1024];
 
-	if(ALGO == cryptonight_gpu || ALGO == cryptonight_heavy || ALGO == cryptonight_haven ||
-		ALGO == cryptonight_bittube2 || ALGO == cryptonight_superfast)
-	{
-		cn_aes_gpu_init(sharedMemory);
-		__syncthreads();
-	}
+	cn_aes_gpu_init(sharedMemory);
+	__syncthreads();
+
 	if(thread >= threads)
 		return;
 
 	int i;
 	uint32_t* __restrict__ ctx_state = d_ctx_state + thread * 50;
-	uint64_t hash[4];
 	uint32_t state[50];
 
 #pragma unroll
 	for(i = 0; i < 50; i++)
 		state[i] = ctx_state[i];
 
-	if(ALGO == cryptonight_gpu || ALGO == cryptonight_heavy || ALGO == cryptonight_haven ||
-		ALGO == cryptonight_bittube2 || ALGO == cryptonight_superfast)
+	// cn_gpu requires 16 rounds of AES + mix_and_propagate before final keccak
+	uint32_t key[40];
+	MEMCPY8(key, d_ctx_key2 + thread * 40, 20);
+
+	for(int i = 0; i < 16; i++)
 	{
-		uint32_t key[40];
-
-		// load keys
-		MEMCPY8(key, d_ctx_key2 + thread * 40, 20);
-
-		for(int i = 0; i < 16; i++)
+		for(size_t t = 4; t < 12; ++t)
 		{
-			for(size_t t = 4; t < 12; ++t)
-			{
-				cn_aes_pseudo_round_mut(sharedMemory, state + 4u * t, key);
-			}
-			// scipt first 4 * 128bit blocks = 4 * 4 uint32_t values
-			mix_and_propagate(state + 4 * 4);
+			cn_aes_pseudo_round_mut(sharedMemory, state + 4u * t, key);
 		}
+		mix_and_propagate(state + 4 * 4);
 	}
+
 	cn_keccakf2((uint64_t*)state);
 
-	if(ALGO == cryptonight_gpu)
+	// cn_gpu outputs directly (no branch dispatcher)
+	if(((uint64_t*)state)[3] < target)
 	{
-		if(((uint64_t*)state)[3] < target)
-		{
-			uint32_t idx = atomicInc(d_res_count, 0xFFFFFFFF);
+		uint32_t idx = atomicInc(d_res_count, 0xFFFFFFFF);
 
-			if(idx < 10)
-				d_res_nonce[idx] = thread;
-		}
-	}
-	else
-	{
-		switch(((uint8_t*)state)[0] & 0x03)
-		{
-		case 0:
-			cn_blake((const uint8_t*)state, 200, (uint8_t*)hash);
-			break;
-		case 1:
-			cn_groestl((const BitSequence*)state, 200, (BitSequence*)hash);
-			break;
-		case 2:
-			cn_jh((const BitSequence*)state, 200, (BitSequence*)hash);
-			break;
-		case 3:
-			cn_skein((const BitSequence*)state, 200, (BitSequence*)hash);
-			break;
-		default:
-			break;
-		}
-
-		// Note that comparison is equivalent to subtraction - we can't just compare 8 32-bit values
-		// and expect an accurate result for target > 32-bit without implementing carries
-
-		if(hash[3] < target)
-		{
-			uint32_t idx = atomicInc(d_res_count, 0xFFFFFFFF);
-
-			if(idx < 10)
-				d_res_nonce[idx] = thread;
-		}
+		if(idx < 10)
+			d_res_nonce[idx] = thread;
 	}
 }
 
@@ -305,36 +219,10 @@ extern "C" int cryptonight_extra_cpu_init(nvid_ctx* ctx)
 	// get the cudaRT context
 	CU_CHECK(ctx->device_id, cuCtxGetCurrent(&ctx->cuContext));
 
+	// cn_gpu uses standard 4 * uint32_t ctx_b
 	size_t ctx_b_size = 4 * sizeof(uint32_t) * wsize;
-	if(
-		std::find(neededAlgorithms.begin(), neededAlgorithms.end(), cryptonight_heavy) != neededAlgorithms.end() ||
-		std::find(neededAlgorithms.begin(), neededAlgorithms.end(), cryptonight_haven) != neededAlgorithms.end() ||
-		std::find(neededAlgorithms.begin(), neededAlgorithms.end(), cryptonight_bittube2) != neededAlgorithms.end() ||
-		std::find(neededAlgorithms.begin(), neededAlgorithms.end(), cryptonight_superfast) != neededAlgorithms.end())
-	{
-		// extent ctx_b to hold the state of idx0
-		ctx_b_size += sizeof(uint32_t) * wsize;
-		// create a double buffer for the state to exchange the mixed state to phase1
-		CUDA_CHECK(ctx->device_id, cudaMalloc(&ctx->d_ctx_state2, 50 * sizeof(uint32_t) * wsize));
-	}
-	else if(std::find(neededAlgorithms.begin(), neededAlgorithms.end(), cryptonight_conceal) != neededAlgorithms.end())
-	{
-		ctx_b_size += sizeof(uint32_t) * 4 * wsize;
-	}
-	else if((std::find(neededAlgorithms.begin(), neededAlgorithms.end(), cryptonight_monero_v8) != neededAlgorithms.end()) || (std::find(neededAlgorithms.begin(), neededAlgorithms.end(), cryptonight_v8_reversewaltz) != neededAlgorithms.end()))
-	{
-		// bx0 (16byte), bx1 (16byte), division_result (8byte) and sqrt_result (8byte), padding (16byte)
-		ctx_b_size = 4 * 4 * sizeof(uint32_t) * wsize;
-	}
-	else if(
-		std::find(neededAlgorithms.begin(), neededAlgorithms.end(), cryptonight_r) != neededAlgorithms.end() ||
-		std::find(neededAlgorithms.begin(), neededAlgorithms.end(), cryptonight_r_wow) != neededAlgorithms.end())
-	{
-		// bx0 (16byte), bx1 (16byte), and [r0, r1, r2, r3] (a 8byte)
-		ctx_b_size = 4 * 4 * sizeof(uint32_t) * wsize;
-	}
-	else
-		ctx->d_ctx_state2 = ctx->d_ctx_state;
+	// No state2 needed (cn_gpu uses cn_explode_gpu, not phase1)
+	ctx->d_ctx_state2 = ctx->d_ctx_state;
 
 	CUDA_CHECK(ctx->device_id, cudaMalloc(&ctx->d_ctx_key1, 40 * sizeof(uint32_t) * wsize));
 	CUDA_CHECK(ctx->device_id, cudaMalloc(&ctx->d_ctx_key2, 40 * sizeof(uint32_t) * wsize));
@@ -360,59 +248,8 @@ extern "C" void cryptonight_extra_cpu_prepare(nvid_ctx* ctx, uint32_t startNonce
 	dim3 grid((wsize + threadsperblock - 1) / threadsperblock);
 	dim3 block(threadsperblock);
 
-	if(miner_algo == cryptonight_heavy)
-	{
-		CUDA_CHECK_KERNEL(ctx->device_id, cryptonight_extra_gpu_prepare<cryptonight_heavy><<<grid, block>>>(wsize, ctx->d_input, ctx->inputlen, startNonce,
-											  ctx->d_ctx_state, ctx->d_ctx_state2, ctx->d_ctx_a, ctx->d_ctx_b, ctx->d_ctx_key1, ctx->d_ctx_key2));
-	}
-	else if(miner_algo == cryptonight_haven)
-	{
-		CUDA_CHECK_KERNEL(ctx->device_id, cryptonight_extra_gpu_prepare<cryptonight_haven><<<grid, block>>>(wsize, ctx->d_input, ctx->inputlen, startNonce,
-											  ctx->d_ctx_state, ctx->d_ctx_state2, ctx->d_ctx_a, ctx->d_ctx_b, ctx->d_ctx_key1, ctx->d_ctx_key2));
-	}
-	else if(miner_algo == cryptonight_superfast)
-	{
-		CUDA_CHECK_KERNEL(ctx->device_id, cryptonight_extra_gpu_prepare<cryptonight_superfast><<<grid, block>>>(wsize, ctx->d_input, ctx->inputlen, startNonce,
-											  ctx->d_ctx_state, ctx->d_ctx_state2, ctx->d_ctx_a, ctx->d_ctx_b, ctx->d_ctx_key1, ctx->d_ctx_key2));
-	}
-	else if(miner_algo == cryptonight_bittube2)
-	{
-		CUDA_CHECK_KERNEL(ctx->device_id, cryptonight_extra_gpu_prepare<cryptonight_bittube2><<<grid, block>>>(wsize, ctx->d_input, ctx->inputlen, startNonce,
-											  ctx->d_ctx_state, ctx->d_ctx_state2, ctx->d_ctx_a, ctx->d_ctx_b, ctx->d_ctx_key1, ctx->d_ctx_key2));
-	}
-	else if(miner_algo == cryptonight_monero_v8)
-	{
-		CUDA_CHECK_KERNEL(ctx->device_id, cryptonight_extra_gpu_prepare<cryptonight_monero_v8><<<grid, block>>>(wsize, ctx->d_input, ctx->inputlen, startNonce,
-											  ctx->d_ctx_state, ctx->d_ctx_state2, ctx->d_ctx_a, ctx->d_ctx_b, ctx->d_ctx_key1, ctx->d_ctx_key2));
-	}
-	else if(miner_algo == cryptonight_gpu)
-	{
-		CUDA_CHECK_KERNEL(ctx->device_id, cryptonight_extra_gpu_prepare<cryptonight_gpu><<<grid, block>>>(wsize, ctx->d_input, ctx->inputlen, startNonce,
-											  ctx->d_ctx_state, ctx->d_ctx_state2, ctx->d_ctx_a, ctx->d_ctx_b, ctx->d_ctx_key1, ctx->d_ctx_key2));
-	}
-	else if(miner_algo == cryptonight_r)
-	{
-		CUDA_CHECK_KERNEL(ctx->device_id, cryptonight_extra_gpu_prepare<cryptonight_r><<<grid, block>>>(wsize, ctx->d_input, ctx->inputlen, startNonce,
-											  ctx->d_ctx_state, ctx->d_ctx_state2, ctx->d_ctx_a, ctx->d_ctx_b, ctx->d_ctx_key1, ctx->d_ctx_key2));
-	}
-	else if(miner_algo == cryptonight_r_wow)
-	{
-		CUDA_CHECK_KERNEL(ctx->device_id, cryptonight_extra_gpu_prepare<cryptonight_r_wow><<<grid, block>>>(wsize, ctx->d_input, ctx->inputlen, startNonce,
-											  ctx->d_ctx_state, ctx->d_ctx_state2, ctx->d_ctx_a, ctx->d_ctx_b, ctx->d_ctx_key1, ctx->d_ctx_key2));
-	}
-	else if(miner_algo == cryptonight_v8_reversewaltz)
-	{
-		CUDA_CHECK_KERNEL(ctx->device_id, cryptonight_extra_gpu_prepare<cryptonight_v8_reversewaltz><<<grid, block>>>(wsize, ctx->d_input, ctx->inputlen, startNonce,
-											  ctx->d_ctx_state, ctx->d_ctx_state2, ctx->d_ctx_a, ctx->d_ctx_b, ctx->d_ctx_key1, ctx->d_ctx_key2));
-	}
-	else
-	{
-		/* pass two times d_ctx_state because the second state is used later in phase1,
-		 * the first is used than in phase3
-		 */
-		CUDA_CHECK_KERNEL(ctx->device_id, cryptonight_extra_gpu_prepare<invalid_algo><<<grid, block>>>(wsize, ctx->d_input, ctx->inputlen, startNonce,
-											  ctx->d_ctx_state, ctx->d_ctx_state, ctx->d_ctx_a, ctx->d_ctx_b, ctx->d_ctx_key1, ctx->d_ctx_key2));
-	}
+	CUDA_CHECK_KERNEL(ctx->device_id, cryptonight_extra_gpu_prepare<cryptonight_gpu><<<grid, block>>>(wsize, ctx->d_input, ctx->inputlen, startNonce,
+										  ctx->d_ctx_state, ctx->d_ctx_state2, ctx->d_ctx_a, ctx->d_ctx_b, ctx->d_ctx_key1, ctx->d_ctx_key2));
 }
 
 extern "C" void cryptonight_extra_cpu_final(nvid_ctx* ctx, uint32_t startNonce, uint64_t target, uint32_t* rescount, uint32_t* resnonce, const xmrstak_algo& miner_algo)
@@ -426,50 +263,10 @@ extern "C" void cryptonight_extra_cpu_final(nvid_ctx* ctx, uint32_t startNonce, 
 	CUDA_CHECK(ctx->device_id, cudaMemset(ctx->d_result_nonce, 0xFF, 10 * sizeof(uint32_t)));
 	CUDA_CHECK(ctx->device_id, cudaMemset(ctx->d_result_count, 0, sizeof(uint32_t)));
 
-	if(miner_algo == cryptonight_heavy)
-	{
-		CUDA_CHECK_MSG_KERNEL(
-			ctx->device_id,
-			"\n**suggestion: Try to increase the value of the attribute 'bfactor' in the NVIDIA config file.**",
-			cryptonight_extra_gpu_final<cryptonight_heavy><<<grid, block>>>(wsize, target, ctx->d_result_count, ctx->d_result_nonce, ctx->d_ctx_state, ctx->d_ctx_key2));
-	}
-	else if(miner_algo == cryptonight_haven)
-	{
-		CUDA_CHECK_MSG_KERNEL(
-			ctx->device_id,
-			"\n**suggestion: Try to increase the value of the attribute 'bfactor' in the NVIDIA config file.**",
-			cryptonight_extra_gpu_final<cryptonight_haven><<<grid, block>>>(wsize, target, ctx->d_result_count, ctx->d_result_nonce, ctx->d_ctx_state, ctx->d_ctx_key2));
-	}
-	else if(miner_algo == cryptonight_superfast)
-	{
-		CUDA_CHECK_MSG_KERNEL(
-			ctx->device_id,
-			"\n**suggestion: Try to increase the value of the attribute 'bfactor' in the NVIDIA config file.**",
-			cryptonight_extra_gpu_final<cryptonight_superfast><<<grid, block>>>(wsize, target, ctx->d_result_count, ctx->d_result_nonce, ctx->d_ctx_state, ctx->d_ctx_key2));
-	}
-	else if(miner_algo == cryptonight_bittube2)
-	{
-		CUDA_CHECK_MSG_KERNEL(
-			ctx->device_id,
-			"\n**suggestion: Try to increase the value of the attribute 'bfactor' in the NVIDIA config file.**",
-			cryptonight_extra_gpu_final<cryptonight_bittube2><<<grid, block>>>(wsize, target, ctx->d_result_count, ctx->d_result_nonce, ctx->d_ctx_state, ctx->d_ctx_key2));
-	}
-	else if(miner_algo == cryptonight_gpu)
-	{
-		// fallback for all other algorithms
-		CUDA_CHECK_MSG_KERNEL(
-			ctx->device_id,
-			"\n**suggestion: Try to increase the value of the attribute 'bfactor' in the NVIDIA config file.**",
-			cryptonight_extra_gpu_final<cryptonight_gpu><<<grid, block>>>(wsize, target, ctx->d_result_count, ctx->d_result_nonce, ctx->d_ctx_state, ctx->d_ctx_key2));
-	}
-	else
-	{
-		// fallback for all other algorithms
-		CUDA_CHECK_MSG_KERNEL(
-			ctx->device_id,
-			"\n**suggestion: Try to increase the value of the attribute 'bfactor' in the NVIDIA config file.**",
-			cryptonight_extra_gpu_final<invalid_algo><<<grid, block>>>(wsize, target, ctx->d_result_count, ctx->d_result_nonce, ctx->d_ctx_state, ctx->d_ctx_key2));
-	}
+	CUDA_CHECK_MSG_KERNEL(
+		ctx->device_id,
+		"\n**suggestion: Try to increase the value of the attribute 'bfactor' in the NVIDIA config file.**",
+		cryptonight_extra_gpu_final<cryptonight_gpu><<<grid, block>>>(wsize, target, ctx->d_result_count, ctx->d_result_nonce, ctx->d_ctx_state, ctx->d_ctx_key2));
 
 	CUDA_CHECK(ctx->device_id, cudaMemcpy(rescount, ctx->d_result_count, sizeof(uint32_t), cudaMemcpyDeviceToHost));
 	CUDA_CHECK_MSG(
@@ -746,12 +543,6 @@ extern "C" int cuda_get_deviceinfo(nvid_ctx* ctx)
 		// up to 16kibyte extra memory is used per thread for some kernel (lmem/local memory)
 		// 680bytes are extra meta data memory per hash
 		size_t perThread = hashMemSize + 16192u + 680u;
-		if(
-			std::find(neededAlgorithms.begin(), neededAlgorithms.end(), cryptonight_heavy) != neededAlgorithms.end() ||
-			std::find(neededAlgorithms.begin(), neededAlgorithms.end(), cryptonight_haven) != neededAlgorithms.end() ||
-			std::find(neededAlgorithms.begin(), neededAlgorithms.end(), cryptonight_bittube2) != neededAlgorithms.end() ||
-			std::find(neededAlgorithms.begin(), neededAlgorithms.end(), cryptonight_superfast) != neededAlgorithms.end())
-			perThread += 50 * 4; // state double buffer
 
 		size_t max_intensity = limitedMemory / perThread;
 		ctx->device_threads = max_intensity / ctx->device_blocks;
@@ -763,27 +554,8 @@ extern "C" int cuda_get_deviceinfo(nvid_ctx* ctx)
 			ctx->device_threads = maxThreadsPerBlock / threadsPerHash;
 		}
 
-		// check if cryptonight_monero_v8 is selected for the user pool
-		bool useCryptonight_v8 = (std::find(neededAlgorithms.begin(), neededAlgorithms.end(), cryptonight_monero_v8) != neededAlgorithms.end());
-		bool useCryptonight_r = (std::find(neededAlgorithms.begin(), neededAlgorithms.end(), cryptonight_r) != neededAlgorithms.end());
-		bool useCryptonight_r_wow = (std::find(neededAlgorithms.begin(), neededAlgorithms.end(), cryptonight_r_wow) != neededAlgorithms.end());
-		bool useCryptonight_reversewaltz = (std::find(neededAlgorithms.begin(), neededAlgorithms.end(), cryptonight_v8_reversewaltz) != neededAlgorithms.end());
-
-		// overwrite default config if cryptonight_monero_v8 is mined and GPU has at least compute capability 5.0
-		if((useCryptonight_v8 || useCryptonight_r || useCryptonight_r_wow || useCryptonight_reversewaltz) && gpuArch >= 50)
-		{
-			// 4 based on my test maybe it must be adjusted later
-			size_t threads = 4;
-			// 8 is chosen by checking the occupancy calculator
-			size_t blockOptimal = 8 * ctx->device_mpcount;
-
-			if(blockOptimal * threads * hashMemSize < limitedMemory)
-			{
-				ctx->device_threads = threads;
-				ctx->device_blocks = blockOptimal;
-			}
-		}
-		else if(useCryptonight_gpu)
+		// cn_gpu specific optimizations
+		if(useCryptonight_gpu)
 		{
 			// 8 based on my profiling sessions maybe it must be adjusted later
 			size_t threads = 8;
