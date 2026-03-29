@@ -75,12 +75,12 @@
 **Also:** Default CUDA arch list includes sm_30/35/37/50/52 which are dropped in CUDA 12.x.
 
 ### Tasks:
-- [ ] 3.1.1: Add CUDA 12.x compat shims for deprecated intrinsics
-- [ ] 3.1.2: Modernize default CUDA arch list (drop pre-Pascal, add Ampere/Ada/Blackwell)
-- [ ] 3.1.3: Raise minimum CUDA version from 7.5 to 11.0
-- [ ] 3.1.4: Install cmake on nosnode, test CUDA 12.6 build
-- [ ] 3.1.5: Test on nos2 (CUDA 11.8, Pascal) — verify backward compat
-- [ ] 3.1.6: Test on nosnode (CUDA 12.6, Turing) — verify forward compat
+- [x] 3.1.1: Add CUDA 12.x compat shims for deprecated intrinsics ✅
+- [x] 3.1.2: Modernize default CUDA arch list (drop pre-Pascal, add Ampere/Ada/Blackwell) ✅
+- [x] 3.1.3: Raise minimum CUDA version from 7.5 to 11.0 ✅
+- [ ] 3.1.4: Install cmake on nosnode, test CUDA 12.6 build ⚠️ **BLOCKED: nosnode requires sudo for apt**
+- [x] 3.1.5: Test on nos2 (CUDA 11.8, Pascal) — verify backward compat ✅ **57 shares accepted**
+- [ ] 3.1.6: Test on nosnode (CUDA 12.6, Turing) — verify forward compat ⏳ **Pending 3.1.4**
 
 ### Implementation:
 Add a compat header `cuda_compat.hpp` with version-gated shims:
