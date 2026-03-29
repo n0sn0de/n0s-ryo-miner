@@ -307,11 +307,17 @@ R1 is the most critical — without the validation harness, we're flying blind. 
   - Removed dead algo checks in AMD autoAdjust.hpp (useCryptonight_v8/r/r_wow/heavy)
   - Simplified to constexpr bool useCryptonight_gpu = true
 
+- ✅ **Dead Code Purge** — 2,848 lines deleted
+  - Removed xmr-stak-asm CMake target and all 10 ASM source files
+  - Removed extra_hashes[] (do_blake/groestl/jh/skein_hash) — cn_gpu doesn't branch
+  - Removed all Windows code from cryptonight_common.cpp (AddPrivilege, VirtualAlloc, etc.)
+  - cryptonight_common.cpp: 320 → 116 lines
+  - All 3 GPUs: build + mining verified after removal
+
 **Notes for next session:**
 - R6/R7 can continue: pool/network code is functional but could use docs
-- coinDescription/coin_selection infrastructure is overkill for single-algo but pervasive (20+ call sites) — major refactor, do cautiously
-- The xmr-stak-asm CMake target still exists but never called — can remove
-- extra_hashes[] array still defined but never called — dead code  
-- cryptonight.cl (1164 lines) has dead branch kernels (Skein/JH/Blake/Groestl)
+- coinDescription/coin_selection is overkill but pervasive (20+ call sites)
+- cryptonight.cl (1164 lines) has dead branch kernels (Skein/JH/Blake/Groestl) — compiled but never launched
 - gpu.cpp (1142 lines) could use documentation pass
+- C hash files (c_blake256.c etc.) still compiled but only c_keccak.c is actually used
 - Could consolidate cuda_core.cu + cuda_extra.cu in a future pass
