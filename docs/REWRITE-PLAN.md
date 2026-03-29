@@ -2,7 +2,7 @@
 
 **High-Level Strategy for the Foundational C++ Rewrite**
 
-*Status: Phase R1 ✅ Phase R2 ✅ Phase R3 ✅ Phase R4 ✅ Phase R5 ✅ — Phase R6 (pool/network) next*
+*Status: Phase R1 ✅ Phase R2 ✅ Phase R3 ✅ Phase R4 ✅ Phase R5 ✅ Phase R6/R7 (partial) ✅*
 
 ---
 
@@ -302,10 +302,16 @@ R1 is the most critical — without the validation harness, we're flying blind. 
   - OpenCL cache miss confirmed (new source hash) → fresh compile → shares accepted
   - All 3 GPUs verified (nitro AMD = critical test)
 
+- ✅ **Phase R6/R7 (partial): Config/CLI Cleanup**
+  - Fixed binaryName default 'xmr-stak' → 'n0s-ryo-miner' in params.hpp
+  - Removed dead algo checks in AMD autoAdjust.hpp (useCryptonight_v8/r/r_wow/heavy)
+  - Simplified to constexpr bool useCryptonight_gpu = true
+
 **Notes for next session:**
-- Phase R6 (pool/network) and R7 (config/CLI) are independent cleanups
-- The xmr-stak-asm CMake target still exists but its code is never called — can remove
+- R6/R7 can continue: pool/network code is functional but could use docs
+- coinDescription/coin_selection infrastructure is overkill for single-algo but pervasive (20+ call sites) — major refactor, do cautiously
+- The xmr-stak-asm CMake target still exists but never called — can remove
 - extra_hashes[] array still defined but never called — dead code  
-- cryptonight.cl (1164 lines) still has dead branch kernels (Skein/JH/Blake/Groestl) — cn_gpu doesn't use them
+- cryptonight.cl (1164 lines) has dead branch kernels (Skein/JH/Blake/Groestl)
 - gpu.cpp (1142 lines) could use documentation pass
-- Could consolidate cuda_core.cu + cuda_extra.cu into fewer files in a future pass
+- Could consolidate cuda_core.cu + cuda_extra.cu in a future pass
