@@ -46,7 +46,7 @@ struct params
 	static constexpr int32_t httpd_port_disabled = 0;
 	int32_t httpd_port = httpd_port_unset;
 
-	std::string currency;
+	std::string currency = "cryptonight_gpu";
 
 	std::string configFile;
 	std::string configFilePools;

@@ -105,7 +105,6 @@ void help()
 	cout << "  -r, --rigid RIGID          rig identifier for pool-side statistics (needs pool support)" << endl;
 	cout << "  -p, --pass PASSWD          pool password, in the most cases x or empty \"\"" << endl;
 	cout << "  --use-nicehash             the pool should run in nicehash mode" << endl;
-	cout << "  --currency NAME            currency to mine" << endl;
 	cout << endl;
 #ifdef _WIN32
 	cout << "Environment variables:\n"
@@ -219,22 +218,10 @@ void do_guided_pool_config()
 	configTpl.set(std::string(tpl));
 	bool prompted = false;
 
+	// Hardcoded to cryptonight_gpu (RYO Currency)
 	auto currency = params::inst().currency;
-	if(currency.empty() || !jconf::IsOnAlgoList(currency))
-	{
-		prompt_once(prompted);
-
-		std::string tmp;
-		while(tmp.empty() || !jconf::IsOnAlgoList(tmp))
-		{
-			std::string list;
-			jconf::GetAlgoList(list);
-			std::cout << "- Please enter the currency that you want to mine: " << std::endl;
-			std::cout << list << std::endl;
-			std::cin >> tmp;
-		}
-		currency = tmp;
-	}
+	if(currency.empty())
+		currency = "cryptonight_gpu";
 
 	auto pool = params::inst().poolURL;
 	bool userSetPool = true;
@@ -554,14 +541,9 @@ int main(int argc, char* argv[])
 		}
 		else if(opName.compare("--currency") == 0)
 		{
-			++i;
-			if(i >= argc)
-			{
-				printer::inst()->print_msg(L0, "No argument for parameter '--currency' given");
-				win_exit();
-				return 1;
-			}
-			params::inst().currency = argv[i];
+			++i; // consume argument for backward compatibility
+			if(i < argc)
+				printer::inst()->print_msg(L0, "WARNING: --currency is deprecated. Algorithm is hardcoded to cryptonight_gpu.");
 		}
 		else if(opName.compare("-o") == 0 || opName.compare("--url") == 0)
 		{

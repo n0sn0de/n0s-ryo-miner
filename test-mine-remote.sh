@@ -39,7 +39,7 @@ echo "✅ Remote build successful"
 echo ""
 echo "Mining for ${TIMEOUT} seconds on $REMOTE..."
 OUTPUT=$(ssh $REMOTE "cd $REMOTE_DIR && timeout $TIMEOUT ./build/bin/n0s-ryo-miner --noAMD \
-  -o $POOL -u WALLET -p x --currency cryptonight_gpu 2>&1" || true)
+  -o $POOL -u WALLET -p x 2>&1" || true)
 
 # Check for errors
 if echo "$OUTPUT" | grep -q "CUDA.*ERROR\|Error.*cuda\|INVALID_DEVICE"; then

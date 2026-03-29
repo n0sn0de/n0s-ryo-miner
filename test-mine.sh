@@ -40,7 +40,7 @@ OUTPUT=$(timeout $TIMEOUT $BINARY --noAMDCache \
   -o $POOL \
   -u WALLET \
   -p x \
-  --currency cryptonight_gpu 2>&1 || true)
+  2>&1 || true)
 
 # Check for errors
 if echo "$OUTPUT" | grep -q "CL_INVALID\|Error.*clEnqueue\|Error.*clCreate"; then
