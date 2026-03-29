@@ -21,11 +21,11 @@ ssh $REMOTE "rm -rf $REMOTE_DIR && git clone $REPO_URL $REMOTE_DIR 2>&1 | tail -
 
 # Build (NVIDIA only, no AMD)
 echo "Building on remote..."
-ssh $REMOTE "export PATH=/usr/local/cuda-12.6/bin:\$PATH && \
-  export LD_LIBRARY_PATH=/usr/local/cuda-12.6/lib64:\$LD_LIBRARY_PATH && \
+ssh $REMOTE "export PATH=/usr/local/cuda-11.8/bin:\$PATH && \
+  export LD_LIBRARY_PATH=/usr/local/cuda-11.8/lib64:\$LD_LIBRARY_PATH && \
   cd $REMOTE_DIR && rm -rf build && mkdir build && cd build && \
   cmake .. -DCUDA_ENABLE=ON -DOpenCL_ENABLE=OFF -DMICROHTTPD_ENABLE=OFF \
-    -DCUDA_ARCH='50;52;60;61;70;75' -DCMAKE_BUILD_TYPE=Release && \
+    -DCUDA_ARCH='61' -DCMAKE_BUILD_TYPE=Release && \
   cmake --build . -j\$(nproc) 2>&1 | tail -5"
 
 if [ $? -ne 0 ]; then
