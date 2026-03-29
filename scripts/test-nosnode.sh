@@ -20,18 +20,12 @@ echo "Deploying to nosnode..."
 BRANCH="${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}"
 ssh $REMOTE "rm -rf $REMOTE_DIR && git clone -b $BRANCH $REPO_URL $REMOTE_DIR 2>&1 | tail -3"
 
-# Check for cmake
-echo "Checking for cmake..."
-if ! ssh $REMOTE "which cmake >/dev/null 2>&1"; then
-    echo "❌ cmake not found on nosnode"
-    echo "   Please install: sudo apt-get install -y cmake"
-    exit 1
-fi
-
 # Build (NVIDIA only, no AMD)
 echo "Building with CUDA 12.6..."
-ssh $REMOTE "set -e && export PATH=/usr/local/cuda-12.6/bin:\$PATH && \
+ssh $REMOTE "set -e && \
+  export PATH=\$HOME/.local/bin:/usr/local/cuda-12.6/bin:\$PATH && \
   export LD_LIBRARY_PATH=/usr/local/cuda-12.6/lib64:\$LD_LIBRARY_PATH && \
+  cmake --version | head -1 && \
   cd $REMOTE_DIR && rm -rf build && mkdir build && cd build && \
   cmake .. -DCUDA_ENABLE=ON -DOpenCL_ENABLE=OFF -DMICROHTTPD_ENABLE=ON \
     -DCUDA_ARCH='75' -DCMAKE_BUILD_TYPE=Release 2>&1 && \
@@ -47,7 +41,8 @@ echo "✅ CUDA 12.6 build successful"
 # Mine test
 echo ""
 echo "Mining for ${TIMEOUT} seconds..."
-OUTPUT=$(ssh $REMOTE "cd $REMOTE_DIR && timeout $TIMEOUT ./build/bin/n0s-ryo-miner --noAMD \
+OUTPUT=$(ssh $REMOTE "export LD_LIBRARY_PATH=/usr/local/cuda-12.6/lib64:\$LD_LIBRARY_PATH && \
+  cd $REMOTE_DIR/build/bin && timeout $TIMEOUT ./n0s-ryo-miner --noAMD \
   -o $POOL -u WALLET -p x 2>&1" || true)
 
 # Check for errors
