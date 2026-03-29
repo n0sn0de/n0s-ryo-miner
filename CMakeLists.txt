@@ -292,19 +292,7 @@ if(CMAKE_LINK_STATIC)
     endif()
 endif()
 
-# ASM library (cryptonight_v8 mainloop)
-if(CMAKE_C_COMPILER_ID MATCHES "MSVC")
-    enable_language(ASM_MASM)
-    set_property(SOURCE "xmrstak/backend/cpu/crypto/asm/cryptonight_v8_main_loop.asm" PROPERTY ASM_MASM)
-    add_library(xmr-stak-asm STATIC "xmrstak/backend/cpu/crypto/asm/cryptonight_v8_main_loop.asm")
-else()
-    enable_language(ASM)
-    set_property(SOURCE "xmrstak/backend/cpu/crypto/asm/cryptonight_v8_main_loop.S" PROPERTY CPP)
-    set_source_files_properties("xmrstak/backend/cpu/crypto/asm/cryptonight_v8_main_loop.S"
-        PROPERTIES COMPILE_FLAGS "-x assembler-with-cpp")
-    add_library(xmr-stak-asm STATIC "xmrstak/backend/cpu/crypto/asm/cryptonight_v8_main_loop.S")
-endif()
-set_property(TARGET xmr-stak-asm PROPERTY LINKER_LANGUAGE C)
+# ASM library removed — cryptonight_v8 mainloop was only used by removed algorithms
 
 # C crypto library
 file(GLOB SRCFILES_C "xmrstak/backend/cpu/crypto/*.c")
@@ -313,7 +301,7 @@ set_property(TARGET xmr-stak-c PROPERTY C_STANDARD 99)
 if(MICROHTTPD_ENABLE)
     target_link_libraries(xmr-stak-c ${MHTD})
 endif()
-target_link_libraries(xmr-stak-c ${LIBS} xmr-stak-asm)
+target_link_libraries(xmr-stak-c ${LIBS})
 
 # Core backend library
 file(GLOB BACKEND_CPP
@@ -325,7 +313,7 @@ file(GLOB BACKEND_CPP
     "xmrstak/misc/*.cpp"
     "xmrstak/net/*.cpp")
 add_library(xmr-stak-backend STATIC ${BACKEND_CPP})
-target_link_libraries(xmr-stak-backend xmr-stak-c ${CMAKE_DL_LIBS} xmr-stak-asm)
+target_link_libraries(xmr-stak-backend xmr-stak-c ${CMAKE_DL_LIBS})
 
 # CUDA backend (shared library, loaded via dlopen)
 if(CUDA_FOUND)
@@ -337,7 +325,7 @@ if(CUDA_FOUND)
 
     set(CUDA_LIBRARIES ${CUDA_LIB} ${CUDA_LIBRARIES} ${CUDA_NVRTC_LIB})
     target_link_libraries(xmrstak_cuda_backend ${CUDA_LIBRARIES})
-    target_link_libraries(xmrstak_cuda_backend xmr-stak-backend xmr-stak-asm)
+    target_link_libraries(xmrstak_cuda_backend xmr-stak-backend)
 endif()
 
 # OpenCL backend (shared library, loaded via dlopen)
@@ -347,7 +335,7 @@ if(OpenCL_FOUND)
         "xmrstak/backend/amd/*.cpp")
     add_library(xmrstak_opencl_backend SHARED ${OPENCLSRCFILES})
     target_link_libraries(xmrstak_opencl_backend ${OpenCL_LIBRARY})
-    target_link_libraries(xmrstak_opencl_backend xmr-stak-backend xmr-stak-asm)
+    target_link_libraries(xmrstak_opencl_backend xmr-stak-backend)
 endif()
 
 # Main executable
@@ -358,7 +346,7 @@ add_executable(n0s-ryo-miner ${SRCFILES_CPP})
 set(EXECUTABLE_OUTPUT_PATH "bin" CACHE STRING "Path to executables relative to ${CMAKE_INSTALL_PREFIX}")
 set(LIBRARY_OUTPUT_PATH "bin" CACHE STRING "Path to libraries relative to ${CMAKE_INSTALL_PREFIX}")
 
-target_link_libraries(n0s-ryo-miner ${LIBS} xmr-stak-c xmr-stak-backend xmr-stak-asm)
+target_link_libraries(n0s-ryo-miner ${LIBS} xmr-stak-c xmr-stak-backend)
 
 ################################################################################
 # Install
