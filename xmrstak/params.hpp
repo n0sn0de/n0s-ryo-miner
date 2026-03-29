@@ -68,7 +68,7 @@ struct params
 	int benchmark_work_sec = 60;
 
 	params() :
-		binaryName("xmr-stak"),
+		binaryName("n0s-ryo-miner"),
 		executablePrefix(""),
 		useAMD(true),
 		AMDCache(true),

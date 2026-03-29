@@ -110,18 +110,8 @@ class autoAdjust
 				}
 			}
 
-			// check if invalid_algo is selected for the user or dev pool
-			bool useCryptonight_v8 = (std::find(neededAlgorithms.begin(), neededAlgorithms.end(), invalid_algo) != neededAlgorithms.end());
-
-			// true for all invalid_algo derivates since we check the user and dev pool
-			bool useCryptonight_heavy = std::find(neededAlgorithms.begin(), neededAlgorithms.end(), invalid_algo) != neededAlgorithms.end();
-
-			// true for cryptonight_gpu as main user pool algorithm
-			bool useCryptonight_gpu = ::jconf::inst()->GetCurrentCoinSelection().GetDescription(1).GetMiningAlgo() == cryptonight_gpu;
-
-			bool useCryptonight_r = ::jconf::inst()->GetCurrentCoinSelection().GetDescription(1).GetMiningAlgo() == invalid_algo;
-
-			bool useCryptonight_r_wow = ::jconf::inst()->GetCurrentCoinSelection().GetDescription(1).GetMiningAlgo() == invalid_algo;
+			// Only cryptonight_gpu is supported
+			constexpr bool useCryptonight_gpu = true;
 
 			// 8 threads per block (this is a good value for the most gpus)
 			uint32_t default_workSize = 8;
@@ -163,18 +153,12 @@ class autoAdjust
 				minFreeMem = 512u * byteToMiB;
 			}
 
-			// set strided index to default
+			// Strided index: contiguous for best cn_gpu performance
 			ctx.stridedIndex = 1;
 
-			// nvidia performance is very bad if the scratchpad is not contiguous
+			// nvidia OpenCL: contiguous scratchpad required
 			if(ctx.isNVIDIA)
 				ctx.stridedIndex = 0;
-
-			// use chunked (4x16byte) scratchpad for all backends. Default `mem_chunk` is `2`
-			if(useCryptonight_v8 || useCryptonight_r || useCryptonight_r_wow)
-				ctx.stridedIndex = 2;
-			else if(useCryptonight_heavy)
-				ctx.stridedIndex = 3;
 
 			if(hashMemSize < CN_MEMORY)
 			{
