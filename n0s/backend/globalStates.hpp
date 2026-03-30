@@ -2,11 +2,11 @@
 
 #include "n0s/backend/miner_work.hpp"
 #include "n0s/backend/pool_data.hpp"
-#include "n0s/cpputil/read_write_lock.h"
 #include "n0s/misc/console.hpp"
 #include "n0s/misc/environment.hpp"
 
 #include <atomic>
+#include <shared_mutex>
 
 namespace n0s
 {
@@ -53,7 +53,7 @@ struct globalStates
 	{
 	}
 
-	::cpputil::RWLock jobLock;
+	std::shared_mutex jobLock;
 };
 
 } // namespace n0s
