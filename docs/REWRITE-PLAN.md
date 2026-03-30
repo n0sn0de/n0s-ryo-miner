@@ -148,7 +148,7 @@ tests/
 - ⏳ Consider CUDA Graphs for kernel chaining
 - ⏳ Algorithm/Kernel Autotuning based on user hardware (see /docs/PRD_01-AUTOTUNING.md)
 - ⏳ Profile hotspots on AMD RDNA4 + NVIDIA Pascal/Turing/Ampere
-- ⏳ Fix or rebuild benchmark harness for reproducible measurements -- Deferred to optimization phase (production miner works)
+- ✅ Fix or rebuild benchmark harness for reproducible measurements (S36: --benchmark-json + stability CV% + tests/benchmark.sh)
 
 ---
 
@@ -223,6 +223,34 @@ With foundation rock-solid, focus shifts to:
 
 **Session accomplishment summary:**
 Memory updated (Session 28-35 notes), REWRITE-PLAN updated with optimization roadmap. **Foundation complete. Optimization phase begins.** Ready to profile, document, and tune for maximum hashrate. 🧘⚡🔥
+
+---
+
+## Session 36 Notes (2026-03-30 04:12 PM) — Benchmark Harness with Stability Metrics ⚡
+
+**What we accomplished:**
+- ✅ **Fixed benchmark mode** — work_size was 128 bytes, exceeding OpenCL's 124-byte limit → XMRSetJob failed every time. Changed to 76 bytes (realistic cn_gpu block size)
+- ✅ **Added interval sampling** — benchmark now samples hashrate every 5 seconds and computes coefficient of variation (CV%) for stability tracking
+- ✅ **Added `--benchmark-json` CLI flag** — structured JSON output with per-thread avg H/s, CV%, sample count, and total hashes for A/B comparison scripting
+- ✅ **Fixed miner_work sJobID buffer overread** — `memcpy` copied 64 bytes from a 1-byte string literal `""`, replaced with `strncpy` + null termination (eliminated GCC -Wstringop-overread warning)
+- ✅ **Created `tests/benchmark.sh`** — wrapper script with `--quick`/`--long`/`--compare` modes for easy benchmarking
+- ✅ **Verified**: Zero warnings (our code), 3/3 golden hashes pass, live mining accepted shares, benchmark produces **4505.4 H/s @ 3.2% CV on RX 9070 XT**
+
+**Key insights:**
+- The built-in benchmark was completely broken (XMRSetJob always failed) — now it actually works and produces meaningful data
+- CV% is a better stability metric than min/max because it normalizes against the mean
+- JSON output enables automated A/B perf comparison — critical for optimization work
+- The `strncpy` fix for sJobID was a real buffer overread bug, not just a warning
+
+**Baseline established:**
+- **RX 9070 XT (RDNA4)**: 4505.4 H/s, CV 3.2% (very stable)
+- CUDA nodes (nos2/nosnode) need testing when available
+
+**Next session priorities:**
+1. **Performance profiling with `rocprof`** — Identify kernel-level hotspots on AMD
+2. **Run benchmark on CUDA nodes** — Establish NVIDIA baselines (GTX 1070 Ti, RTX 2070)
+3. **Kernel documentation pass** — Phase 2/3 GPU kernels need function-level comments
+4. **Begin autotuning framework** — Use benchmark harness as the scoring backend
 
 ---
 
