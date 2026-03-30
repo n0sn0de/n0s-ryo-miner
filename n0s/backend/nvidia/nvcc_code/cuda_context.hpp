@@ -62,9 +62,9 @@ extern "C"
  * @param deviceCount[out] cuda device count
  * @return error code: 0 == error is occurred, 1 == no error
  */
-	int cuda_get_devicecount(int* deviceCount);
-	int cuda_get_deviceinfo(nvid_ctx* ctx);
-	int cryptonight_extra_cpu_init(nvid_ctx* ctx);
+	[[nodiscard]] int cuda_get_devicecount(int* deviceCount);
+	[[nodiscard]] int cuda_get_deviceinfo(nvid_ctx* ctx);
+	[[nodiscard]] int cryptonight_extra_cpu_init(nvid_ctx* ctx);
 	void cryptonight_extra_cpu_set_data(nvid_ctx* ctx, const void* data, uint32_t len);
 	void cryptonight_extra_cpu_prepare(nvid_ctx* ctx, uint32_t startNonce, const n0s_algo& miner_algo);
 	void cryptonight_extra_cpu_final(nvid_ctx* ctx, uint32_t startNonce, uint64_t target, uint32_t* rescount, uint32_t* resnonce, const n0s_algo& miner_algo);

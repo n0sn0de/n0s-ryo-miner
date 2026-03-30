@@ -167,9 +167,9 @@ int plain_socket::recv(char* buf, unsigned int len)
 	int ret = ::recv(hSocket, buf, len, 0);
 
 	if(ret == 0)
-		pCallback->set_socket_error("RECEIVE error: socket closed");
+		(void)pCallback->set_socket_error("RECEIVE error: socket closed");
 	if(ret == SOCKET_ERROR || ret < 0)
-		pCallback->set_socket_error_strerr("RECEIVE error: ");
+		(void)pCallback->set_socket_error_strerr("RECEIVE error: ");
 
 	return ret;
 }
@@ -183,7 +183,7 @@ bool plain_socket::send(const char* buf)
 		int ret = ::send(hSocket, buf + pos, slen - pos, 0);
 		if(ret == SOCKET_ERROR)
 		{
-			pCallback->set_socket_error_strerr("SEND error: ");
+			(void)pCallback->set_socket_error_strerr("SEND error: ");
 			return false;
 		}
 		else
@@ -220,12 +220,12 @@ void tls_socket::print_error()
 	if(buf == nullptr)
 	{
 		if(jconf::inst()->TlsSecureAlgos())
-			pCallback->set_socket_error("Unknown TLS error. Secure TLS maybe unsupported, try setting tls_secure_algo to false.");
+			(void)pCallback->set_socket_error("Unknown TLS error. Secure TLS maybe unsupported, try setting tls_secure_algo to false.");
 		else
-			pCallback->set_socket_error("Unknown TLS error. You might be trying to connect to a non-TLS port.");
+			(void)pCallback->set_socket_error("Unknown TLS error. You might be trying to connect to a non-TLS port.");
 	}
 	else
-		pCallback->set_socket_error(buf, len);
+		(void)pCallback->set_socket_error(buf, len);
 
 	BIO_free(err_bio);
 }
@@ -360,7 +360,7 @@ bool tls_socket::connect()
 		printer::inst()->print_msg(L0, "FINGERPRINT FAILED CHECK [%s] %.*s was given, %s was configured",
 			pCallback->get_pool_addr(), static_cast<int>(b64_len), b64_md, conf_md);
 
-		pCallback->set_socket_error("FINGERPRINT FAILED CHECK");
+		(void)pCallback->set_socket_error("FINGERPRINT FAILED CHECK");
 		BIO_free_all(b64);
 		X509_free(cert);
 		return false;
@@ -380,7 +380,7 @@ int tls_socket::recv(char* buf, unsigned int len)
 	int ret = BIO_read(bio, buf, len);
 
 	if(ret == 0)
-		pCallback->set_socket_error("RECEIVE error: socket closed");
+		(void)pCallback->set_socket_error("RECEIVE error: socket closed");
 	if(ret < 0)
 		print_error();
 

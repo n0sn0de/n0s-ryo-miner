@@ -16,7 +16,7 @@ class httpd
 		return oInst;
 	};
 
-	bool start_daemon();
+	[[nodiscard]] bool start_daemon();
 
   private:
 	httpd();
