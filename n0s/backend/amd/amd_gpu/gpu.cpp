@@ -70,8 +70,8 @@ char* LoadTextFile(const char* filename)
 	char* out;
 	FILE* kernel = fopen(filename, "rb");
 
-	if(kernel == NULL)
-		return NULL;
+	if(kernel == nullptr)
+		return nullptr;
 
 	fseek(kernel, 0, SEEK_END);
 	flen = ftell(kernel);
@@ -84,7 +84,7 @@ char* LoadTextFile(const char* filename)
 	if(r != 1)
 	{
 		free(out);
-		return NULL;
+		return nullptr;
 	}
 
 	out[flen] = '\0';
@@ -96,7 +96,7 @@ size_t InitOpenCLGpu(cl_context opencl_ctx, GpuContext* ctx, const char* source_
 	size_t MaximumWorkSize;
 	cl_int ret;
 
-	if((ret = clGetDeviceInfo(ctx->DeviceID, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), &MaximumWorkSize, NULL)) != CL_SUCCESS)
+	if((ret = clGetDeviceInfo(ctx->DeviceID, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), &MaximumWorkSize, nullptr)) != CL_SUCCESS)
 	{
 		printer::inst()->print_msg(L1, "Error %s when querying a device's max worksize using clGetDeviceInfo.", err_to_str(ret));
 		return ERR_OCL_API;
@@ -131,13 +131,13 @@ size_t InitOpenCLGpu(cl_context opencl_ctx, GpuContext* ctx, const char* source_
 		return ERR_OCL_API;
 	}
 
-	if((ret = clGetDeviceInfo(ctx->DeviceID, CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(int), &(ctx->computeUnits), NULL)) != CL_SUCCESS)
+	if((ret = clGetDeviceInfo(ctx->DeviceID, CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(int), &(ctx->computeUnits), nullptr)) != CL_SUCCESS)
 	{
 		printer::inst()->print_msg(L1, "WARNING: %s when calling clGetDeviceInfo to get CL_DEVICE_MAX_COMPUTE_UNITS for device %u.", err_to_str(ret), static_cast<uint32_t>(ctx->deviceIdx));
 		return ERR_OCL_API;
 	}
 
-	ctx->InputBuffer = clCreateBuffer(opencl_ctx, CL_MEM_READ_ONLY, 128, NULL, &ret);
+	ctx->InputBuffer = clCreateBuffer(opencl_ctx, CL_MEM_READ_ONLY, 128, nullptr, &ret);
 	if(ret != CL_SUCCESS)
 	{
 		printer::inst()->print_msg(L1, "Error %s when calling clCreateBuffer to create input buffer.", err_to_str(ret));
@@ -147,14 +147,14 @@ size_t InitOpenCLGpu(cl_context opencl_ctx, GpuContext* ctx, const char* source_
 	const size_t scratchPadSize = ::jconf::inst()->GetMiningMemSize();
 
 	size_t g_thd = ctx->rawIntensity;
-	ctx->ExtraBuffers[0] = clCreateBuffer(opencl_ctx, CL_MEM_READ_WRITE, scratchPadSize * g_thd, NULL, &ret);
+	ctx->ExtraBuffers[0] = clCreateBuffer(opencl_ctx, CL_MEM_READ_WRITE, scratchPadSize * g_thd, nullptr, &ret);
 	if(ret != CL_SUCCESS)
 	{
 		printer::inst()->print_msg(L1, "Error %s when calling clCreateBuffer to create hash scratchpads buffer.", err_to_str(ret));
 		return ERR_OCL_API;
 	}
 
-	ctx->ExtraBuffers[1] = clCreateBuffer(opencl_ctx, CL_MEM_READ_WRITE, 200 * g_thd, NULL, &ret);
+	ctx->ExtraBuffers[1] = clCreateBuffer(opencl_ctx, CL_MEM_READ_WRITE, 200 * g_thd, nullptr, &ret);
 	if(ret != CL_SUCCESS)
 	{
 		printer::inst()->print_msg(L1, "Error %s when calling clCreateBuffer to create hash states buffer.", err_to_str(ret));
@@ -164,7 +164,7 @@ size_t InitOpenCLGpu(cl_context opencl_ctx, GpuContext* ctx, const char* source_
 	// Branch buffers removed — cn_gpu doesn't use Blake/Groestl/JH/Skein branch dispatch
 
 	// Assume we may find up to 0xFF nonces in one run - it's reasonable
-	ctx->OutputBuffer = clCreateBuffer(opencl_ctx, CL_MEM_READ_WRITE, sizeof(cl_uint) * 0x100, NULL, &ret);
+	ctx->OutputBuffer = clCreateBuffer(opencl_ctx, CL_MEM_READ_WRITE, sizeof(cl_uint) * 0x100, nullptr, &ret);
 	if(ret != CL_SUCCESS)
 	{
 		printer::inst()->print_msg(L1, "Error %s when calling clCreateBuffer to create output buffer.", err_to_str(ret));
@@ -172,14 +172,14 @@ size_t InitOpenCLGpu(cl_context opencl_ctx, GpuContext* ctx, const char* source_
 	}
 
 	std::vector<char> devNameVec(1024);
-	if((ret = clGetDeviceInfo(ctx->DeviceID, CL_DEVICE_NAME, devNameVec.size(), devNameVec.data(), NULL)) != CL_SUCCESS)
+	if((ret = clGetDeviceInfo(ctx->DeviceID, CL_DEVICE_NAME, devNameVec.size(), devNameVec.data(), nullptr)) != CL_SUCCESS)
 	{
 		printer::inst()->print_msg(L1, "WARNING: %s when calling clGetDeviceInfo to get CL_DEVICE_NAME for device %u.", err_to_str(ret), ctx->deviceIdx);
 		return ERR_OCL_API;
 	}
 
 	std::vector<char> openCLDriverVer(1024);
-	if((ret = clGetDeviceInfo(ctx->DeviceID, CL_DRIVER_VERSION, openCLDriverVer.size(), openCLDriverVer.data(), NULL)) != CL_SUCCESS)
+	if((ret = clGetDeviceInfo(ctx->DeviceID, CL_DRIVER_VERSION, openCLDriverVer.size(), openCLDriverVer.data(), nullptr)) != CL_SUCCESS)
 	{
 		printer::inst()->print_msg(L1, "WARNING: %s when calling clGetDeviceInfo to get CL_DRIVER_VERSION for device %u.", err_to_str(ret), ctx->deviceIdx);
 		return ERR_OCL_API;
@@ -237,20 +237,20 @@ size_t InitOpenCLGpu(cl_context opencl_ctx, GpuContext* ctx, const char* source_
 		{
 			if(n0s::params::inst().AMDCache)
 				printer::inst()->print_msg(L1, "OpenCL device %u - Precompiled code %s not found. Compiling ...", ctx->deviceIdx, cache_file.c_str());
-			ctx->Program = clCreateProgramWithSource(opencl_ctx, 1, (const char**)&source_code, NULL, &ret);
+			ctx->Program = clCreateProgramWithSource(opencl_ctx, 1, (const char**)&source_code, nullptr, &ret);
 			if(ret != CL_SUCCESS)
 			{
 				printer::inst()->print_msg(L1, "Error %s when calling clCreateProgramWithSource on the OpenCL miner code", err_to_str(ret));
 				return ERR_OCL_API;
 			}
 
-			ret = clBuildProgram(ctx->Program, 1, &ctx->DeviceID, options.c_str(), NULL, NULL);
+			ret = clBuildProgram(ctx->Program, 1, &ctx->DeviceID, options.c_str(), nullptr, nullptr);
 			if(ret != CL_SUCCESS)
 			{
 				size_t len;
 				printer::inst()->print_msg(L1, "Error %s when calling clBuildProgram.", err_to_str(ret));
 
-				if((ret = clGetProgramBuildInfo(ctx->Program, ctx->DeviceID, CL_PROGRAM_BUILD_LOG, 0, NULL, &len)) != CL_SUCCESS)
+				if((ret = clGetProgramBuildInfo(ctx->Program, ctx->DeviceID, CL_PROGRAM_BUILD_LOG, 0, nullptr, &len)) != CL_SUCCESS)
 				{
 					printer::inst()->print_msg(L1, "Error %s when calling clGetProgramBuildInfo for length of build log output.", err_to_str(ret));
 					return ERR_OCL_API;
@@ -259,7 +259,7 @@ size_t InitOpenCLGpu(cl_context opencl_ctx, GpuContext* ctx, const char* source_
 				char* BuildLog = static_cast<char*>(malloc(len + 1));
 				BuildLog[0] = '\0';
 
-				if((ret = clGetProgramBuildInfo(ctx->Program, ctx->DeviceID, CL_PROGRAM_BUILD_LOG, len, BuildLog, NULL)) != CL_SUCCESS)
+				if((ret = clGetProgramBuildInfo(ctx->Program, ctx->DeviceID, CL_PROGRAM_BUILD_LOG, len, BuildLog, nullptr)) != CL_SUCCESS)
 				{
 					free(BuildLog);
 					printer::inst()->print_msg(L1, "Error %s when calling clGetProgramBuildInfo for build log.", err_to_str(ret));
@@ -274,10 +274,10 @@ size_t InitOpenCLGpu(cl_context opencl_ctx, GpuContext* ctx, const char* source_
 			}
 
 			cl_uint num_devices;
-			clGetProgramInfo(ctx->Program, CL_PROGRAM_NUM_DEVICES, sizeof(cl_uint), &num_devices, NULL);
+			clGetProgramInfo(ctx->Program, CL_PROGRAM_NUM_DEVICES, sizeof(cl_uint), &num_devices, nullptr);
 
 			std::vector<cl_device_id> devices_ids(num_devices);
-			clGetProgramInfo(ctx->Program, CL_PROGRAM_DEVICES, sizeof(cl_device_id) * devices_ids.size(), devices_ids.data(), NULL);
+			clGetProgramInfo(ctx->Program, CL_PROGRAM_DEVICES, sizeof(cl_device_id) * devices_ids.size(), devices_ids.data(), nullptr);
 			int dev_id = 0;
 			/* Search for the gpu within the program context.
 			 * The id can be different to  ctx->DeviceID.
@@ -292,7 +292,7 @@ size_t InitOpenCLGpu(cl_context opencl_ctx, GpuContext* ctx, const char* source_
 			cl_build_status status;
 			do
 			{
-				if((ret = clGetProgramBuildInfo(ctx->Program, ctx->DeviceID, CL_PROGRAM_BUILD_STATUS, sizeof(cl_build_status), &status, NULL)) != CL_SUCCESS)
+				if((ret = clGetProgramBuildInfo(ctx->Program, ctx->DeviceID, CL_PROGRAM_BUILD_STATUS, sizeof(cl_build_status), &status, nullptr)) != CL_SUCCESS)
 				{
 					printer::inst()->print_msg(L1, "Error %s when calling clGetProgramBuildInfo for status of build.", err_to_str(ret));
 					return ERR_OCL_API;
@@ -303,7 +303,7 @@ size_t InitOpenCLGpu(cl_context opencl_ctx, GpuContext* ctx, const char* source_
 			if(n0s::params::inst().AMDCache)
 			{
 				std::vector<size_t> binary_sizes(num_devices);
-				clGetProgramInfo(ctx->Program, CL_PROGRAM_BINARY_SIZES, sizeof(size_t) * binary_sizes.size(), binary_sizes.data(), NULL);
+				clGetProgramInfo(ctx->Program, CL_PROGRAM_BINARY_SIZES, sizeof(size_t) * binary_sizes.size(), binary_sizes.data(), nullptr);
 
 				std::vector<char*> all_programs(num_devices);
 				std::vector<std::vector<char>> program_storage;
@@ -319,7 +319,7 @@ size_t InitOpenCLGpu(cl_context opencl_ctx, GpuContext* ctx, const char* source_
 					p_id++;
 				}
 
-				if((ret = clGetProgramInfo(ctx->Program, CL_PROGRAM_BINARIES, num_devices * sizeof(char*), all_programs.data(), NULL)) != CL_SUCCESS)
+				if((ret = clGetProgramInfo(ctx->Program, CL_PROGRAM_BINARIES, num_devices * sizeof(char*), all_programs.data(), nullptr)) != CL_SUCCESS)
 				{
 					printer::inst()->print_msg(L1, "Error %s when calling clGetProgramInfo.", err_to_str(ret));
 					return ERR_OCL_API;
@@ -351,7 +351,7 @@ size_t InitOpenCLGpu(cl_context opencl_ctx, GpuContext* ctx, const char* source_
 				printer::inst()->print_msg(L1, "Error %s when calling clCreateProgramWithBinary. Try to delete file %s", err_to_str(ret), cache_file.c_str());
 				return ERR_OCL_API;
 			}
-			ret = clBuildProgram(ctx->Program, 1, &ctx->DeviceID, NULL, NULL, NULL);
+			ret = clBuildProgram(ctx->Program, 1, &ctx->DeviceID, nullptr, nullptr, nullptr);
 			if(ret != CL_SUCCESS)
 			{
 				printer::inst()->print_msg(L1, "Error %s when calling clBuildProgram. Try to delete file %s", err_to_str(ret), cache_file.c_str());
@@ -407,7 +407,7 @@ uint32_t getNumPlatforms()
 	cl_int clStatus;
 
 	// Get platform and device information
-	clStatus = clGetPlatformIDs(0, NULL, &num_platforms);
+	clStatus = clGetPlatformIDs(0, nullptr, &num_platforms);
 	if(clStatus != CL_SUCCESS)
 	{
 		printer::inst()->print_msg(L1, "WARNING: %s when calling clGetPlatformIDs for number of platforms.", err_to_str(clStatus));
@@ -431,20 +431,20 @@ std::vector<GpuContext> getAMDDevices(int index)
 		return ctxVec;
 
 	platforms.resize(numPlatforms);
-	if((clStatus = clGetPlatformIDs(numPlatforms, platforms.data(), NULL)) != CL_SUCCESS)
+	if((clStatus = clGetPlatformIDs(numPlatforms, platforms.data(), nullptr)) != CL_SUCCESS)
 	{
 		printer::inst()->print_msg(L1, "WARNING: %s when calling clGetPlatformIDs for platform information.", err_to_str(clStatus));
 		return ctxVec;
 	}
 
-	if((clStatus = clGetDeviceIDs(platforms[index], CL_DEVICE_TYPE_GPU, 0, NULL, &num_devices)) != CL_SUCCESS)
+	if((clStatus = clGetDeviceIDs(platforms[index], CL_DEVICE_TYPE_GPU, 0, nullptr, &num_devices)) != CL_SUCCESS)
 	{
 		printer::inst()->print_msg(L1, "WARNING: %s when calling clGetDeviceIDs for of devices.", err_to_str(clStatus));
 		return ctxVec;
 	}
 
 	device_list.resize(num_devices);
-	if((clStatus = clGetDeviceIDs(platforms[index], CL_DEVICE_TYPE_GPU, num_devices, device_list.data(), NULL)) != CL_SUCCESS)
+	if((clStatus = clGetDeviceIDs(platforms[index], CL_DEVICE_TYPE_GPU, num_devices, device_list.data(), nullptr)) != CL_SUCCESS)
 	{
 		printer::inst()->print_msg(L1, "WARNING: %s when calling clGetDeviceIDs for device information.", err_to_str(clStatus));
 		return ctxVec;
@@ -453,7 +453,7 @@ std::vector<GpuContext> getAMDDevices(int index)
 	for(size_t k = 0; k < num_devices; k++)
 	{
 		std::vector<char> devVendorVec(1024);
-		if((clStatus = clGetDeviceInfo(device_list[k], CL_DEVICE_VENDOR, devVendorVec.size(), devVendorVec.data(), NULL)) != CL_SUCCESS)
+		if((clStatus = clGetDeviceInfo(device_list[k], CL_DEVICE_VENDOR, devVendorVec.size(), devVendorVec.data(), nullptr)) != CL_SUCCESS)
 		{
 			printer::inst()->print_msg(L1, "WARNING: %s when calling clGetDeviceInfo to get the device vendor name for device %u.", err_to_str(clStatus), k);
 			continue;
@@ -473,19 +473,19 @@ std::vector<GpuContext> getAMDDevices(int index)
 			ctx.isNVIDIA = isNVIDIADevice;
 			ctx.isAMD = isAMDDevice;
 
-			if((clStatus = clGetDeviceInfo(device_list[k], CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(int), &(ctx.computeUnits), NULL)) != CL_SUCCESS)
+			if((clStatus = clGetDeviceInfo(device_list[k], CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(int), &(ctx.computeUnits), nullptr)) != CL_SUCCESS)
 			{
 				printer::inst()->print_msg(L1, "WARNING: %s when calling clGetDeviceInfo to get CL_DEVICE_MAX_COMPUTE_UNITS for device %u.", err_to_str(clStatus), k);
 				continue;
 			}
 
-			if((clStatus = clGetDeviceInfo(device_list[k], CL_DEVICE_MAX_MEM_ALLOC_SIZE, sizeof(size_t), &(ctx.maxMemPerAlloc), NULL)) != CL_SUCCESS)
+			if((clStatus = clGetDeviceInfo(device_list[k], CL_DEVICE_MAX_MEM_ALLOC_SIZE, sizeof(size_t), &(ctx.maxMemPerAlloc), nullptr)) != CL_SUCCESS)
 			{
 				printer::inst()->print_msg(L1, "WARNING: %s when calling clGetDeviceInfo to get CL_DEVICE_MAX_MEM_ALLOC_SIZE for device %u.", err_to_str(clStatus), k);
 				continue;
 			}
 
-			if((clStatus = clGetDeviceInfo(device_list[k], CL_DEVICE_GLOBAL_MEM_SIZE, sizeof(size_t), &(ctx.freeMem), NULL)) != CL_SUCCESS)
+			if((clStatus = clGetDeviceInfo(device_list[k], CL_DEVICE_GLOBAL_MEM_SIZE, sizeof(size_t), &(ctx.freeMem), nullptr)) != CL_SUCCESS)
 			{
 				printer::inst()->print_msg(L1, "WARNING: %s when calling clGetDeviceInfo to get CL_DEVICE_GLOBAL_MEM_SIZE for device %u.", err_to_str(clStatus), k);
 				continue;
@@ -495,14 +495,14 @@ std::vector<GpuContext> getAMDDevices(int index)
 			if(isNVIDIADevice)
 				ctx.maxMemPerAlloc = ctx.freeMem;
 
-			if((clStatus = clGetDeviceInfo(device_list[k], CL_DEVICE_NAME, devNameVec.size(), devNameVec.data(), NULL)) != CL_SUCCESS)
+			if((clStatus = clGetDeviceInfo(device_list[k], CL_DEVICE_NAME, devNameVec.size(), devNameVec.data(), nullptr)) != CL_SUCCESS)
 			{
 				printer::inst()->print_msg(L1, "WARNING: %s when calling clGetDeviceInfo to get CL_DEVICE_NAME for device %u.", err_to_str(clStatus), k);
 				continue;
 			}
 
 			std::vector<char> openCLDriverVer(1024);
-			if((clStatus = clGetDeviceInfo(device_list[k], CL_DRIVER_VERSION, openCLDriverVer.size(), openCLDriverVer.data(), NULL)) != CL_SUCCESS)
+			if((clStatus = clGetDeviceInfo(device_list[k], CL_DRIVER_VERSION, openCLDriverVer.size(), openCLDriverVer.data(), nullptr)) != CL_SUCCESS)
 			{
 				printer::inst()->print_msg(L1, "WARNING: %s when calling clGetDeviceInfo to get CL_DRIVER_VERSION for device %u.", err_to_str(clStatus), k);
 				continue;
@@ -531,11 +531,11 @@ int getAMDPlatformIdx()
 		printer::inst()->print_msg(L0, "WARNING: No OpenCL platform found.");
 		return -1;
 	}
-	cl_platform_id* platforms = NULL;
+	cl_platform_id* platforms = nullptr;
 	cl_int clStatus;
 
 	platforms = (cl_platform_id*)malloc(sizeof(cl_platform_id) * numPlatforms);
-	clStatus = clGetPlatformIDs(numPlatforms, platforms, NULL);
+	clStatus = clGetPlatformIDs(numPlatforms, platforms, nullptr);
 
 	int platformIndex = -1;
 	// Mesa OpenCL is the fallback if no AMD or Apple OpenCL is found
@@ -546,10 +546,10 @@ int getAMDPlatformIdx()
 		for(uint32_t i = 0; i < numPlatforms; i++)
 		{
 			size_t infoSize;
-			clGetPlatformInfo(platforms[i], CL_PLATFORM_VENDOR, 0, NULL, &infoSize);
+			clGetPlatformInfo(platforms[i], CL_PLATFORM_VENDOR, 0, nullptr, &infoSize);
 			std::vector<char> platformNameVec(infoSize);
 
-			clGetPlatformInfo(platforms[i], CL_PLATFORM_VENDOR, infoSize, platformNameVec.data(), NULL);
+			clGetPlatformInfo(platforms[i], CL_PLATFORM_VENDOR, infoSize, platformNameVec.data(), nullptr);
 			std::string platformName(platformNameVec.data());
 
 			bool isAMDOpenCL = platformName.find("Advanced Micro Devices") != std::string::npos ||
@@ -592,7 +592,7 @@ size_t InitOpenCL(GpuContext* ctx, size_t num_gpus, size_t platform_idx)
 	cl_int ret;
 	cl_uint entries;
 
-	if((ret = clGetPlatformIDs(0, NULL, &entries)) != CL_SUCCESS)
+	if((ret = clGetPlatformIDs(0, nullptr, &entries)) != CL_SUCCESS)
 	{
 		printer::inst()->print_msg(L1, "Error %s when calling clGetPlatformIDs for number of platforms.", err_to_str(ret));
 		return ERR_OCL_API;
@@ -606,23 +606,23 @@ size_t InitOpenCL(GpuContext* ctx, size_t num_gpus, size_t platform_idx)
 	}
 
 	cl_platform_id PlatformIDList[entries];
-	if((ret = clGetPlatformIDs(entries, PlatformIDList, NULL)) != CL_SUCCESS)
+	if((ret = clGetPlatformIDs(entries, PlatformIDList, nullptr)) != CL_SUCCESS)
 	{
 		printer::inst()->print_msg(L1, "Error %s when calling clGetPlatformIDs for platform ID information.", err_to_str(ret));
 		return ERR_OCL_API;
 	}
 
 	size_t infoSize;
-	clGetPlatformInfo(PlatformIDList[platform_idx], CL_PLATFORM_VENDOR, 0, NULL, &infoSize);
+	clGetPlatformInfo(PlatformIDList[platform_idx], CL_PLATFORM_VENDOR, 0, nullptr, &infoSize);
 	std::vector<char> platformNameVec(infoSize);
-	clGetPlatformInfo(PlatformIDList[platform_idx], CL_PLATFORM_VENDOR, infoSize, platformNameVec.data(), NULL);
+	clGetPlatformInfo(PlatformIDList[platform_idx], CL_PLATFORM_VENDOR, infoSize, platformNameVec.data(), nullptr);
 	std::string platformName(platformNameVec.data());
 	if(n0s::params::inst().openCLVendor == "AMD" && platformName.find("Advanced Micro Devices") == std::string::npos)
 	{
 		printer::inst()->print_msg(L1, "WARNING: using non AMD device: %s", platformName.c_str());
 	}
 
-	if((ret = clGetDeviceIDs(PlatformIDList[platform_idx], CL_DEVICE_TYPE_GPU, 0, NULL, &entries)) != CL_SUCCESS)
+	if((ret = clGetDeviceIDs(PlatformIDList[platform_idx], CL_DEVICE_TYPE_GPU, 0, nullptr, &entries)) != CL_SUCCESS)
 	{
 		printer::inst()->print_msg(L1, "Error %s when calling clGetDeviceIDs for number of devices.", err_to_str(ret));
 		return ERR_OCL_API;
@@ -639,7 +639,7 @@ size_t InitOpenCL(GpuContext* ctx, size_t num_gpus, size_t platform_idx)
 	}
 
 	cl_device_id DeviceIDList[entries];
-	if((ret = clGetDeviceIDs(PlatformIDList[platform_idx], CL_DEVICE_TYPE_GPU, entries, DeviceIDList, NULL)) != CL_SUCCESS)
+	if((ret = clGetDeviceIDs(PlatformIDList[platform_idx], CL_DEVICE_TYPE_GPU, entries, DeviceIDList, nullptr)) != CL_SUCCESS)
 	{
 		printer::inst()->print_msg(L1, "Error %s when calling clGetDeviceIDs for device ID information.", err_to_str(ret));
 		return ERR_OCL_API;
@@ -655,7 +655,7 @@ size_t InitOpenCL(GpuContext* ctx, size_t num_gpus, size_t platform_idx)
 		TempDeviceList[i] = DeviceIDList[ctx[i].deviceIdx];
 	}
 
-	cl_context opencl_ctx = clCreateContext(NULL, num_gpus, TempDeviceList.data(), NULL, NULL, &ret);
+	cl_context opencl_ctx = clCreateContext(nullptr, num_gpus, TempDeviceList.data(), nullptr, nullptr, &ret);
 	if(ret != CL_SUCCESS)
 	{
 		printer::inst()->print_msg(L1, "Error %s when calling clCreateContext.", err_to_str(ret));
@@ -727,7 +727,7 @@ size_t XMRSetJob(GpuContext* ctx, uint8_t* input, size_t input_len, uint64_t tar
 
 	cl_uint numThreads = ctx->rawIntensity;
 
-	if((ret = clEnqueueWriteBuffer(ctx->CommandQueues, ctx->InputBuffer, CL_TRUE, 0, 128, input, 0, NULL, NULL)) != CL_SUCCESS)
+	if((ret = clEnqueueWriteBuffer(ctx->CommandQueues, ctx->InputBuffer, CL_TRUE, 0, 128, input, 0, nullptr, nullptr)) != CL_SUCCESS)
 	{
 		printer::inst()->print_msg(L1, "Error %s when calling clEnqueueWriteBuffer to fill input buffer.", err_to_str(ret));
 		return ERR_OCL_API;
@@ -945,14 +945,14 @@ size_t XMRRunJob(GpuContext* ctx, cl_uint* HashOutput)
 
 	// Branch buffer zeroing removed — cn_gpu doesn't use branch dispatch
 
-	if((ret = clEnqueueWriteBuffer(ctx->CommandQueues, ctx->OutputBuffer, CL_FALSE, sizeof(cl_uint) * 0xFF, sizeof(cl_uint), &zero, 0, NULL, NULL)) != CL_SUCCESS)
+	if((ret = clEnqueueWriteBuffer(ctx->CommandQueues, ctx->OutputBuffer, CL_FALSE, sizeof(cl_uint) * 0xFF, sizeof(cl_uint), &zero, 0, nullptr, nullptr)) != CL_SUCCESS)
 	{
 		printer::inst()->print_msg(L1, "Error %s when calling clEnqueueWriteBuffer to fetch results.", err_to_str(ret));
 		return ERR_OCL_API;
 	}
 
 	size_t Nonce[2] = {ctx->Nonce, 1}, gthreads[2] = {g_thd, 8}, lthreads[2] = {8, 8};
-	if((ret = clEnqueueNDRangeKernel(ctx->CommandQueues, Kernels[0], 2, Nonce, gthreads, lthreads, 0, NULL, NULL)) != CL_SUCCESS)
+	if((ret = clEnqueueNDRangeKernel(ctx->CommandQueues, Kernels[0], 2, Nonce, gthreads, lthreads, 0, nullptr, nullptr)) != CL_SUCCESS)
 	{
 		printer::inst()->print_msg(L1, "Error %s when calling clEnqueueNDRangeKernel for kernel %d.", err_to_str(ret), 0);
 		return ERR_OCL_API;
@@ -962,7 +962,7 @@ size_t XMRRunJob(GpuContext* ctx, cl_uint* HashOutput)
 	{
 		size_t thd = 64;
 		size_t intens = g_intensity * thd;
-		if((ret = clEnqueueNDRangeKernel(ctx->CommandQueues, Kernels[3], 1, 0, &intens, &thd, 0, NULL, NULL)) != CL_SUCCESS)
+		if((ret = clEnqueueNDRangeKernel(ctx->CommandQueues, Kernels[3], 1, 0, &intens, &thd, 0, nullptr, nullptr)) != CL_SUCCESS)
 		{
 			printer::inst()->print_msg(L1, "Error %s when calling clEnqueueNDRangeKernel for kernel %d.", err_to_str(ret), 7);
 			return ERR_OCL_API;
@@ -971,7 +971,7 @@ size_t XMRRunJob(GpuContext* ctx, cl_uint* HashOutput)
 		size_t w_size_cn_gpu = w_size * 16;
 		size_t g_thd_cn_gpu = g_thd * 16;
 
-		if((ret = clEnqueueNDRangeKernel(ctx->CommandQueues, Kernels[1], 1, 0, &g_thd_cn_gpu, &w_size_cn_gpu, 0, NULL, NULL)) != CL_SUCCESS)
+		if((ret = clEnqueueNDRangeKernel(ctx->CommandQueues, Kernels[1], 1, 0, &g_thd_cn_gpu, &w_size_cn_gpu, 0, nullptr, nullptr)) != CL_SUCCESS)
 		{
 			printer::inst()->print_msg(L1, "Error %s when calling clEnqueueNDRangeKernel for kernel %d.", err_to_str(ret), 1);
 			return ERR_OCL_API;
@@ -979,7 +979,7 @@ size_t XMRRunJob(GpuContext* ctx, cl_uint* HashOutput)
 	}
 
 	size_t  NonceT[2] = {0, ctx->Nonce}, gthreadsT[2] = {8, g_thd}, lthreadsT[2] = {8 , w_size};
-	if((ret = clEnqueueNDRangeKernel(ctx->CommandQueues, Kernels[2], 2, NonceT, gthreadsT, lthreadsT, 0, NULL, NULL)) != CL_SUCCESS)
+	if((ret = clEnqueueNDRangeKernel(ctx->CommandQueues, Kernels[2], 2, NonceT, gthreadsT, lthreadsT, 0, nullptr, nullptr)) != CL_SUCCESS)
 	{
 		printer::inst()->print_msg(L1, "Error %s when calling clEnqueueNDRangeKernel for kernel %d.", err_to_str(ret), 2);
 			return ERR_OCL_API;
@@ -988,7 +988,7 @@ size_t XMRRunJob(GpuContext* ctx, cl_uint* HashOutput)
 	// cn_gpu does not use branch kernels (Kernels 3-6) — final hash done in Kernel 2
 
 	// this call is blocking therefore the access to the results without cl_finish is fine
-	if((ret = clEnqueueReadBuffer(ctx->CommandQueues, ctx->OutputBuffer, CL_TRUE, 0, sizeof(cl_uint) * 0x100, HashOutput, 0, NULL, NULL)) != CL_SUCCESS)
+	if((ret = clEnqueueReadBuffer(ctx->CommandQueues, ctx->OutputBuffer, CL_TRUE, 0, sizeof(cl_uint) * 0x100, HashOutput, 0, nullptr, nullptr)) != CL_SUCCESS)
 	{
 		printer::inst()->print_msg(L1, "Error %s when calling clEnqueueReadBuffer to fetch results.", err_to_str(ret));
 		return ERR_OCL_API;

@@ -83,7 +83,7 @@ printer::printer()
 {
 	verbose_level = LINF;
 	logfile = nullptr;
-	setvbuf(stdout, NULL, _IOFBF, BUFSIZ);
+	setvbuf(stdout, nullptr, _IOFBF, BUFSIZ);
 }
 
 bool printer::open_logfile(const char* file)

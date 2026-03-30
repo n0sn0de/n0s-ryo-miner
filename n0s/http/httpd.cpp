@@ -62,7 +62,7 @@ MHD_Result httpd::req_handler([[maybe_unused]] void* cls,
 		MHD_Result ret;
 
 		username = MHD_digest_auth_get_username(connection);
-		if(username == NULL)
+		if(username == nullptr)
 		{
 			rsp = MHD_create_response_from_buffer(sHtmlAccessDeniedSize, const_cast<char*>(sHtmlAccessDenied), MHD_RESPMEM_PERSISTENT);
 			ret = MHD_queue_auth_fail_response(connection, sHttpAuthRealm, sHttpAuthOpaque, rsp, MHD_NO);
@@ -87,7 +87,7 @@ MHD_Result httpd::req_handler([[maybe_unused]] void* cls,
 	{
 		const char* req_etag = MHD_lookup_connection_value(connection, MHD_HEADER_KIND, "If-None-Match");
 
-		if(req_etag != NULL && strcmp(req_etag, sHtmlCssEtag) == 0)
+		if(req_etag != nullptr && strcmp(req_etag, sHtmlCssEtag) == 0)
 		{ //Cache hit
 			rsp = MHD_create_response_from_buffer(0, nullptr, MHD_RESPMEM_PERSISTENT);
 
@@ -154,9 +154,9 @@ MHD_Result httpd::req_handler([[maybe_unused]] void* cls,
 bool httpd::start_daemon()
 {
 	d = MHD_start_daemon(MHD_USE_THREAD_PER_CONNECTION,
-		jconf::inst()->GetHttpdPort(), NULL, NULL,
+		jconf::inst()->GetHttpdPort(), nullptr, nullptr,
 		&httpd::req_handler,
-		NULL, MHD_OPTION_END);
+		nullptr, MHD_OPTION_END);
 
 	if(d == nullptr)
 	{

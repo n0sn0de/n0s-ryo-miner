@@ -46,7 +46,7 @@ cryptonight_ctx* cryptonight_alloc_ctx(size_t use_fast_mem, size_t use_mlock, al
 		ptr->long_state = static_cast<uint8_t*>(_mm_malloc(hashMemSize, hashMemSize));
 		ptr->ctx_info[0] = 0;
 		ptr->ctx_info[1] = 0;
-		if(ptr->long_state == NULL)
+		if(ptr->long_state == nullptr)
 			printer::inst()->print_msg(L0, "MEMORY ALLOC FAILED: _mm_malloc was not able to allocate %s byte",
 				std::to_string(hashMemSize).c_str());
 		return ptr;
@@ -68,7 +68,7 @@ cryptonight_ctx* cryptonight_alloc_ctx(size_t use_fast_mem, size_t use_mlock, al
 	{
 		_mm_free(ptr);
 		msg->warning = "mmap failed, check attribute 'use_slow_memory' in 'config.txt'";
-		return NULL;
+		return nullptr;
 	}
 
 	ptr->ctx_info[0] = 1;

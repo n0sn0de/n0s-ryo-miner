@@ -324,7 +324,7 @@ bool jconf::parse_file(const char* sFilename, bool main_conf)
 	size_t flen;
 
 	pFile = fopen(sFilename, "rb");
-	if(pFile == NULL)
+	if(pFile == nullptr)
 	{
 		printer::inst()->print_msg(L0, "Failed to open config file %s.", sFilename);
 		return false;

@@ -115,7 +115,7 @@ cryptonight_ctx* minethd::minethd_alloc_ctx()
 	{
 	case ::jconf::never_use:
 		ctx = cryptonight_alloc_ctx(1, 1, &msg);
-		if(ctx == NULL)
+		if(ctx == nullptr)
 			printer::inst()->print_msg(L0, "MEMORY ALLOC FAILED: %s", msg.warning);
 		else
 		{
@@ -128,7 +128,7 @@ cryptonight_ctx* minethd::minethd_alloc_ctx()
 
 	case ::jconf::no_mlck:
 		ctx = cryptonight_alloc_ctx(1, 0, &msg);
-		if(ctx == NULL)
+		if(ctx == nullptr)
 			printer::inst()->print_msg(L0, "MEMORY ALLOC FAILED: %s", msg.warning);
 		else
 		{
@@ -141,12 +141,12 @@ cryptonight_ctx* minethd::minethd_alloc_ctx()
 
 	case ::jconf::print_warning:
 		ctx = cryptonight_alloc_ctx(1, 1, &msg);
-		if(msg.warning != NULL)
+		if(msg.warning != nullptr)
 			printer::inst()->print_msg(L0, "MEMORY ALLOC FAILED: %s", msg.warning);
-		if(ctx == NULL)
-			ctx = cryptonight_alloc_ctx(0, 0, NULL);
+		if(ctx == nullptr)
+			ctx = cryptonight_alloc_ctx(0, 0, nullptr);
 
-		if(ctx != NULL)
+		if(ctx != nullptr)
 		{
 			ctx->hash_fn = nullptr;
 			ctx->loop_fn = nullptr;
@@ -156,7 +156,7 @@ cryptonight_ctx* minethd::minethd_alloc_ctx()
 		return ctx;
 
 	case ::jconf::always_use:
-		ctx = cryptonight_alloc_ctx(0, 0, NULL);
+		ctx = cryptonight_alloc_ctx(0, 0, nullptr);
 
 		ctx->hash_fn = nullptr;
 		ctx->loop_fn = nullptr;
@@ -166,7 +166,7 @@ cryptonight_ctx* minethd::minethd_alloc_ctx()
 		return ctx;
 
 	case ::jconf::unknown_value:
-		return NULL; //Shut up compiler
+		return nullptr; //Shut up compiler
 	}
 
 	return nullptr; //Should never happen

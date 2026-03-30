@@ -322,7 +322,7 @@ bool jpsock::process_line(char* line, size_t len)
 	prv->callAllocator.Clear();
 	++iMessageCnt;
 
-	/*NULL terminate the line instead of '\n', parsing will add some more NULLs*/
+	/*nullptr terminate the line instead of '\n', parsing will add some more NULLs*/
 	line[len - 1] = '\0';
 
 	//printf("RECV: %s\n", line);
