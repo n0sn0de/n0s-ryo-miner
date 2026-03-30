@@ -139,6 +139,14 @@ tests/
 - ✅ Added const to jpsock simple getters (get_pool_addr, get_tls_fp, get_rigid, is_nicehash)
 - Net: 5 files changed, 19 insertions(+), 19 deletions(-) — zero behavior changes, bit-exact hashes verified
 
+**Session 19 (2026-03-30 08:46 AM):**
+- ✅ Added constexpr to 15+ pure compile-time functions (n0s_algo constructors, accessors, comparison ops)
+- ✅ Made POW() fully constexpr (constructs algorithm descriptors at compile time)
+- ✅ Added constexpr to target conversion helpers (t32_to_t64, t64_to_diff, diff_to_t64)
+- ✅ Made miner_work::getVersion() constexpr
+- Zero runtime behavior changes, bit-exact hashes verified (3/3 pass)
+- Compiler can now optimize algorithm constant lookups and comparisons
+
 **Session 18 (2026-03-30 03:35 AM):**
 - ✅ Split AMD `gpu.cpp` (1003 lines) into focused modules: gpu_utils, gpu_platform, gpu_device, gpu (4 files, 373-421 lines each)
 - ✅ Wrapped all AMD GPU functions in `n0s::amd` namespace (was global scope)
