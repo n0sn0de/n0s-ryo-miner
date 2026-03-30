@@ -2,7 +2,7 @@
 
 **High-Level Strategy for the Foundational C++ Rewrite**
 
-*Status: Foundation + dead code removal complete. CUDA consolidated. Namespace migrated (n0s::). Pool/network documented. Directory restructured (xmrstak/ → n0s/). Zero-warning build. Modern C++ patterns applied.*
+*Status: Foundation + dead code removal complete. CUDA consolidated. Namespace migrated (n0s::). Pool/network documented. Directory restructured (xmrstak/ → n0s/). Zero-warning build. Modern C++ patterns applied. Config/algo simplified. OpenCL constants hardcoded.*
 
 ---
 
@@ -26,7 +26,7 @@ Take the inherited xmr-stak CryptoNight-GPU implementation and transform it into
 
 The `xmrstak/` directory is **GONE**. All source code now lives under `n0s/`.
 
-**~220 files changed. Net -9,380+ lines removed. Namespace migrated. Directory restructured. Protocol documented. Zero-warning build. Modern C++17.**
+**~245 files changed. Net -10,000+ lines removed. Namespace migrated. Directory restructured. Protocol documented. Zero-warning build. Config simplified. Modern C++17.**
 
 ---
 
@@ -96,7 +96,7 @@ n0s/
 │   ├── executor.cpp/hpp   ← Main coordinator
 │   ├── console.cpp/hpp    ← Console output
 │   ├── telemetry.cpp/hpp  ← Hashrate tracking
-│   ├── coinDescription.hpp ← Internal to jconf
+│   ├── (coinDescription.hpp removed — Session 7)
 │   └── [other utilities]
 │
 ├── cli/cli-miner.cpp     ← Entry point (947 lines)
@@ -116,7 +116,7 @@ tests/
 └── build_harness.sh       ← Build script
 ```
 
-**Codebase: ~31K lines (down from ~43K). Our code: ~17K lines (excluding vendored rapidjson/picosha2)**
+**Codebase: ~30K lines (down from ~43K). Our code: ~16.5K lines (excluding vendored rapidjson/picosha2)**
 **The `xmrstak/` directory is GONE. Everything is `n0s/` now.**
 
 ---
@@ -149,7 +149,7 @@ tests/
 
 CUDA files reduced from 9 → 5. Live-tested on nos2 (GTX 1070 Ti) and nosnode (RTX 2070).
 
-### Phase S3: OpenCL Cleanup — IN PROGRESS
+### Phase S3: OpenCL Cleanup — MOSTLY COMPLETE
 
 | Target | Status |
 |--------|--------|
@@ -157,8 +157,11 @@ CUDA files reduced from 9 → 5. Live-tested on nos2 (GTX 1070 Ti) and nosnode (
 | Remove KernelNames vector indirection | ✅ Done (static const char*) |
 | Strip dead Windows code from gpu.cpp | ✅ Done (-46 lines) |
 | Remove dead JOIN_DO/JOIN macros | ✅ Done |
-| `gpu.cpp` split (device_init, kernel_compile, mining_loop) | ❌ Future — 1,015 lines, still monolithic |
-| Remove remaining multi-algo conditionals in .cl files | ❌ Future — COMP_MODE, STRIDED_INDEX still present |
+| Remove STRIDED_INDEX dead branches | ✅ Done — hardcoded to 0 (Session 7, S3.2) |
+| Remove MEM_CHUNK/mem_chunk/strided_index config | ✅ Done — accepted but ignored (Session 7) |
+| Delete dead cryptonight_r*.rtcl files | ✅ Done (Session 7) |
+| `gpu.cpp` split (device_init, kernel_compile, mining_loop) | ❌ Future — ~990 lines, still monolithic |
+| COMP_MODE conditionals | ✅ Kept — live feature for non-aligned intensity |
 
 **Remaining: gpu.cpp split (~4 hours). Deferred — risk/reward not favorable yet.**
 
@@ -228,7 +231,44 @@ Fixed ~80 compiler warnings across 18 files to achieve clean `-Wall -Wextra`:
   - Configuration reference and error handling summary
 - Module-level doc comments added to executor.cpp, jpsock.cpp, socket.cpp, msgstruct.hpp
 
-### Phase S8: Performance Optimization (Future)
+### Phase S8: Config & Algorithm Simplification ✅ COMPLETE (Session 7)
+
+**S8.1: n0s_algo Struct Simplification ✅**
+- Collapsed 5 constructors to 2 (default + full parameterized)
+- Removed `algo_name`/`base_algo` duality — single `id` member (always identical for cn_gpu)
+- Cleaner member names: `id`, `iter`, `mem`, `mask`
+- All pool protocol fields preserved (Name/BaseName/Iter/Mem/Mask)
+
+**S8.2: Delete coinDescription.hpp ✅ (-89 lines)**
+- Removed `coinDescription` struct (algo + algo_root + fork_version — root and fork_version never used)
+- Removed `coin_selection` struct (coin_name + 2 coinDescriptions + default_pool)
+- Removed coin lookup loops in jconf.cpp — replaced with direct `isValidCurrency()` check
+- Removed `currentCoin` member from jconf class
+
+**S8.3: Dead Code Removal ✅**
+- Removed `cached_algo` from `nvid_ctx` (CUDA context — declared but never read)
+- Removed `last_algo` from `cryptonight_ctx` (CPU context — only written, never read)
+
+### Phase S3.2: OpenCL Constant Cleanup ✅ COMPLETE (Session 7)
+
+- Hardcoded `STRIDED_INDEX=0` in OpenCL kernels (cn_gpu always uses direct indexing)
+- Removed `STRIDED_INDEX` 1/2/3 branches from `cryptonight.cl` and `cryptonight_gpu.cl`
+- Removed `MEM_CHUNK` macro (only used by dead `STRIDED_INDEX=2`)
+- Removed `-DSTRIDED_INDEX=` and `-DMEM_CHUNK_EXPONENT=` from OpenCL compiler options
+- Removed `stridedIndex`/`memChunk` from `GpuContext`, jconf `thd_cfg`, and config parsing
+  (strided_index/mem_chunk still accepted in config files for backward compat, just ignored)
+- Removed dead stridedIndex 2/3 intensity adjustment check in gpu.cpp
+- Deleted dead `cryptonight_r*.rtcl` files (CryptoNight-R variant, never used by cn_gpu)
+- `COMP_MODE` kept — it's a live runtime feature for non-aligned intensity
+
+### Phase S9: Dead Code Sweep ✅ COMPLETE (Session 7)
+
+- Removed dead `CNKeccak()` function from `cryptonight.cl` (defined but never called)
+- Removed stale "Dead code removed" tombstone comments and commented-out includes
+- Removed dead `if(false)` block in `gpu.cpp` (MaximumWorkSize /= 8)
+- Cleaned up keccak function comments to reflect actual usage
+
+### Phase S10: Performance Optimization (Future)
 
 Only after all structural work is complete:
 - Profile on each GPU architecture
@@ -251,6 +291,8 @@ Only after all structural work is complete:
 - [x] Clean compiler output (zero warnings at `-Wall -Wextra`) — Session 6
 - [x] Directory restructured to `n0s/` layout (S4, Session 5)
 - [x] `xmrstak` namespace fully replaced → `n0s::` (S5, Session 4)
+- [x] Config/algo system simplified — single-algorithm focus (S8, Session 7)
+- [x] OpenCL dead kernel branches removed (S3.2, Session 7)
 
 ---
 
