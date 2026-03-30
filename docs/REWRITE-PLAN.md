@@ -528,4 +528,91 @@ Only after structural work is complete (check the Remaining things in succes cri
 
 ---
 
+## Session 25 Notes (2026-03-30 10:12 AM)
+
+**What we accomplished:**
+- ✅ Verified benchmark harness builds and runs with correct parameters (intensity=8, worksize=8)
+- ✅ Confirmed Phases 1 and 2 execute successfully on AMD RDNA4 (gfx1201)
+- ✅ Isolated Phase 3 GPU memory fault to specific kernel execution (not buffer allocation)
+- ✅ Built production miner (build-quick/) for comparison testing
+- ✅ Fixed build script work size calculation (was showing intensity=1 due to stale binary)
+
+**Current blocker (unchanged from Session 24):**
+- Phase 3 kernel (`cn_gpu_phase3_compute`) hits GPU memory fault at address `0x792dc3e00000`
+- Error: "Page not present or supervisor privilege"
+- Phases 1+2 complete successfully → buffer allocation and initial data flow working
+- Phase 3's specific memory access pattern triggers the fault
+
+**What works:**
+- OpenCL device discovery and initialization ✓
+- Buffer allocation (16 MB scratchpad, 1600 bytes states) ✓
+- Kernel compilation with device-specific WORKSIZE ✓
+- Kernel array mapping (corrected in S24: indices 0,3,1,2 not sequential) ✓
+- Phase 1: Keccak + AES expansion ✓
+- Phase 2: Scratchpad expansion (64 threads/hash) ✓
+- Work size calculations (g_thd rounded to multiple of w_size) ✓
+
+**What doesn't work:**
+- Phase 3: Main memory-hard loop (`global=128, local=128` with intensity=8, worksize=8)
+- Memory fault suggests issue with scratchpad pointer arithmetic or bounds
+
+**Debugging hypothesis:**
+1. **Most likely:** Scratchpad buffer size mismatch or incorrect offset calculation in Phase 3 kernel
+   - Formula: `scratchpad + MEMORY * (gIdx/16)` where MEMORY = 2 MiB
+   - With intensity=8: need 8 × 2 MiB = 16 MB ✓ (allocated correctly)
+   - But global work size = 128 (g_thd * 16) → 128/16 = 8 threads accessing scratchpad
+   - Kernel may be trying to access beyond allocated bounds due to work group indexing
+
+2. **Alternative:** Phase 1/2 not initializing scratchpad correctly
+   - They complete without errors but may not write expected data
+   - Phase 3 then reads uninitialized/invalid pointers
+
+3. **AMD-specific:** Buffer alignment or page table setup
+   - RDNA4 may have specific alignment requirements not met by clCreateBuffer defaults
+   - May need CL_MEM_ALLOC_HOST_PTR or explicit alignment
+
+**Next session priorities (in order):**
+1. **Add debug logging to Phase 3 kernel** (~1 hour) — IMMEDIATE
+   - Add printf statements to verify gIdx, scratchpad offset calculations
+   - Print first scratchpad read address before fault
+   - Will require rebuilding kernels with `-Werror=implicit-function-declaration` disabled
+   
+2. **Compare with production miner** (~2 hours) — HIGH PRIORITY
+   - Run `build-quick/bin/n0s-ryo-miner` with intensity=8
+   - Capture working kernel arguments via temporary debug logging in production code
+   - Compare buffer pointers, sizes, and kernel args between harness and production
+   
+3. **Validate Phase 1/2 output** (~1 hour) — MEDIUM
+   - Read back states buffer after Phase 2
+   - Compare against golden hash intermediate values
+   - Ensure actual data is being written, not just no-errors
+
+4. **Fix Phase 3 memory access** (~1-2 hours) — After comparison
+   - Apply findings from production comparison
+   - Test buffer flag variations (CL_MEM_ALLOC_HOST_PTR, etc.)
+   - Try explicit buffer mapping/unmapping
+
+5. **Golden hash validation** (~30 min) — After Phase 3 works
+   - Complete full 5-phase pipeline execution
+   - Read output buffer and compare against test vector hashes
+   - Verify bit-exact match with `cn_gpu_harness.cpp` results
+
+**Tools built:**
+- Production miner: `build-quick/bin/n0s-ryo-miner` (OpenCL only, AMD RDNA4 tested)
+- Benchmark harness: `tests/benchmark_harness` (OpenCL, Phase 1+2 working, Phase 3 blocked)
+
+**Key insights:**
+- GPU memory faults are harder to debug than host errors (no backtraces, just addresses)
+- Phase-by-phase validation with `clFinish()` is essential for isolating kernel issues
+- Building both harness AND production miner enables comparison-based debugging
+- Work group size validation critical: `global >= local` and `global % local == 0`
+
+**Lessons learned:**
+- Always rebuild after code changes (stale binary showed wrong parameters)
+- Kernel array index mapping is non-obvious — verify against production code
+- GPU memory faults suggest pointer arithmetic or buffer size issues, not allocation failures
+- Comparison with working production code is faster than blind trial-and-error
+
+---
+
 The code is ours now. The dead weight is gone, the names make sense, and the path forward is clear. We're not rewriting for elegance — we're rewriting for ownership, understanding, and the ability to confidently modify any part of the system.*
