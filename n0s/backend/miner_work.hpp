@@ -64,7 +64,8 @@ struct miner_work
 
 	miner_work& operator=(miner_work&& from)
 	{
-		assert(this != &from);
+		if(this == &from)
+			return *this;
 
 		iBlockHeight = from.iBlockHeight;
 		iPoolId = from.iPoolId;
@@ -82,7 +83,8 @@ struct miner_work
 
 	miner_work& operator=(miner_work const& from)
 	{
-		assert(this != &from);
+		if(this == &from)
+			return *this;
 
 		iBlockHeight = from.iBlockHeight;
 		iPoolId = from.iPoolId;

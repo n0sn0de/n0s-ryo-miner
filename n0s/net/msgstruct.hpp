@@ -35,16 +35,14 @@
 
 struct pool_job
 {
-	char sJobID[64];
-	uint8_t bWorkBlob[128];
-	uint64_t iTarget;
-	uint32_t iWorkLen;
-	uint32_t iSavedNonce;
+	char sJobID[64] = {};
+	uint8_t bWorkBlob[128] = {};
+	uint64_t iTarget = 0;
+	uint32_t iWorkLen = 0;
+	uint32_t iSavedNonce = 0;
 	uint64_t iBlockHeight = uint64_t(-1);
 
-	pool_job() :
-		iWorkLen(0),
-		iSavedNonce(0) {}
+	pool_job() = default;
 	pool_job(const char* sJobID, uint64_t iTarget, const uint8_t* bWorkBlob, uint32_t iWorkLen) :
 		iTarget(iTarget),
 		iWorkLen(iWorkLen),
@@ -90,9 +88,11 @@ struct sock_err
 
 	sock_err& operator=(sock_err&& from)
 	{
-		assert(this != &from);
-		sSocketError = std::move(from.sSocketError);
-		silent = from.silent;
+		if(this != &from)
+		{
+			sSocketError = std::move(from.sSocketError);
+			silent = from.silent;
+		}
 		return *this;
 	}
 
@@ -208,7 +208,8 @@ struct ex_event
 
 	ex_event& operator=(ex_event&& from)
 	{
-		assert(this != &from);
+		if(this == &from)
+			return *this;
 
 		if(iName == EV_SOCK_ERROR)
 			oSocketError.~sock_err();
