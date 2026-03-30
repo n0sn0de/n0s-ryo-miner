@@ -1,0 +1,180 @@
+/**
+ * cuda_dispatch.cu — CUDA kernel dispatch and host-side entry points
+ *
+ * Orchestrates the complete CryptoNight-GPU pipeline:
+ *   Phase 1: cryptonight_extra_cpu_prepare  — Keccak + AES key expansion
+ *   Phase 2: kernel_expand_scratchpad       — Keccak-based scratchpad fill
+ *   Phase 3: kernel_gpu_compute             — FP computation loop
+ *   Phase 4: kernel_implode_scratchpad      — AES compression + mix_and_propagate
+ *   Phase 5: cryptonight_extra_cpu_final    — Final Keccak + target check
+ */
+
+#include "cuda_dispatch.hpp"
+#include "cuda_device.hpp"
+#include "cuda_phase1.hpp"
+#include "cuda_phase4_5.hpp"
+#include "cuda_cryptonight_gpu.hpp"
+#include "cuda_extra.hpp"
+
+#include "n0s/backend/cryptonight.hpp"
+#include "n0s/jconf.hpp"
+
+#include <cuda.h>
+#include <cuda_runtime.h>
+#include <unistd.h>
+
+// ============================================================
+// usleep wrapper (extern "C" for ABI compatibility)
+// ============================================================
+
+extern "C" void compat_usleep(uint64_t waitTime)
+{
+	usleep(waitTime);
+}
+
+// ============================================================
+// Host: Launch all GPU kernels for CryptoNight-GPU hash
+//
+// Orchestrates phases 2-4 (phase 1 and 5 are launched separately
+// by cryptonight_extra_cpu_prepare and cryptonight_extra_cpu_final).
+// ============================================================
+
+template <n0s_algo_id ALGO, uint32_t MEM_MODE>
+void cryptonight_core_gpu_hash(nvid_ctx* ctx, uint32_t nonce, const n0s_algo& algo)
+{
+	const uint32_t MASK = algo.Mask();
+	const uint32_t ITERATIONS = algo.Iter();
+	const size_t MEM = algo.Mem();
+
+	dim3 grid(ctx->device_blocks);
+	dim3 block(ctx->device_threads);
+	dim3 block8(ctx->device_threads << 3);   // 8 threads per hash for phase 4
+
+	const size_t intensity = ctx->device_blocks * ctx->device_threads;
+
+	// ---- Phase 2: Expand scratchpad (keccak-based) ----
+	CUDA_CHECK_KERNEL(
+		ctx->device_id,
+		n0s::cuda::kernel_expand_scratchpad<<<intensity, 128>>>(
+			MEM, (int*)ctx->d_ctx_state, (int*)ctx->d_long_state));
+
+	// ---- Phase 3: GPU floating-point computation loop ----
+	// 16 threads per hash, split across bfactor partitions
+	const int phase3_partitions = 1 << ctx->device_bfactor;
+	for(int i = 0; i < phase3_partitions; i++)
+	{
+		CUDA_CHECK_KERNEL(
+			ctx->device_id,
+			n0s::cuda::kernel_gpu_compute<<<
+				ctx->device_blocks,
+				ctx->device_threads * 16,
+				sizeof(n0s::cuda::SharedMemory) * ctx->device_threads>>>(
+				ITERATIONS, MEM, MASK,
+				(int*)ctx->d_ctx_state,
+				(int*)ctx->d_long_state,
+				ctx->device_bfactor, i,
+				ctx->d_ctx_a, ctx->d_ctx_b));
+	}
+
+	// ---- Phase 4: Implode scratchpad (AES + mix_and_propagate) ----
+	// Less work than phase 3, so only split at bfactor >= 8
+	int phase4_bfactor = ctx->device_bfactor - 8;
+	if(phase4_bfactor < 0)
+		phase4_bfactor = 0;
+
+	// cn_gpu: two full passes over scratchpad (HEAVY_MIX mode)
+	const int phase4_partitions = (1 << phase4_bfactor) * 2;
+
+	int phase4_block = block8.x;
+	int phase4_grid = grid.x;
+	// Double threads per block if hardware allows (improves occupancy)
+	if(phase4_block * 2 <= ctx->device_maxThreadsPerBlock)
+	{
+		phase4_block *= 2;
+		phase4_grid = (phase4_grid + 1) / 2;
+	}
+
+	for(int i = 0; i < phase4_partitions; i++)
+	{
+		CUDA_CHECK_KERNEL(ctx->device_id,
+			kernel_implode_scratchpad<ALGO><<<
+				phase4_grid,
+				phase4_block,
+				phase4_block * sizeof(uint32_t) * static_cast<int>(ctx->device_arch[0] < 3)>>>(
+				ITERATIONS,
+				MEM / 4,
+				ctx->device_blocks * ctx->device_threads,
+				phase4_bfactor, i,
+				ctx->d_long_state,
+				ctx->d_ctx_state, ctx->d_ctx_key2));
+	}
+}
+
+// ============================================================
+// Entry point: called by CUDA mining thread
+// ============================================================
+
+void cryptonight_core_cpu_hash(nvid_ctx* ctx, const n0s_algo& miner_algo, uint32_t startNonce, uint64_t chain_height)
+{
+	if(miner_algo == invalid_algo)
+		return;
+
+	if(ctx->memMode == 1)
+		cryptonight_core_gpu_hash<cryptonight_gpu, 1>(ctx, startNonce, miner_algo);
+	else
+		cryptonight_core_gpu_hash<cryptonight_gpu, 0>(ctx, startNonce, miner_algo);
+}
+
+// ============================================================
+// Host: Phase 1 launch (prepare) and Phase 5 launch (finalize)
+// ============================================================
+
+extern "C" void cryptonight_extra_cpu_set_data(nvid_ctx* ctx, const void* data, uint32_t len)
+{
+	ctx->inputlen = len;
+	CUDA_CHECK(ctx->device_id, cudaMemcpy(ctx->d_input, data, len, cudaMemcpyHostToDevice));
+}
+
+extern "C" void cryptonight_extra_cpu_prepare(nvid_ctx* ctx, uint32_t startNonce, const n0s_algo& miner_algo)
+{
+	int threadsperblock = 128;
+	uint32_t wsize = ctx->device_blocks * ctx->device_threads;
+
+	dim3 grid((wsize + threadsperblock - 1) / threadsperblock);
+	dim3 block(threadsperblock);
+
+	CUDA_CHECK_KERNEL(ctx->device_id, cryptonight_extra_gpu_prepare<cryptonight_gpu><<<grid, block>>>(wsize, ctx->d_input, ctx->inputlen, startNonce,
+										  ctx->d_ctx_state, ctx->d_ctx_state2, ctx->d_ctx_a, ctx->d_ctx_b, ctx->d_ctx_key1, ctx->d_ctx_key2));
+}
+
+extern "C" void cryptonight_extra_cpu_final(nvid_ctx* ctx, uint32_t startNonce, uint64_t target, uint32_t* rescount, uint32_t* resnonce, const n0s_algo& miner_algo)
+{
+	int threadsperblock = 128;
+	uint32_t wsize = ctx->device_blocks * ctx->device_threads;
+
+	dim3 grid((wsize + threadsperblock - 1) / threadsperblock);
+	dim3 block(threadsperblock);
+
+	CUDA_CHECK(ctx->device_id, cudaMemset(ctx->d_result_nonce, 0xFF, 10 * sizeof(uint32_t)));
+	CUDA_CHECK(ctx->device_id, cudaMemset(ctx->d_result_count, 0, sizeof(uint32_t)));
+
+	CUDA_CHECK_MSG_KERNEL(
+		ctx->device_id,
+		"\n**suggestion: Try to increase the value of the attribute 'bfactor' in the NVIDIA config file.**",
+		cryptonight_extra_gpu_final<cryptonight_gpu><<<grid, block>>>(wsize, target, ctx->d_result_count, ctx->d_result_nonce, ctx->d_ctx_state, ctx->d_ctx_key2));
+
+	CUDA_CHECK(ctx->device_id, cudaMemcpy(rescount, ctx->d_result_count, sizeof(uint32_t), cudaMemcpyDeviceToHost));
+	CUDA_CHECK_MSG(
+		ctx->device_id,
+		"\n**suggestion: Try to increase the attribute 'bfactor' in the NVIDIA config file.**",
+		cudaMemcpy(resnonce, ctx->d_result_nonce, 10 * sizeof(uint32_t), cudaMemcpyDeviceToHost));
+
+	/* There is only a 32bit limit for the counter on the device side
+	 * therefore this value can be greater than 10, in that case limit rescount
+	 * to 10 entries.
+	 */
+	if(*rescount > 10)
+		*rescount = 10;
+	for(int i = 0; i < *rescount; i++)
+		resnonce[i] += startNonce;
+}
