@@ -890,14 +890,15 @@ int do_benchmark(int block_version, int wait_sec, int work_sec)
 	printer::inst()->print_msg(L0, "Wait %d sec until all backends are initialized", wait_sec);
 	std::this_thread::sleep_for(std::chrono::seconds(wait_sec));
 
-	/* AMD and NVIDIA is currently only supporting work sizes up to 128byte
+	/* AMD and NVIDIA benchmark work size: XMRSetJob validates input_len <= 124
+	 * (appends 0x01 padding byte, total 128 with trailing zeros)
 	 */
 	printer::inst()->print_msg(L0, "Start a %d second benchmark...", work_sec);
-	n0s::globalStates::inst().switch_work(n0s::miner_work("", work, 128, 0, false, 1, 0), dat);
+	n0s::globalStates::inst().switch_work(n0s::miner_work("", work, 76, 0, false, 1, 0), dat);
 	uint64_t iStartStamp = get_timestamp_ms();
 
 	std::this_thread::sleep_for(std::chrono::seconds(work_sec));
-	n0s::globalStates::inst().switch_work(n0s::miner_work("", work, 128, 0, false, 0, 0), dat);
+	n0s::globalStates::inst().switch_work(n0s::miner_work("", work, 76, 0, false, 0, 0), dat);
 
 	double fTotalHps = 0.0;
 	for(uint32_t i = 0; i < pvThreads.size(); i++)
