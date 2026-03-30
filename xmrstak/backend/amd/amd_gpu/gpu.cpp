@@ -37,27 +37,9 @@
 #include <thread>
 #include <vector>
 
-#if defined _MSC_VER
-#include <direct.h>
-#elif defined __GNUC__
+#include <pwd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#endif
-
-#ifdef _WIN32
-#include <windows.h>
-
-static inline void create_directory(std::string dirname)
-{
-	_mkdir(dirname.data());
-}
-
-static inline void port_sleep(size_t sec)
-{
-	Sleep(sec * 1000);
-}
-#else
-#include <pwd.h>
 #include <unistd.h>
 
 static inline void create_directory(std::string dirname)
@@ -69,21 +51,10 @@ static inline void port_sleep(size_t sec)
 {
 	sleep(sec);
 }
-#endif // _WIN32
-
-#if 0
-static inline long long unsigned int int_port(size_t i)
-{
-	return i;
-}
-#endif
 
 #include "gpu.hpp"
 
-#if 0
-void printer::inst()->print_msg(L1,const char* fmt, ...);
-void printer::inst()->print_str(const char* str);
-#endif
+
 
 char* LoadTextFile(const char* filename)
 {
@@ -249,7 +220,7 @@ size_t InitOpenCLGpu(cl_context opencl_ctx, GpuContext* ctx, const char* source_
 		 */
 		options += " -DOPENCL_DRIVER_MAJOR=" + std::to_string(std::stoi(openCLDriverVer.data()) / 100);
 
-		options += " -DIS_WINDOWS_OS=0";
+		options += " -DIS_WINDOWS_OS=0"; // always Linux
 
 		// cn_gpu requires IEEE 754 compliant float math
 		options += " -cl-fp32-correctly-rounded-divide-sqrt";
@@ -648,12 +619,7 @@ size_t InitOpenCL(GpuContext* ctx, size_t num_gpus, size_t platform_idx)
 		return ERR_STUPID_PARAMS;
 	}
 
-	/*MSVC skimping on devel costs by shoehorning C99 to be a subset of C++? Noooo... can't be.*/
-#ifdef __GNUC__
 	cl_platform_id PlatformIDList[entries];
-#else
-	cl_platform_id* PlatformIDList = (cl_platform_id*)_alloca(entries * sizeof(cl_platform_id));
-#endif
 	if((ret = clGetPlatformIDs(entries, PlatformIDList, NULL)) != CL_SUCCESS)
 	{
 		printer::inst()->print_msg(L1, "Error %s when calling clGetPlatformIDs for platform ID information.", err_to_str(ret));
@@ -686,11 +652,7 @@ size_t InitOpenCL(GpuContext* ctx, size_t num_gpus, size_t platform_idx)
 		}
 	}
 
-#ifdef __GNUC__
 	cl_device_id DeviceIDList[entries];
-#else
-	cl_device_id* DeviceIDList = (cl_device_id*)_alloca(entries * sizeof(cl_device_id));
-#endif
 	if((ret = clGetDeviceIDs(PlatformIDList[platform_idx], CL_DEVICE_TYPE_GPU, entries, DeviceIDList, NULL)) != CL_SUCCESS)
 	{
 		printer::inst()->print_msg(L1, "Error %s when calling clGetDeviceIDs for device ID information.", err_to_str(ret));

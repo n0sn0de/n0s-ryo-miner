@@ -14,8 +14,8 @@ R"===(
   * along with this program.  If not, see <http://www.gnu.org/licenses/>.
   */
 
-// Algorithm ID — must match enum in cryptonight.hpp and CUDA -DALGO= value
-#define cryptonight_gpu 13
+// Algorithm ID — passed via -DALGO=13 compiler option.
+// Kernel names are now explicit (cn_gpu_phase*) and don't use ALGO.
 
 
 static const __constant ulong keccakf_rndc[24] =
@@ -214,9 +214,6 @@ void keccakf1600_2(__local ulong *st)
 // Dead code removed: _mm_* float4 helpers (only used by cn1 AES loop)
 // Dead code removed: CNKeccak (only used by cn0 Keccak kernel)
 // Dead code removed: mix_and_propagate macro (only used by cn0)
-
-#define JOIN_DO(x,y) x##y
-#define JOIN(x,y) JOIN_DO(x,y)
 
 inline uint getIdx()
 {
