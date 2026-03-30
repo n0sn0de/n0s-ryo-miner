@@ -30,12 +30,7 @@
 #include <stdlib.h>
 #include <string>
 
-#ifdef _WIN32
-#define strcasecmp _stricmp
-#include <intrin.h>
-#else
 #include <cpuid.h>
-#endif
 
 namespace n0s
 {

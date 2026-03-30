@@ -4,22 +4,12 @@
 #include "n0s/params.hpp"
 
 #include "iBackend.hpp"
-#include <atomic>
+#include <dlfcn.h>
 #include <iostream>
 #include <string>
+#include <sys/types.h>
 #include <thread>
 #include <vector>
-
-#ifndef USE_PRECOMPILED_HEADERS
-#ifdef WIN32
-#include <direct.h>
-#include <windows.h>
-#else
-#include <dlfcn.h>
-#include <sys/types.h>
-#endif
-#include <iostream>
-#endif
 
 namespace n0s
 {
@@ -32,20 +22,10 @@ struct plugin
 	void load(const std::string backendName, const std::string libName)
 	{
 		m_backendName = backendName;
-#ifdef WIN32
-		libBackend = LoadLibrary(TEXT((libName + ".dll").c_str()));
-		if(!libBackend)
-		{
-			std::cerr << "WARNING: " << m_backendName << " cannot load backend library: " << (libName + ".dll") << std::endl;
-			return;
-		}
-#else
-		// `.so` linux file extention for dynamic libraries
-		std::string fileExtension = ".so";
-#if defined(__APPLE__)
-		// `.dylib` Mac OS X file extention for dynamic libraries
-		fileExtension = ".dylib";
-#endif
+
+		// `.so` linux file extension for dynamic libraries
+		const std::string fileExtension = ".so";
+
 		// search library in working directory
 		libBackend = dlopen(("./lib" + libName + fileExtension).c_str(), RTLD_NOW | RTLD_LAZY | RTLD_GLOBAL);
 		// fallback to binary directory
@@ -59,15 +39,7 @@ struct plugin
 			std::cerr << "WARNING: " << m_backendName << " cannot load backend library: " << dlerror() << std::endl;
 			return;
 		}
-#endif
 
-#ifdef WIN32
-		fn_startBackend = (startBackend_t)GetProcAddress(libBackend, "n0s_start_backend");
-		if(!fn_startBackend)
-		{
-			std::cerr << "WARNING: backend plugin " << libName << " contains no entry 'n0s_start_backend': " << GetLastError() << std::endl;
-		}
-#else
 		// reset last error
 		dlerror();
 		fn_startBackend = (startBackend_t)dlsym(libBackend, "n0s_start_backend");
@@ -76,7 +48,6 @@ struct plugin
 		{
 			std::cerr << "WARNING: backend plugin " << libName << " contains no entry 'n0s_start_backend': " << dlsym_error << std::endl;
 		}
-#endif
 	}
 
 	std::vector<iBackend*>* startBackend(uint32_t threadOffset, miner_work& pWork, environment& env)
@@ -94,11 +65,7 @@ struct plugin
 	{
 		if(libBackend)
 		{
-#ifdef WIN32
-			FreeLibrary(libBackend);
-#else
 			dlclose(libBackend);
-#endif
 		}
 		fn_startBackend = nullptr;
 	}
@@ -109,11 +76,7 @@ struct plugin
 
 	startBackend_t fn_startBackend = nullptr;
 
-#ifdef WIN32
-	HINSTANCE libBackend;
-#else
 	void* libBackend = nullptr;
-#endif
 };
 
 } // namespace n0s

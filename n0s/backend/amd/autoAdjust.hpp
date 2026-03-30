@@ -18,11 +18,7 @@
 #include <string>
 #include <vector>
 
-#if defined(__APPLE__)
-#include <OpenCL/cl.h>
-#else
 #include <CL/cl.h>
-#endif
 
 namespace n0s
 {

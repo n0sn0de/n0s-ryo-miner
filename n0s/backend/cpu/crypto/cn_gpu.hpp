@@ -1,20 +1,9 @@
 #pragma once
 
 #include "n0s/backend/cryptonight.hpp"
-#include <stdint.h>
-
-#if defined(_WIN32) || defined(_WIN64)
-#include <intrin.h>
-#include <malloc.h>
-#define HAS_WIN_INTRIN_API
-#endif
-
-#ifdef __GNUC__
-#include <x86intrin.h>
-#if !defined(HAS_WIN_INTRIN_API)
 #include <cpuid.h>
-#endif // !defined(HAS_WIN_INTRIN_API)
-#endif // __GNUC__
+#include <stdint.h>
+#include <x86intrin.h>
 
 inline void cngpu_cpuid(uint32_t eax, int32_t ecx, int32_t val[4])
 {
@@ -23,11 +12,7 @@ inline void cngpu_cpuid(uint32_t eax, int32_t ecx, int32_t val[4])
 	val[2] = 0;
 	val[3] = 0;
 
-#if defined(HAS_WIN_INTRIN_API)
-	__cpuidex(val, eax, ecx);
-#else
 	__cpuid_count(eax, ecx, val[0], val[1], val[2], val[3]);
-#endif
 }
 
 inline bool cngpu_check_avx2()

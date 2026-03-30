@@ -17,11 +17,7 @@ inline int32_t get_masked(int32_t val, int32_t h, int32_t l)
 #include "n0s/params.hpp"
 #include <string>
 
-#ifdef _WIN32
-#include <windows.h>
-#else
 #include <unistd.h>
-#endif // _WIN32
 
 namespace n0s
 {
@@ -169,15 +165,8 @@ class autoAdjust
 
 	void detectCPUConf()
 	{
-#ifdef _WIN32
-		SYSTEM_INFO info;
-		GetSystemInfo(&info);
-		corecnt = info.dwNumberOfProcessors;
-		linux_layout = false;
-#else
 		corecnt = sysconf(_SC_NPROCESSORS_ONLN);
 		linux_layout = true;
-#endif // _WIN32
 	}
 
 	size_t L3KB_size = 0;

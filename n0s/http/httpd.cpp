@@ -36,10 +36,6 @@
 #include <string>
 
 #include <microhttpd.h>
-#ifdef _WIN32
-#define strcasecmp _stricmp
-#endif // _WIN32
-
 httpd* httpd::oInst = nullptr;
 
 httpd::httpd()

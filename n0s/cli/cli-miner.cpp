@@ -47,11 +47,7 @@
 #include <openssl/ssl.h>
 #endif
 
-#ifdef _WIN32
-#define strcasecmp _stricmp
 
-#include <windows.h>
-#endif // _WIN32
 
 int do_benchmark(int block_version, int wait_sec, int work_sec);
 
@@ -67,9 +63,6 @@ void help()
 	cout << "  -V, --version-long         show long version number" << endl;
 	cout << "  -c, --config FILE          common miner configuration file" << endl;
 	cout << "  -C, --poolconf FILE        pool configuration file" << endl;
-#ifdef _WIN32
-	cout << "  --noUAC                    disable the UAC dialog" << endl;
-#endif
 	cout << "  --benchmark BLOCKVERSION   ONLY do a benchmark and exit" << endl;
 	cout << "  --benchwait WAIT_SEC             ... benchmark wait time" << endl;
 	cout << "  --benchwork WORK_SEC             ... benchmark work time" << endl;
@@ -106,13 +99,6 @@ void help()
 	cout << "  -p, --pass PASSWD          pool password, in the most cases x or empty \"\"" << endl;
 	cout << "  --use-nicehash             the pool should run in nicehash mode" << endl;
 	cout << endl;
-#ifdef _WIN32
-	cout << "Environment variables:\n"
-		 << endl;
-	cout << "  N0S_NOWAIT             disable the dialog `Press any key to exit." << std::endl;
-	cout << "                	            for non UAC execution" << endl;
-	cout << endl;
-#endif
 	std::string algos;
 	jconf::GetAlgoList(algos);
 	cout << "Supported coin options: " << endl
@@ -438,19 +424,19 @@ int main(int argc, char* argv[])
 		if(opName.compare("-h") == 0 || opName.compare("--help") == 0)
 		{
 			help();
-			win_exit(0);
+			n0s_exit(0);
 			return 0;
 		}
 		if(opName.compare("-v") == 0 || opName.compare("--version") == 0)
 		{
 			std::cout << "Version: " << get_version_str_short() << std::endl;
-			win_exit();
+			n0s_exit();
 			return 0;
 		}
 		else if(opName.compare("-V") == 0 || opName.compare("--version-long") == 0)
 		{
 			std::cout << "Version: " << get_version_str() << std::endl;
-			win_exit();
+			n0s_exit();
 			return 0;
 		}
 		else if(opName.compare("--noAMD") == 0)
@@ -463,7 +449,7 @@ int main(int argc, char* argv[])
 			if (i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '--amdGpus' given");
-				win_exit();
+				n0s_exit();
 				return 1;
 			}
 			params::inst().amdGpus = argv[i];
@@ -474,7 +460,7 @@ int main(int argc, char* argv[])
 			if(i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '--openCLVendor' given");
-				win_exit();
+				n0s_exit();
 				return 1;
 			}
 			std::string vendor(argv[i]);
@@ -482,7 +468,7 @@ int main(int argc, char* argv[])
 			if(vendor != "AMD" && vendor != "NVIDIA")
 			{
 				printer::inst()->print_msg(L0, "'--openCLVendor' must be 'AMD' or 'NVIDIA'");
-				win_exit();
+				n0s_exit();
 				return 1;
 			}
 		}
@@ -500,7 +486,7 @@ int main(int argc, char* argv[])
 			if (i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '--nvidiaGpus' given");
-				win_exit();
+				n0s_exit();
 				return 1;
 			}
 			params::inst().nvidiaGpus = argv[i];
@@ -511,7 +497,7 @@ int main(int argc, char* argv[])
 			if(i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '--amd' given");
-				win_exit();
+				n0s_exit();
 				return 1;
 			}
 			params::inst().configFileAMD = argv[i];
@@ -522,7 +508,7 @@ int main(int argc, char* argv[])
 			if(i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '--amdCacheDir' given");
-				win_exit();
+				n0s_exit();
 				return 1;
 			}
 			params::inst().rootAMDCacheDir = std::string(argv[i]) + "/";
@@ -533,7 +519,7 @@ int main(int argc, char* argv[])
 			if(i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '--nvidia' given");
-				win_exit();
+				n0s_exit();
 				return 1;
 			}
 			params::inst().configFileNVIDIA = argv[i];
@@ -550,7 +536,7 @@ int main(int argc, char* argv[])
 			if(i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '-o/--url' given");
-				win_exit();
+				n0s_exit();
 				return 1;
 			}
 			params::inst().poolURL = argv[i];
@@ -562,7 +548,7 @@ int main(int argc, char* argv[])
 			if(i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '-O/--tls-url' given");
-				win_exit();
+				n0s_exit();
 				return 1;
 			}
 			params::inst().poolURL = argv[i];
@@ -573,7 +559,7 @@ int main(int argc, char* argv[])
 			if(!pool_url_set)
 			{
 				printer::inst()->print_msg(L0, "Pool address has to be set if you want to specify username and password.");
-				win_exit();
+				n0s_exit();
 				return 1;
 			}
 
@@ -581,7 +567,7 @@ int main(int argc, char* argv[])
 			if(i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '-u/--user' given");
-				win_exit();
+				n0s_exit();
 				return 1;
 			}
 			params::inst().poolUsername = argv[i];
@@ -591,7 +577,7 @@ int main(int argc, char* argv[])
 			if(!pool_url_set)
 			{
 				printer::inst()->print_msg(L0, "Pool address has to be set if you want to specify username and password.");
-				win_exit();
+				n0s_exit();
 				return 1;
 			}
 
@@ -599,7 +585,7 @@ int main(int argc, char* argv[])
 			if(i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '-p/--pass' given");
-				win_exit();
+				n0s_exit();
 				return 1;
 			}
 			params::inst().userSetPwd = true;
@@ -610,7 +596,7 @@ int main(int argc, char* argv[])
 			if(!pool_url_set)
 			{
 				printer::inst()->print_msg(L0, "Pool address has to be set if you want to specify rigid.");
-				win_exit();
+				n0s_exit();
 				return 1;
 			}
 
@@ -618,7 +604,7 @@ int main(int argc, char* argv[])
 			if(i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '-r/--rigid' given");
-				win_exit();
+				n0s_exit();
 				return 1;
 			}
 
@@ -635,7 +621,7 @@ int main(int argc, char* argv[])
 			if(i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '-c/--config' given");
-				win_exit();
+				n0s_exit();
 				return 1;
 			}
 			params::inst().configFile = argv[i];
@@ -646,7 +632,7 @@ int main(int argc, char* argv[])
 			if(i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '-C/--poolconf' given");
-				win_exit();
+				n0s_exit();
 				return 1;
 			}
 			params::inst().configFilePools = argv[i];
@@ -657,7 +643,7 @@ int main(int argc, char* argv[])
 			if(i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '--log' given");
-				win_exit();
+				n0s_exit();
 				return 1;
 			}
 			params::inst().outputFile = argv[i];
@@ -668,7 +654,7 @@ int main(int argc, char* argv[])
 			if (i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '--h-print-time' given");
-				win_exit();
+				n0s_exit();
 				return 1;
 			}
 			char* h_print_time = nullptr;
@@ -687,7 +673,7 @@ int main(int argc, char* argv[])
 			if(i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '-i/--httpd' given");
-				win_exit();
+				n0s_exit();
 				return 1;
 			}
 
@@ -697,7 +683,7 @@ int main(int argc, char* argv[])
 			if(endp == nullptr || ret < 0 || ret > 65535)
 			{
 				printer::inst()->print_msg(L0, "Argument for parameter '-i/--httpd' must be a number between 0 and 65535");
-				win_exit();
+				n0s_exit();
 				return 1;
 			}
 
@@ -713,7 +699,7 @@ int main(int argc, char* argv[])
 			if(i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '--benchmark' given");
-				win_exit();
+				n0s_exit();
 				return 1;
 			}
 			char* block_version = nullptr;
@@ -732,7 +718,7 @@ int main(int argc, char* argv[])
 			if(i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '--benchwait' given");
-				win_exit();
+				n0s_exit();
 				return 1;
 			}
 			char* wait_sec = nullptr;
@@ -751,7 +737,7 @@ int main(int argc, char* argv[])
 			if(i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '--benchwork' given");
-				win_exit();
+				n0s_exit();
 				return 1;
 			}
 			char* work_sec = nullptr;
@@ -767,7 +753,7 @@ int main(int argc, char* argv[])
 		else
 		{
 			printer::inst()->print_msg(L0, "Parameter unknown '%s'", argv[i]);
-			win_exit();
+			n0s_exit();
 			return 1;
 		}
 	}
@@ -784,7 +770,7 @@ int main(int argc, char* argv[])
 
 	if(!jconf::inst()->parse_config(params::inst().configFile.c_str(), params::inst().configFilePools.c_str()))
 	{
-		win_exit();
+		n0s_exit();
 		return 1;
 	}
 
@@ -796,7 +782,7 @@ int main(int argc, char* argv[])
 	if(!BackendConnector::self_test())
 	{
 		printer::inst()->print_msg(L0, "Self test not passed!");
-		win_exit();
+		n0s_exit();
 		return 1;
 	}
 
@@ -804,12 +790,12 @@ int main(int argc, char* argv[])
 	{
 #ifdef CONF_NO_HTTPD
 		printer::inst()->print_msg(L0, "HTTPD port is enabled but this binary was compiled without HTTP support!");
-		win_exit();
+		n0s_exit();
 		return 1;
 #else
 		if(!httpd::inst()->start_daemon())
 		{
-			win_exit();
+			n0s_exit();
 			return 1;
 		}
 #endif

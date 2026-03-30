@@ -36,12 +36,7 @@
 #include <string.h>
 #include <vector>
 
-#ifdef _WIN32
-#define strcasecmp _stricmp
-#include <intrin.h>
-#else
 #include <cpuid.h>
-#endif
 
 using namespace rapidjson;
 
@@ -262,11 +257,7 @@ void jconf::cpuid(uint32_t eax, int32_t ecx, int32_t val[4])
 {
 	memset(val, 0, sizeof(int32_t) * 4);
 
-#ifdef _WIN32
-	__cpuidex(val, eax, ecx);
-#else
 	__cpuid_count(eax, ecx, val[0], val[1], val[2], val[3]);
-#endif
 }
 
 bool jconf::check_cpu_features()
@@ -564,14 +555,6 @@ bool jconf::parse_config(const char* sFilename, const char* sFilenamePools)
 			"Invalid config file. use_slow_memory must be \"always\", \"no_mlck\", \"warn\" or \"never\"");
 		return false;
 	}
-
-#ifdef _WIN32
-	if(GetSlowMemSetting() == no_mlck)
-	{
-		printer::inst()->print_msg(L0, "On Windows large pages need mlock. Please use another option.");
-		return false;
-	}
-#endif // _WIN32
 
 	std::string ctmp = GetMiningCoin();
 	std::transform(ctmp.begin(), ctmp.end(), ctmp.begin(), ::tolower);

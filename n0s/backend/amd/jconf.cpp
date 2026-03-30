@@ -25,12 +25,7 @@
 #include "n0s/misc/console.hpp"
 #include "n0s/misc/jext.hpp"
 
-#ifdef _WIN32
-#define strcasecmp _stricmp
-#include <intrin.h>
-#else
 #include <cpuid.h>
-#endif
 
 #include <stdio.h>
 #include <stdlib.h>

@@ -75,9 +75,6 @@ minethd::minethd(miner_work& pWork, size_t iNo, GpuContext* ctx, const jconf::th
 
 extern "C"
 {
-#ifdef WIN32
-	__declspec(dllexport)
-#endif
 		std::vector<iBackend*>* n0s_start_backend(uint32_t threadOffset, miner_work& pWork, environment& env)
 	{
 		environment::inst(&env);
@@ -122,7 +119,7 @@ std::vector<iBackend*>* minethd::thread_starter(uint32_t threadOffset, miner_wor
 
 	if(!jconf::inst()->parse_config())
 	{
-		win_exit();
+		n0s_exit();
 	}
 
 	// \ todo get device count and exit if no opencl device
@@ -145,10 +142,6 @@ std::vector<iBackend*>* minethd::thread_starter(uint32_t threadOffset, miner_wor
 
 		if(cfg.cpu_aff >= 0)
 		{
-#if defined(__APPLE__)
-			printer::inst()->print_msg(L1, "WARNING on macOS thread affinity is only advisory.");
-#endif
-
 			printer::inst()->print_msg(L1, "Starting %s GPU (OpenCL) thread %d, affinity: %d.", backendName.c_str(), i, (int)cfg.cpu_aff);
 		}
 		else
@@ -177,7 +170,7 @@ void minethd::work_main()
 	if(cpu_ctx == nullptr)
 	{
 		printer::inst()->print_msg(L0, "ERROR: miner was not able to allocate memory, miner will be stopped.");
-		win_exit(1);
+		n0s_exit(1);
 	}
 	// start with root algorithm and switch later if fork version is reached
 	auto miner_algo = ::jconf::inst()->GetMiningAlgo();

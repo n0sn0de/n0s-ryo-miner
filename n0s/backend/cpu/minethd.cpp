@@ -53,20 +53,7 @@
 #include <thread>
 #include <unordered_map>
 
-#ifdef _WIN32
-#include <windows.h>
-#else
 #include <pthread.h>
-
-#if defined(__APPLE__)
-#include <mach/thread_act.h>
-#include <mach/thread_policy.h>
-#define SYSCTL_CORE_COUNT "machdep.cpu.core_count"
-#elif defined(__FreeBSD__)
-#include <pthread_np.h>
-#endif //__APPLE__
-
-#endif //_WIN32
 
 namespace n0s
 {
@@ -75,36 +62,10 @@ namespace cpu
 
 bool minethd::thd_setaffinity(std::thread::native_handle_type h, uint64_t cpu_id)
 {
-#if defined(_WIN32)
-	// we can only pin up to 64 threads
-	if(cpu_id < 64)
-	{
-		return SetThreadAffinityMask(h, 1ULL << cpu_id) != 0;
-	}
-	else
-	{
-		printer::inst()->print_msg(L0, "WARNING: Windows supports only affinity up to 63.");
-		return false;
-	}
-#elif defined(__APPLE__)
-	thread_port_t mach_thread;
-	thread_affinity_policy_data_t policy = {static_cast<integer_t>(cpu_id)};
-	mach_thread = pthread_mach_thread_np(h);
-	return thread_policy_set(mach_thread, THREAD_AFFINITY_POLICY, (thread_policy_t)&policy, 1) == KERN_SUCCESS;
-#elif defined(__FreeBSD__)
-	cpuset_t mn;
-	CPU_ZERO(&mn);
-	CPU_SET(cpu_id, &mn);
-	return pthread_setaffinity_np(h, sizeof(cpuset_t), &mn) == 0;
-#elif defined(__OpenBSD__)
-	printer::inst()->print_msg(L0, "WARNING: thread pinning is not supported under OPENBSD.");
-	return true;
-#else
 	cpu_set_t mn;
 	CPU_ZERO(&mn);
 	CPU_SET(cpu_id, &mn);
 	return pthread_setaffinity_np(h, sizeof(cpu_set_t), &mn) == 0;
-#endif
 }
 
 minethd::minethd(miner_work& pWork, size_t iNo, int iMultiway, bool no_prefetch, int64_t affinity)
@@ -316,7 +277,7 @@ std::vector<iBackend*> minethd::thread_starter(uint32_t threadOffset, miner_work
 
 	if(!jconf::inst()->parse_config())
 	{
-		win_exit();
+		n0s_exit();
 	}
 
 	//Launch the requested number of single and double threads, to distribute
@@ -331,10 +292,6 @@ std::vector<iBackend*> minethd::thread_starter(uint32_t threadOffset, miner_work
 
 		if(cfg.iCpuAff >= 0)
 		{
-#if defined(__APPLE__)
-			printer::inst()->print_msg(L1, "WARNING on macOS thread affinity is only advisory.");
-#endif
-
 			printer::inst()->print_msg(L1, "Starting %dx thread, affinity: %d.", cfg.iMultiway, (int)cfg.iCpuAff);
 		}
 		else
@@ -437,7 +394,7 @@ void minethd::multiway_work_main()
 	uint32_t* piNonce[MAX_N];
 	uint8_t bHashOut[MAX_N * 32];
 	uint8_t bWorkBlob[sizeof(miner_work::bWorkBlob) * MAX_N];
-	uint32_t iNonce;
+	uint32_t iNonce = 0;
 	job_result res;
 
 	for(size_t i = 0; i < N; i++)
@@ -448,7 +405,7 @@ void minethd::multiway_work_main()
 			printer::inst()->print_msg(L0, "ERROR: miner was not able to allocate memory.");
 			for(size_t j = 0; j < i; j++)
 				cryptonight_free_ctx(ctx[j]);
-			win_exit(1);
+			n0s_exit(1);
 		}
 		piHashVal[i] = (uint64_t*)(bHashOut + 32 * i + 24);
 		piNonce[i] = (i == 0) ? (uint32_t*)(bWorkBlob + 39) : nullptr;
