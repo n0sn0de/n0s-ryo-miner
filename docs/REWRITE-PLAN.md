@@ -133,7 +133,7 @@ tests/
 - **Unused includes** — ✅ 13 removed (Session 9). Remaining includes verified needed
 
 ### Performance Optimization (P1)
-Only after structural work is complete:
+Only after structural work is complete (check the Remaining things in succes criteria):
 - Profile on each GPU architecture (AMD RDNA4, NVIDIA Pascal/Turing/Ampere)
 - Optimize shared memory usage in Phase 3 kernel
 - Explore occupancy improvements
@@ -155,10 +155,11 @@ Only after structural work is complete:
 - ✅ Modern C++ headers everywhere (`<cstdint>` not `<stdint.h>`)
 
 **Remaining:**
-- ⏳ Algorithm/Kernel Autotuning based on users hardware (see /docs/PRD_01-AUTOTUNING.md)
 - ⏳ No raw `new`/`delete` outside vendored code
 - ⏳ No global mutable state outside `main()`
 - ⏳ All `constexpr` where possible
+- ⏳ Create hashrate benchmark testing harness that always stops mining at the end before beginning performance optimizations
+- ⏳ Algorithm/Kernel Autotuning based on users hardware (see /docs/PRD_01-AUTOTUNING.md)
 
 ---
 
