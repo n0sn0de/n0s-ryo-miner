@@ -5,6 +5,7 @@
 #include "n0s/misc/environment.hpp"
 
 #include <cstdlib>
+#include <memory>
 #include <string>
 
 class jconf
@@ -99,7 +100,7 @@ class jconf
 
 	bool check_cpu_features();
 	struct opaque_private;
-	opaque_private* prv;
+	std::unique_ptr<opaque_private> prv;
 
 	bool bHaveAes;
 

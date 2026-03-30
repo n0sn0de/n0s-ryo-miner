@@ -127,7 +127,7 @@ struct jconf::opaque_private
 
 jconf::jconf()
 {
-	prv = new opaque_private();
+	prv = std::make_unique<opaque_private>();
 }
 
 uint64_t jconf::GetPoolCount()

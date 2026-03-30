@@ -139,7 +139,7 @@ class jpsock
 	std::mutex job_mutex;
 	pool_job oCurrentJob;
 
-	opaque_private* prv;
+	std::unique_ptr<opaque_private> prv;
 	std::unique_ptr<base_socket> sck;
 
 	uint64_t iMessageCnt = 0;

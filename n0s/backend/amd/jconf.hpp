@@ -3,6 +3,7 @@
 #include "n0s/params.hpp"
 
 #include <cstdlib>
+#include <memory>
 #include <string>
 
 namespace n0s
@@ -44,7 +45,7 @@ class jconf
 	static jconf* oInst;
 
 	struct opaque_private;
-	opaque_private* prv;
+	std::unique_ptr<opaque_private> prv;
 };
 
 } // namespace opencl
