@@ -1,8 +1,16 @@
 # Backend Rewrite Plan
 
+**High-Level Strategy for the Foundational C++ Rewrite**
+
+*Status: Foundation + dead code removal complete. CUDA consolidated. Namespace migrated (n0s::). Pool/network documented. Directory restructured (xmrstak/ → n0s/). Zero-warning build. Modern C++ patterns applied. Config/algo simplified. OpenCL constants hardcoded. Windows/macOS/BSD code stripped. Pure C++17 (zero C files). Linux-only.*
+
+---
+
 ## Goal
 
-Transform the inherited xmr-stak CryptoNight-GPU implementation into a clean, modern, single-purpose miner. The algorithm math remains bit-exact — we change organization and expression, not computation.
+Take the inherited xmr-stak CryptoNight-GPU implementation and transform it into a clean, modern, single-purpose miner we can reason about, optimize, and maintain confidently. The algorithm math remains bit-exact — we change organization and expression, not computation.
+
+---
 
 ## Principles
 
@@ -13,6 +21,12 @@ Transform the inherited xmr-stak CryptoNight-GPU implementation into a clean, mo
 5. **Modern idioms** — `constexpr`, proper naming, RAII, documentation
 
 ---
+
+### Cumulative Total (All Sessions)
+
+The `xmrstak/` directory is **GONE**. All source code now lives under `n0s/`.
+
+**~300 files changed. Net -10,500+ lines removed. Namespace migrated. Directory restructured. Protocol documented. Zero-warning build. Config simplified. Modern C++17. Linux-only. Zero C files.**
 
 
 ## Current Codebase State
@@ -101,8 +115,9 @@ tests/
 └── build_harness.sh       ← Build script
 ```
 
-**Codebase: ~30K lines (down from ~43K). Our code: ~16.1K lines (excluding vendored rapidjson/picosha2)**
-**The `xmrstak/` directory is GONE. Everything is `n0s/` now. Zero C files remain.**
+## Cumulative Progress (All Sessions)
+
+~300 files changed. Net -10,500+ lines removed. Our code: 16,136 lines (down from ~43K). Clean C++17, zero warnings, zero C files, Linux-only, single-purpose.
 
 ---
 
@@ -137,7 +152,7 @@ Only after structural work is complete:
 - ✅ Modern C++ headers everywhere (`<cstdint>` not `<stdint.h>`)
 
 **Remaining:**
-- ⏳ Hashrate within 1% of original (needs formal benchmark)
+- ⏳ Algorithm/Kernel Autotuning based on users hardware
 - ⏳ No raw `new`/`delete` outside vendored code
 - ⏳ No global mutable state outside `main()`
 - ⏳ All `constexpr` where possible
@@ -146,18 +161,13 @@ Only after structural work is complete:
 
 ---
 
-## What We've Accomplished
-
-- **16,136 lines** (down from 43K+) — -63% reduction
-- **Pure C++17** — zero C files remain
-- **Linux-only** — all Windows/macOS/BSD code removed
-- **Zero warnings** — clean `-Wall -Wextra` build
-- **3-GPU validation** — AMD RX 9070 XT (OpenCL), GTX 1070 Ti (CUDA 11.8), RTX 2070 (CUDA 12.6)
-- **Bit-exact** — golden test vectors + zero share rejections
-- **Modern namespace** — `n0s::` not `xmrstak::`
-- **Clean directory** — `n0s/` not `xmrstak/`
-- **Single-purpose** — CryptoNight-GPU only, no dead algorithm branches
+### Key Differences from Initial Vision:
+- **Kept `crypto/` separate from `algorithm/`** — constants vs. implementations
+- **Vendor directory** — rapidjson and picosha2 are dependencies, not our code
+- **Realistic file mapping** — each target file has a clear source file
+- **Tests at top level** — not buried in the tree
+- **No abstract GPU interface** — CUDA and OpenCL are too different to share a meaningful base class. Separate implementations with shared algorithm constants is the right pattern.
 
 ---
 
-*The code is ours now. The dead weight is gone, the names make sense, and the path forward is clear.*
+The code is ours now. The dead weight is gone, the names make sense, and the path forward is clear. We're not rewriting for elegance — we're rewriting for ownership, understanding, and the ability to confidently modify any part of the system.*
