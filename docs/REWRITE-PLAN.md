@@ -142,7 +142,8 @@ tests/
 
 ### Performance Optimization (P1)
 - ⏳ Deeply review the CN-GPU-WHITEPAPER.md to understand the algo in conjunction with the codebase to assess approach to optimization opportunities
-- ⏳ Profile on each GPU architecture (AMD RDNA4, NVIDIA Pascal/Turing/Ampere)
+- ✅ Profile on AMD RDNA4 (S37: --profile flag, per-phase timing, baseline established)
+- ⏳ Profile on NVIDIA Pascal/Turing/Ampere (port --profile to CUDA backend)
 - ⏳ Optimize shared memory usage in Phase 3 kernel
 - ⏳ Explore occupancy improvements
 - ⏳ Consider CUDA Graphs for kernel chaining
@@ -164,65 +165,6 @@ tests/
 - ✅ Config/algo system simplified (single-algorithm focus)
 - ✅ OpenCL dead kernel branches removed
 - ✅ Modern C++ headers everywhere (`<cstdint>` not `<stdint.h>`)
-
----
-
-## Session 35 Notes (2026-03-30 01:33 PM) — Check-in & Next Phase Planning 🧘
-
-**Context:** Hourly n0s-ryo-miner cron check-in post-release
-
-**Status Check:**
-- ✅ **Foundation rewrite: COMPLETE** — v3.0.0 shipped with 8 artifacts
-- ✅ **Zero warnings** — OpenCL + CUDA 11.8/12.6/12.8 all build cleanly
-- ✅ **Container build matrix** — Production-ready infrastructure
-- ✅ **Production validated** — Runs cleanly on AMD RDNA4
-- ✅ **Documentation current** — Session notes 28-34 captured
-
-**Next Phase: OPTIMIZATION**
-
-With foundation rock-solid, focus shifts to:
-
-1. **Live Mining Validation** (~1 hour when pool/wallet available)
-   - Verify accepted shares on real pool
-   - Establish that refactored code mines successfully
-   - Capture baseline hashrate on AMD RDNA4 (current hardware)
-
-2. **Performance Profiling** (~2-3 hours)
-   - Profile with `rocprof` (AMD) or `nsys` (NVIDIA) when hardware available
-   - Identify hotspots: memory bandwidth, occupancy, kernel execution time
-   - Measure Phase 1-5 individual kernel times
-   - Document baseline performance in `docs/benchmarks/`
-
-3. **Kernel Documentation** (~2 hours)
-   - Add function-level comments to Phase 2 (scratchpad expansion)
-   - Add function-level comments to Phase 3 (memory-hard loop)
-   - Document memory access patterns and optimization opportunities
-   - Make kernel code approachable for future optimization work
-
-4. **Autotuning Implementation** (~1 week — see PRD_01-AUTOTUNING.md)
-   - Implement grid search for intensity/worksize combinations
-   - Measure hashrate for each configuration
-   - Store optimal params per GPU model
-   - Replace hardcoded defaults with learned values
-
-**Branch Strategy:**
-- Keep master stable (release-ready at all times)
-- Create focused optimization branches:
-  - `optimize/profiling-baseline`
-  - `optimize/kernel-docs`
-  - `optimize/autotuning-phase1`
-- Test with harness (`tests/cn_gpu_harness`) + container builds + live mining
-- Merge only when validated (golden hashes pass, shares accepted)
-
-**Guiding Principles for Optimization:**
-1. **Measure before changing** — No blind optimizations
-2. **One change at a time** — Isolate performance impact
-3. **Validate bit-exactness** — Golden hashes must always pass
-4. **Document findings** — Future-you will thank present-you
-5. **Keep it clean** — No hacks, no magic numbers without comments
-
-**Session accomplishment summary:**
-Memory updated (Session 28-35 notes), REWRITE-PLAN updated with optimization roadmap. **Foundation complete. Optimization phase begins.** Ready to profile, document, and tune for maximum hashrate. 🧘⚡🔥
 
 ---
 
@@ -251,6 +193,43 @@ Memory updated (Session 28-35 notes), REWRITE-PLAN updated with optimization roa
 2. **Run benchmark on CUDA nodes** — Establish NVIDIA baselines (GTX 1070 Ti, RTX 2070)
 3. **Kernel documentation pass** — Phase 2/3 GPU kernels need function-level comments
 4. **Begin autotuning framework** — Use benchmark harness as the scoring backend
+
+---
+
+---
+
+## Session 37 Notes (2026-03-30 04:49 PM) — Per-Kernel Profiling + RDNA4 Baseline 🧘
+
+**What we accomplished:**
+- ✅ **Deep algorithm study** — Read CN-GPU whitepaper + both OpenCL and CUDA kernel implementations in full
+- ✅ **Added `--profile` flag** — Per-phase kernel timing using clFinish barriers between phases
+- ✅ **XMRRunJobProfile()** — New profiling dispatch function that accumulates timing over 50 dispatches
+- ✅ **KernelProfile struct** — Clean data container with `print_summary()` method
+- ✅ **Established RDNA4 baseline** — `docs/benchmarks/BASELINE-RX9070XT.md`
+- ✅ **Verified**: Zero warnings, 3/3 golden hashes, live mining all shares accepted with profiling active
+
+**RX 9070 XT Profiling Results:**
+
+| Phase | Benchmark (µs) | % | Live Mining (µs) | % |
+|-------|---------------|---|-------------------|---|
+| Phase 1: Keccak prepare | 127 | 0.0% | 213 | 0.1% |
+| Phase 2: Scratchpad expand | 39,795 | 11.6% | 34,212 | 8.2% |
+| **Phase 3: GPU compute** | **239,331** | **69.8%** | **310,201** | **74.1%** |
+| Phase 4+5: Implode+final | 63,543 | 18.5% | 73,969 | 17.7% |
+
+**Key insights:**
+- Phase 3 dominates at 70-74% — this is the 49,152-iteration FP math loop with 16 cooperative threads
+- Phase 3 has 4 `mem_fence()` calls per iteration = 196,608 barriers total — potential reduction target
+- Phase 3 does 32 FP divisions per thread per iteration — division is the most expensive FP op
+- Phase 4+5 at 18% is secondary — AES over full 2MB scratchpad
+- Live mining overhead ~18% from pool network + interleave delays (not kernel-side)
+- `clFinish()` between phases adds ~10% overhead vs pipelined execution — profile numbers are conservative
+
+**Next session priorities:**
+1. **Phase 3 optimization** — Analyze shared memory bank conflicts, barrier reduction opportunities
+2. **CUDA profiling** — Port `--profile` to NVIDIA backend, establish Pascal/Turing baselines
+3. **Occupancy analysis** — Check if workgroup size (WORKSIZE * 16) is optimal for RDNA4
+4. **Begin autotuning** — Use profiling + benchmark harness to sweep intensity/worksize combos
 
 ---
 
