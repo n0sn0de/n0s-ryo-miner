@@ -25,6 +25,10 @@ namespace n0s
 namespace opencl
 {
 
+// Platform/device discovery functions from amd_gpu/gpu_platform.cpp
+using n0s::amd::getAMDPlatformIdx;
+using n0s::amd::getAMDDevices;
+
 class autoAdjust
 {
   public:
