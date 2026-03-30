@@ -93,7 +93,7 @@ jconf* jconf::oInst = nullptr;
 
 jconf::jconf()
 {
-	prv = new opaque_private();
+	prv = std::make_unique<opaque_private>();
 }
 
 size_t jconf::GetGPUThreadCount()

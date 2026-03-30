@@ -105,7 +105,7 @@ jconf* jconf::oInst = nullptr;
 
 jconf::jconf()
 {
-	prv = new opaque_private();
+	prv = std::make_unique<opaque_private>();
 }
 
 bool jconf::GetThreadConfig(size_t id, thd_cfg& cfg)
