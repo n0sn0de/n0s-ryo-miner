@@ -129,6 +129,8 @@ tests/
 - **Modern casts** — ✅ Host code done (Session 9). Only CUDA device code + soft_aes macro retain C-style casts
 - **[[nodiscard]]** — Add to error-returning functions
 - **std::regex removal** — ✅ gpu.cpp done (Session 9). configEditor.hpp still uses regex (genuine pattern matching)
+- **NULL → nullptr** — ✅ Host code done (Session 9, 68 replacements)
+- **Unused includes** — ✅ 13 removed (Session 9). Remaining includes verified needed
 
 ### Performance Optimization (P1)
 Only after structural work is complete:
