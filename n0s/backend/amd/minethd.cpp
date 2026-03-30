@@ -52,7 +52,7 @@ minethd::minethd(miner_work& pWork, size_t iNo, GpuContext* ctx, const jconf::th
 	this->backendType = iBackend::AMD;
 	oWork = pWork;
 	bQuit = 0;
-	iThreadNo = (uint8_t)iNo;
+	iThreadNo = static_cast<uint8_t>(iNo);
 	this->iGpuIndex = cfg.index;
 	iJobNo = 0;
 	iHashCount = 0;
@@ -142,7 +142,7 @@ std::vector<iBackend*>* minethd::thread_starter(uint32_t threadOffset, miner_wor
 
 		if(cfg.cpu_aff >= 0)
 		{
-			printer::inst()->print_msg(L1, "Starting %s GPU (OpenCL) thread %d, affinity: %d.", backendName.c_str(), i, (int)cfg.cpu_aff);
+			printer::inst()->print_msg(L1, "Starting %s GPU (OpenCL) thread %d, affinity: %d.", backendName.c_str(), i, static_cast<int>(cfg.cpu_aff));
 		}
 		else
 			printer::inst()->print_msg(L1, "Starting %s GPU (OpenCL) thread %d, no affinity.", backendName.c_str(), i);
@@ -232,7 +232,7 @@ void minethd::work_main()
 		XMRSetJob(pGpuCtx, oWork.bWorkBlob, oWork.iWorkSize, target);
 
 		if(oWork.bNiceHash)
-			pGpuCtx->Nonce = *(uint32_t*)(oWork.bWorkBlob + 39);
+			pGpuCtx->Nonce = *reinterpret_cast<uint32_t*>(oWork.bWorkBlob + 39);
 
 		while(globalStates::inst().iGlobalJobNo.load(std::memory_order_relaxed) == iJobNo)
 		{
@@ -262,10 +262,10 @@ void minethd::work_main()
 				memcpy(bWorkBlob, oWork.bWorkBlob, oWork.iWorkSize);
 				memset(bResult, 0, sizeof(job_result::bResult));
 
-				*(uint32_t*)(bWorkBlob + 39) = results[i];
+				*reinterpret_cast<uint32_t*>(bWorkBlob + 39) = results[i];
 
 				cpu_ctx->hash_fn(bWorkBlob, oWork.iWorkSize, bResult, &cpu_ctx, miner_algo);
-				if((*((uint64_t*)(bResult + 24))) < oWork.iTarget)
+				if((*reinterpret_cast<uint64_t*>(bResult + 24)) < oWork.iTarget)
 					executor::inst()->push_event(ex_event(job_result(oWork.sJobID, results[i], bResult, iThreadNo, miner_algo), oWork.iPoolId));
 				else
 					executor::inst()->push_event(ex_event("AMD Invalid Result", pGpuCtx->deviceIdx, oWork.iPoolId));

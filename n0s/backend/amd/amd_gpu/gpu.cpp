@@ -77,7 +77,7 @@ char* LoadTextFile(const char* filename)
 	flen = ftell(kernel);
 	fseek(kernel, 0, SEEK_SET);
 
-	out = (char*)malloc(flen + 1);
+	out = static_cast<char*>(malloc(flen + 1));
 	size_t r = fread(out, flen, 1, kernel);
 	fclose(kernel);
 
@@ -133,7 +133,7 @@ size_t InitOpenCLGpu(cl_context opencl_ctx, GpuContext* ctx, const char* source_
 
 	if((ret = clGetDeviceInfo(ctx->DeviceID, CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(int), &(ctx->computeUnits), NULL)) != CL_SUCCESS)
 	{
-		printer::inst()->print_msg(L1, "WARNING: %s when calling clGetDeviceInfo to get CL_DEVICE_MAX_COMPUTE_UNITS for device %u.", err_to_str(ret), (uint32_t)ctx->deviceIdx);
+		printer::inst()->print_msg(L1, "WARNING: %s when calling clGetDeviceInfo to get CL_DEVICE_MAX_COMPUTE_UNITS for device %u.", err_to_str(ret), static_cast<uint32_t>(ctx->deviceIdx));
 		return ERR_OCL_API;
 	}
 
@@ -256,7 +256,7 @@ size_t InitOpenCLGpu(cl_context opencl_ctx, GpuContext* ctx, const char* source_
 					return ERR_OCL_API;
 				}
 
-				char* BuildLog = (char*)malloc(len + 1);
+				char* BuildLog = static_cast<char*>(malloc(len + 1));
 				BuildLog[0] = '\0';
 
 				if((ret = clGetProgramBuildInfo(ctx->Program, ctx->DeviceID, CL_PROGRAM_BUILD_LOG, len, BuildLog, NULL)) != CL_SUCCESS)

@@ -64,7 +64,7 @@ MHD_Result httpd::req_handler([[maybe_unused]] void* cls,
 		username = MHD_digest_auth_get_username(connection);
 		if(username == NULL)
 		{
-			rsp = MHD_create_response_from_buffer(sHtmlAccessDeniedSize, (void*)sHtmlAccessDenied, MHD_RESPMEM_PERSISTENT);
+			rsp = MHD_create_response_from_buffer(sHtmlAccessDeniedSize, const_cast<char*>(sHtmlAccessDenied), MHD_RESPMEM_PERSISTENT);
 			ret = MHD_queue_auth_fail_response(connection, sHttpAuthRealm, sHttpAuthOpaque, rsp, MHD_NO);
 			MHD_destroy_response(rsp);
 			return ret;
@@ -74,7 +74,7 @@ MHD_Result httpd::req_handler([[maybe_unused]] void* cls,
 		ret = (MHD_Result)MHD_digest_auth_check(connection, sHttpAuthRealm, jconf::inst()->GetHttpUsername(), jconf::inst()->GetHttpPassword(), 300);
 		if(ret == MHD_INVALID_NONCE || ret == MHD_NO)
 		{
-			rsp = MHD_create_response_from_buffer(sHtmlAccessDeniedSize, (void*)sHtmlAccessDenied, MHD_RESPMEM_PERSISTENT);
+			rsp = MHD_create_response_from_buffer(sHtmlAccessDeniedSize, const_cast<char*>(sHtmlAccessDenied), MHD_RESPMEM_PERSISTENT);
 			ret = MHD_queue_auth_fail_response(connection, sHttpAuthRealm, sHttpAuthOpaque, rsp, (ret == MHD_INVALID_NONCE) ? MHD_YES : MHD_NO);
 			MHD_destroy_response(rsp);
 			return ret;
@@ -96,7 +96,7 @@ MHD_Result httpd::req_handler([[maybe_unused]] void* cls,
 			return ret;
 		}
 
-		rsp = MHD_create_response_from_buffer(sHtmlCssSize, (void*)sHtmlCssFile, MHD_RESPMEM_PERSISTENT);
+		rsp = MHD_create_response_from_buffer(sHtmlCssSize, const_cast<char*>(sHtmlCssFile), MHD_RESPMEM_PERSISTENT);
 		MHD_add_response_header(rsp, "ETag", sHtmlCssEtag);
 		MHD_add_response_header(rsp, "Content-Type", "text/css; charset=utf-8");
 	}
@@ -104,28 +104,28 @@ MHD_Result httpd::req_handler([[maybe_unused]] void* cls,
 	{
 		executor::inst()->get_http_report(EV_HTML_JSON, str);
 
-		rsp = MHD_create_response_from_buffer(str.size(), (void*)str.c_str(), MHD_RESPMEM_MUST_COPY);
+		rsp = MHD_create_response_from_buffer(str.size(), const_cast<char*>(str.c_str()), MHD_RESPMEM_MUST_COPY);
 		MHD_add_response_header(rsp, "Content-Type", "application/json; charset=utf-8");
 	}
 	else if(strcasecmp(url, "/h") == 0 || strcasecmp(url, "/hashrate") == 0)
 	{
 		executor::inst()->get_http_report(EV_HTML_HASHRATE, str);
 
-		rsp = MHD_create_response_from_buffer(str.size(), (void*)str.c_str(), MHD_RESPMEM_MUST_COPY);
+		rsp = MHD_create_response_from_buffer(str.size(), const_cast<char*>(str.c_str()), MHD_RESPMEM_MUST_COPY);
 		MHD_add_response_header(rsp, "Content-Type", "text/html; charset=utf-8");
 	}
 	else if(strcasecmp(url, "/c") == 0 || strcasecmp(url, "/connection") == 0)
 	{
 		executor::inst()->get_http_report(EV_HTML_CONNSTAT, str);
 
-		rsp = MHD_create_response_from_buffer(str.size(), (void*)str.c_str(), MHD_RESPMEM_MUST_COPY);
+		rsp = MHD_create_response_from_buffer(str.size(), const_cast<char*>(str.c_str()), MHD_RESPMEM_MUST_COPY);
 		MHD_add_response_header(rsp, "Content-Type", "text/html; charset=utf-8");
 	}
 	else if(strcasecmp(url, "/r") == 0 || strcasecmp(url, "/results") == 0)
 	{
 		executor::inst()->get_http_report(EV_HTML_RESULTS, str);
 
-		rsp = MHD_create_response_from_buffer(str.size(), (void*)str.c_str(), MHD_RESPMEM_MUST_COPY);
+		rsp = MHD_create_response_from_buffer(str.size(), const_cast<char*>(str.c_str()), MHD_RESPMEM_MUST_COPY);
 		MHD_add_response_header(rsp, "Content-Type", "text/html; charset=utf-8");
 	}
 	else

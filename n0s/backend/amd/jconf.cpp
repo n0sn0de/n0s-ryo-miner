@@ -158,12 +158,12 @@ bool jconf::GetThreadConfig(size_t id, thd_cfg& cfg)
 
 	// strided_index and mem_chunk are accepted but ignored (cn_gpu always uses direct indexing)
 
-	if(!unroll->IsUint64() || (int)unroll->GetInt64() >= 128 || (int)unroll->GetInt64() == 0)
+	if(!unroll->IsUint64() || static_cast<int>(unroll->GetInt64()) >= 128 || static_cast<int>(unroll->GetInt64()) == 0)
 	{
 		printer::inst()->print_msg(L0, "ERROR: unroll must be smaller than 128 and not zero");
 		return false;
 	}
-	cfg.unroll = (int)unroll->GetInt64();
+	cfg.unroll = static_cast<int>(unroll->GetInt64());
 
 	if(!compMode->IsBool())
 		return false;
