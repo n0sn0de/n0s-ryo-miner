@@ -34,17 +34,15 @@ namespace n0s
 
 void globalStates::consume_work(miner_work& threadWork, uint64_t& currentJobId)
 {
-	jobLock.ReadLock();
+	std::shared_lock lck(jobLock);
 
 	threadWork = oGlobalWork;
 	currentJobId = iGlobalJobNo.load(std::memory_order_relaxed);
-
-	jobLock.UnLock();
 }
 
 void globalStates::switch_work(miner_work&& pWork, pool_data& dat)
 {
-	jobLock.WriteLock();
+	std::unique_lock lck(jobLock);
 
 	/* This notifies all threads that the job has changed.
 	 * To avoid duplicated shared this must be done before the nonce is exchanged.
@@ -61,8 +59,6 @@ void globalStates::switch_work(miner_work&& pWork, pool_data& dat)
 	 */
 	dat.iSavedNonce = iGlobalNonce.exchange(dat.iSavedNonce, std::memory_order_relaxed);
 	oGlobalWork = std::move(pWork);
-
-	jobLock.UnLock();
 }
 
 } // namespace n0s
