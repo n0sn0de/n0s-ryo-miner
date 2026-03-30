@@ -68,7 +68,7 @@ struct GpuContext
 
 namespace
 {
-const char* err_to_str(cl_int ret)
+[[maybe_unused]] const char* err_to_str(cl_int ret)
 {
 	switch(ret)
 	{

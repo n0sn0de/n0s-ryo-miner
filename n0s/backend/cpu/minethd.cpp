@@ -256,12 +256,12 @@ bool minethd::self_test()
 		return false;
 
 	cryptonight_ctx* ctx[MAX_N] = {0};
-	for(int i = 0; i < MAX_N; i++)
+	for(size_t i = 0; i < MAX_N; i++)
 	{
 		if((ctx[i] = minethd_alloc_ctx()) == nullptr)
 		{
 			printer::inst()->print_msg(L0, "ERROR: miner was not able to allocate memory.");
-			for(int j = 0; j < i; j++)
+			for(size_t j = 0; j < i; j++)
 				cryptonight_free_ctx(ctx[j]);
 			return false;
 		}
@@ -287,7 +287,7 @@ bool minethd::self_test()
 		printer::inst()->print_msg(L0,
 			"Cryptonight hash self-test failed. This might be caused by bad compiler optimizations.");
 
-	for(int i = 0; i < MAX_N; i++)
+	for(size_t i = 0; i < MAX_N; i++)
 		cryptonight_free_ctx(ctx[i]);
 
 	return bResult;
@@ -358,7 +358,7 @@ std::vector<iBackend*> minethd::thread_starter(uint32_t threadOffset, miner_work
  */
 template <size_t N>
 void minethd::func_multi_selector(cryptonight_ctx** ctx, minethd::cn_on_new_job& on_new_job,
-	bool bHaveAes, bool bNoPrefetch, const n0s_algo& algo)
+	bool bHaveAes, bool bNoPrefetch, [[maybe_unused]] const n0s_algo& algo)
 {
 	static_assert(N >= 1, "number of threads must be >= 1");
 
@@ -375,7 +375,7 @@ void minethd::func_multi_selector(cryptonight_ctx** ctx, minethd::cn_on_new_job&
 
 	ctx[0]->hash_fn = func_table[digit.to_ulong()];
 
-	for(int h = 1; h < N; ++h)
+	for(size_t h = 1; h < N; ++h)
 		ctx[h]->hash_fn = ctx[0]->hash_fn;
 
 	on_new_job = nullptr;
@@ -450,7 +450,7 @@ void minethd::multiway_work_main()
 		if(ctx[i] == nullptr)
 		{
 			printer::inst()->print_msg(L0, "ERROR: miner was not able to allocate memory.");
-			for(int j = 0; j < i; j++)
+			for(size_t j = 0; j < i; j++)
 				cryptonight_free_ctx(ctx[j]);
 			win_exit(1);
 		}
@@ -547,7 +547,7 @@ void minethd::multiway_work_main()
 		prep_multiway_work<N>(bWorkBlob, piNonce);
 	}
 
-	for(int i = 0; i < N; i++)
+	for(size_t i = 0; i < N; i++)
 		cryptonight_free_ctx(ctx[i]);
 }
 

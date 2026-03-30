@@ -28,7 +28,7 @@
 #include <errno.h>
 #include <sys/mman.h>
 
-size_t cryptonight_init(size_t use_fast_mem, size_t use_mlock, alloc_msg* msg)
+size_t cryptonight_init([[maybe_unused]] size_t use_fast_mem, [[maybe_unused]] size_t use_mlock, [[maybe_unused]] alloc_msg* msg)
 {
 	// Linux: no special initialization needed
 	return 1;

@@ -155,7 +155,7 @@ jpsock::jpsock(size_t id, const char* sAddr, const char* sLogin, const char* sRi
 	bLoggedIn = false;
 	iJobDiff = 0;
 
-	memset(&oCurrentJob, 0, sizeof(oCurrentJob));
+	oCurrentJob = pool_job();
 }
 
 jpsock::~jpsock()
@@ -267,7 +267,7 @@ void jpsock::jpsock_thread()
 		disconnect_time = 0;
 
 	std::unique_lock<std::mutex> lck(job_mutex);
-	memset(&oCurrentJob, 0, sizeof(oCurrentJob));
+	oCurrentJob = pool_job();
 	bRunning = false;
 }
 

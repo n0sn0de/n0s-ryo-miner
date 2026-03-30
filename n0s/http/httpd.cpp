@@ -46,13 +46,13 @@ httpd::httpd()
 {
 }
 
-MHD_Result httpd::req_handler(void* cls,
+MHD_Result httpd::req_handler([[maybe_unused]] void* cls,
 	MHD_Connection* connection,
 	const char* url,
 	const char* method,
-	const char* version,
-	const char* upload_data,
-	size_t* upload_data_size,
+	[[maybe_unused]] const char* version,
+	[[maybe_unused]] const char* upload_data,
+	[[maybe_unused]] size_t* upload_data_size,
 	void** ptr)
 {
 	struct MHD_Response* rsp;

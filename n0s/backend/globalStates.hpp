@@ -39,10 +39,10 @@ struct globalStates
 	void consume_work(miner_work& threadWork, uint64_t& currentJobId);
 
 	miner_work oGlobalWork;
+	uint64_t iThreadCount;
 	std::atomic<uint64_t> iGlobalJobNo;
 	std::atomic<uint64_t> iConsumeCnt;
 	std::atomic<uint32_t> iGlobalNonce;
-	uint64_t iThreadCount;
 	size_t pool_id = invalid_pool_id;
 
   private:

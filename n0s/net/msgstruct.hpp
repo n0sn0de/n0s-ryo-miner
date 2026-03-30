@@ -105,8 +105,8 @@ struct sock_err
 // Unlike socket errors, GPU errors are read-only strings
 struct gpu_res_err
 {
-	size_t idx; // GPU index
 	const char* error_str;
+	size_t idx; // GPU index
 	gpu_res_err(const char* error_str, size_t idx) :
 		error_str(error_str),
 		idx(idx) {}

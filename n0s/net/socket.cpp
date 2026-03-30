@@ -88,7 +88,7 @@ bool plain_socket::set_hostname(const char* sAddr)
 	sPort[0] = '\0';
 	sPort++;
 
-	addrinfo hints = {0};
+	addrinfo hints = {};
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_protocol = IPPROTO_TCP;
@@ -193,7 +193,7 @@ bool plain_socket::send(const char* buf)
 	return true;
 }
 
-void plain_socket::close(bool free)
+void plain_socket::close([[maybe_unused]] bool free)
 {
 	if(hSocket != INVALID_SOCKET)
 	{

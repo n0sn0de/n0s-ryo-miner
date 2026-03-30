@@ -12,8 +12,8 @@ namespace n0s
 struct coinDescription
 {
 	n0s_algo algo = {n0s_algo_id::invalid_algo};
-	uint8_t fork_version = 0u;
 	n0s_algo algo_root = {n0s_algo_id::invalid_algo};
+	uint8_t fork_version = 0u;
 
 	coinDescription() = default;
 
