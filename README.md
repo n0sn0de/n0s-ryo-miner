@@ -6,6 +6,21 @@ Supports **AMD** (OpenCL) and **NVIDIA** (CUDA) GPUs. No CPU mining — this is 
 
 Fork of [xmr-stak](https://github.com/fireice-uk/xmr-stak) by fireice-uk and psychocrypt, stripped down and modernized for CryptoNight-GPU exclusively.
 
+**Latest Release:** [v3.0.0 - Modern C++ Rewrite Complete](https://github.com/n0sn0de/n0s-ryo-miner/releases/tag/v3.0.0) 🚀
+
+## Download Pre-Built Binaries
+
+Grab the latest release from [GitHub Releases](https://github.com/n0sn0de/n0s-ryo-miner/releases):
+
+| Platform | Binary | Backend Library | Architectures |
+|---|---|---|---|
+| **OpenCL (AMD)** | `n0s-ryo-miner-v3.0.0-opencl-ubuntu22.04` | `libn0s_opencl_backend-v3.0.0-ubuntu22.04.so` | GCN/RDNA/CDNA |
+| **CUDA 11.8** | `n0s-ryo-miner-v3.0.0-cuda11.8` | `libn0s_cuda_backend-v3.0.0-cuda11.8.so` | Pascal→Ada (sm_61-89) |
+| **CUDA 12.6** | `n0s-ryo-miner-v3.0.0-cuda12.6` | `libn0s_cuda_backend-v3.0.0-cuda12.6.so` | Pascal→Hopper (sm_61-90) |
+| **CUDA 12.8** | `n0s-ryo-miner-v3.0.0-cuda12.8` | `libn0s_cuda_backend-v3.0.0-cuda12.8.so` | Pascal→Blackwell (sm_61-120) |
+
+**Note:** Download BOTH the binary and backend library, place them in the same directory.
+
 ## Supported Hardware
 
 ### NVIDIA (CUDA)
@@ -86,26 +101,45 @@ cmake .. -DN0S_COMPILE=generic -DCMAKE_BUILD_TYPE=Release
 
 The `N0S_COMPILE=generic` flag avoids `-march=native` so binaries run on any x86_64 CPU.
 
-## Containerized Builds (Podman/Docker)
+## Container Builds (Recommended)
 
-Build for any CUDA version without installing the toolkit locally:
+Build for **any CUDA version** without installing the toolkit locally. Uses Podman or Docker with official NVIDIA CUDA images.
+
+### Quick Start
 
 ```bash
-# Single CUDA version
-./scripts/container-build.sh 11.8                    # CUDA 11.8, default archs
-./scripts/container-build.sh 12.6 "75;86;89;90"     # CUDA 12.6, custom archs
-./scripts/container-build.sh 12.8 "" 24.04           # CUDA 12.8, Ubuntu 24.04
+# OpenCL (AMD GPUs)
+./scripts/container-build-opencl.sh
 
-# Full build matrix (all CUDA versions)
+# CUDA 11.8 (Pascal→Ada)
+./scripts/container-build.sh 11.8
+
+# CUDA 12.6 (Pascal→Hopper)
+./scripts/container-build.sh 12.6
+
+# CUDA 12.8 (Pascal→Blackwell)
+./scripts/container-build.sh 12.8
+
+# Full build matrix (all 4 backends)
 ./scripts/build-matrix.sh
+```
 
-# Full build matrix + hardware mine tests
-./scripts/build-matrix.sh --test
+Artifacts land in `dist/opencl-ubuntu22.04/` or `dist/cuda-{version}/`.
 
-# Full compile validation (10 platform combos)
+### Advanced Options
+
+```bash
+# Custom architectures
+./scripts/container-build.sh 11.8 "61,75,86"       # Specific compute capabilities
+./scripts/container-build.sh 12.8 "auto"           # All supported archs for CUDA version
+
+# Different Ubuntu base
+./scripts/container-build.sh 12.6 "" 24.04         # Ubuntu 24.04 instead of 22.04
+
+# Full validation suite (10 platform combos, compile-only)
 ./scripts/matrix-test.sh
 
-# Quick smoke test (1 CUDA + 1 AMD)
+# Quick smoke test (1 CUDA + 1 OpenCL build)
 ./scripts/matrix-test.sh --quick
 
 # Filter specific platforms
@@ -113,7 +147,13 @@ Build for any CUDA version without installing the toolkit locally:
 ./scripts/matrix-test.sh --filter "opencl"
 ```
 
-Artifacts land in `dist/cuda-{version}/`.
+### Why Container Builds?
+
+- ✅ **No local CUDA toolkit required** — Just Podman/Docker
+- ✅ **Reproducible** — Same source → same binaries every time
+- ✅ **Multiple CUDA versions** — Build for 11.8, 12.6, and 12.8 on same machine
+- ✅ **Clean environment** — No conflicts with system libraries
+- ✅ **CI/CD ready** — Same scripts work in GitHub Actions / GitLab CI
 
 ## Usage
 
