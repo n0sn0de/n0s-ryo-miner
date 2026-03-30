@@ -201,13 +201,16 @@ static bool init_opencl_device(OpenCLDevice* dev, int device_idx, size_t intensi
     constexpr size_t SCRATCHPAD_SIZE = 2 * 1024 * 1024;  // 2 MiB per thread
     constexpr size_t STATE_SIZE = 200;                    // State buffer per thread
 
+    size_t scratchpad_bytes = SCRATCHPAD_SIZE * intensity;
+    size_t states_bytes = STATE_SIZE * intensity;
+    
     dev->input_buf = clCreateBuffer(dev->context, CL_MEM_READ_ONLY, 128, nullptr, &err);
     check_cl(err, "clCreateBuffer(input)");
 
-    dev->scratchpad = clCreateBuffer(dev->context, CL_MEM_READ_WRITE, SCRATCHPAD_SIZE * intensity, nullptr, &err);
+    dev->scratchpad = clCreateBuffer(dev->context, CL_MEM_READ_WRITE, scratchpad_bytes, nullptr, &err);
     check_cl(err, "clCreateBuffer(scratchpad)");
 
-    dev->states = clCreateBuffer(dev->context, CL_MEM_READ_WRITE, STATE_SIZE * intensity, nullptr, &err);
+    dev->states = clCreateBuffer(dev->context, CL_MEM_READ_WRITE, states_bytes, nullptr, &err);
     check_cl(err, "clCreateBuffer(states)");
 
     dev->output_buf = clCreateBuffer(dev->context, CL_MEM_WRITE_ONLY, sizeof(cl_uint) * 0x100, nullptr, &err);
@@ -215,6 +218,8 @@ static bool init_opencl_device(OpenCLDevice* dev, int device_idx, size_t intensi
 
     fprintf(stderr, "[OPENCL] Device %d: %s (intensity=%zu, worksize=%zu)\n", 
             device_idx, dev->device_name, intensity, worksize);
+    fprintf(stderr, "[OPENCL] Buffer sizes: scratchpad=%zu MB, states=%zu bytes\n",
+            scratchpad_bytes / (1024*1024), states_bytes);
     return true;
 }
 
@@ -249,10 +254,11 @@ static bool compile_kernels(OpenCLDevice* dev) {
     constexpr size_t CN_ITER = 262144;             // 256K iterations
     constexpr size_t MASK = CN_MEMORY - 16;        // Thread memory mask
     
+    // CRITICAL: Must compile with the SAME worksize used at dispatch time!
     std::string options;
     options += " -DITERATIONS=" + std::to_string(CN_ITER);
     options += " -DMASK=" + std::to_string(MASK) + "U";
-    options += " -DWORKSIZE=" + std::to_string(dev->worksize) + "U";
+    options += " -DWORKSIZE=" + std::to_string(dev->worksize) + "U";  // Device-specific worksize!
     options += " -DCOMP_MODE=1";  // Compatibility mode
     options += " -DMEMORY=" + std::to_string(CN_MEMORY) + "LU";
     options += " -DALGO=5";       // cn_gpu algorithm ID
@@ -260,6 +266,8 @@ static bool compile_kernels(OpenCLDevice* dev) {
     options += " -DOPENCL_DRIVER_MAJOR=14";
     options += " -DIS_WINDOWS_OS=0";
     options += " -cl-fp32-correctly-rounded-divide-sqrt";  // IEEE 754 compliance
+    
+    fprintf(stderr, "[OPENCL] Compiling with WORKSIZE=%zu (device-specific)\n", dev->worksize);
     
     err = clBuildProgram(dev->program, 1, &dev->device, options.c_str(), nullptr, nullptr);
     
@@ -273,12 +281,10 @@ static bool compile_kernels(OpenCLDevice* dev) {
         return false;
     }
     
-    // Extract kernel handles (actual names from .cl files)
+    // Extract kernel handles — CRITICAL: array indices don't match phase numbers!
+    // Production code mapping: Kernels[0]=phase1, [1]=phase3, [2]=phase4+5, [3]=phase2
     dev->kernel_phase1 = clCreateKernel(dev->program, "cn_gpu_phase1_keccak", &err);
     check_cl(err, "clCreateKernel(cn_gpu_phase1_keccak)");
-    
-    dev->kernel_phase2 = clCreateKernel(dev->program, "cn_gpu_phase2_expand", &err);
-    check_cl(err, "clCreateKernel(cn_gpu_phase2_expand)");
     
     dev->kernel_phase3 = clCreateKernel(dev->program, "cn_gpu_phase3_compute", &err);
     check_cl(err, "clCreateKernel(cn_gpu_phase3_compute)");
@@ -286,7 +292,10 @@ static bool compile_kernels(OpenCLDevice* dev) {
     dev->kernel_phase4_5 = clCreateKernel(dev->program, "cn_gpu_phase4_finalize", &err);
     check_cl(err, "clCreateKernel(cn_gpu_phase4_finalize)");
     
-    fprintf(stderr, "[OPENCL] Kernels compiled successfully\n");
+    dev->kernel_phase2 = clCreateKernel(dev->program, "cn_gpu_phase2_expand", &err);
+    check_cl(err, "clCreateKernel(cn_gpu_phase2_expand)");
+    
+    fprintf(stderr, "[OPENCL] Kernels compiled successfully (phase1, phase3, phase4+5, phase2)\n");
     return true;
 }
 
@@ -306,8 +315,8 @@ static void cleanup_opencl_device(OpenCLDevice* dev) {
 
 static BenchmarkResult benchmark_opencl(int device_id, int duration_sec) {
     // Benchmark configuration
-    constexpr size_t INTENSITY = 64;    // Number of parallel hashes (reduced for testing)
-    constexpr size_t WORKSIZE = 8;      // Local work size (reduced for testing)
+    constexpr size_t INTENSITY = 8;     // Number of parallel hashes
+    constexpr size_t WORKSIZE = 8;      // Local work size (must be >=8 for Phase1's 8x8 local size)
     
     OpenCLDevice dev = {0};
     if (!init_opencl_device(&dev, device_id, INTENSITY, WORKSIZE)) {
@@ -383,18 +392,36 @@ static BenchmarkResult benchmark_opencl(int device_id, int duration_sec) {
         size_t local_1[2] = {8, 8};
         err = clEnqueueNDRangeKernel(dev.queue, dev.kernel_phase1, 2, nonce_offset, global_1, local_1, 0, nullptr, nullptr);
         check_cl(err, "clEnqueueNDRangeKernel(phase1)");
+        err = clFinish(dev.queue);
+        if (err != CL_SUCCESS) {
+            fprintf(stderr, "[ERROR] Phase 1 GPU execution failed: %d\n", err);
+            break;
+        }
+        fprintf(stderr, "[DEBUG] Phase 1 complete\n");
         
         // Phase 2: Scratchpad expansion (1D dispatch, 64 threads per hash)
         size_t global_2 = g_intensity * 64;
         size_t local_2 = 64;
         err = clEnqueueNDRangeKernel(dev.queue, dev.kernel_phase2, 1, nullptr, &global_2, &local_2, 0, nullptr, nullptr);
         check_cl(err, "clEnqueueNDRangeKernel(phase2)");
+        err = clFinish(dev.queue);
+        if (err != CL_SUCCESS) {
+            fprintf(stderr, "[ERROR] Phase 2 GPU execution failed: %d\n", err);
+            break;
+        }
+        fprintf(stderr, "[DEBUG] Phase 2 complete\n");
         
         // Phase 3: Main loop (1D dispatch, MUST use g_thd * 16 and w_size * 16)
         size_t global_3 = g_thd * 16;
         size_t local_3 = w_size * 16;
         err = clEnqueueNDRangeKernel(dev.queue, dev.kernel_phase3, 1, nullptr, &global_3, &local_3, 0, nullptr, nullptr);
         check_cl(err, "clEnqueueNDRangeKernel(phase3)");
+        err = clFinish(dev.queue);
+        if (err != CL_SUCCESS) {
+            fprintf(stderr, "[ERROR] Phase 3 GPU execution failed: %d\n", err);
+            break;
+        }
+        fprintf(stderr, "[DEBUG] Phase 3 complete\n");
         
         // Phase 4+5: Finalize (2D dispatch)
         size_t nonce_offset_45[2] = {0, dev.nonce};

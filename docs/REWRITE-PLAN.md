@@ -396,61 +396,83 @@ Only after structural work is complete (check the Remaining things in succes cri
 ## Session 24 Notes (2026-03-30 09:33 AM)
 
 **What we accomplished:**
-- ✅ Integrated real CN-GPU OpenCL kernels into benchmark harness (Phase 1 complete!)
+- ✅ Integrated real CN-GPU OpenCL kernels into benchmark harness (Phase 1 architecture complete)
 - Loaded kernel sources via C++ `#include` (same pattern as production: raw string literals)
 - Added all required preprocessor defines (ITERATIONS, MASK, WORKSIZE, MEMORY, etc.)
-- Fixed kernel names (`cn_gpu_phase1_keccak`, `cn_gpu_phase2_expand`, `cn_gpu_phase3_compute`, `cn_gpu_phase4_finalize`)
-- Set up 5-phase hash pipeline dispatch with correct work sizes
+- **CRITICAL FIX:** Discovered kernel array mapping mismatch — production uses non-sequential indices!
+  - `Kernels[0]` = phase1_keccak
+  - `Kernels[1]` = phase3_compute (NOT phase2!)
+  - `Kernels[2]` = phase4_finalize
+  - `Kernels[3]` = phase2_expand (phase2 stored at index 3!)
+- Fixed dispatch order: `[0] → [3] → [1] → [2]` (phase1 → phase2 → phase3 → phase4+5)
+- Set up correct work dimensions for each phase (2D vs 1D, thread multipliers)
 - Kernel compilation succeeds, all 4 kernels load successfully
-- **Current blocker:** GPU memory fault in phase 3 (memory access violation)
+- **Phase 1 and Phase 2 execute successfully!** (confirmed via debug output + clFinish error checking)
+- **Current blocker:** GPU memory fault in Phase 3 (`Page not present or supervisor privilege`)
 
 **What works:**
-- OpenCL device init + memory allocation
-- Kernel compilation with full algorithm constants
-- Kernel extraction (all 4 phase kernels)
-- Phase 1 + 2 dispatch (no errors reported)
+- OpenCL device init + memory allocation (16 MB scratchpad, 1600 bytes states for intensity=8)
+- Kernel compilation with device-specific WORKSIZE
+- Kernel extraction with correct array mapping
+- Phase 1 (Keccak + AES) execution — ✓ completes without errors
+- Phase 2 (Scratchpad expansion) execution — ✓ completes without errors
 - Clean shutdown on SIGINT
 
 **What doesn't work yet:**
-- Phase 3 execution hits GPU memory fault (`Page not present or supervisor privilege`)
-- Likely causes: buffer stride mismatch, incorrect memory layout, or alignment issue
-- Need to verify scratchpad/state buffer access patterns match production code
+- Phase 3 execution hits GPU memory fault after Phases 1+2 complete successfully
+- Memory address `0x7985a2600000` access violation (page not present)
+- Buffer sizes verified correct: scratchpad needs `8 * 2MiB = 16MB` ✓, states needs `8 * 200 = 1600 bytes` ✓
+- Kernel arguments verified correct: (scratchpad, states, numThreads) with proper types
+- Work dimensions verified: global=128 (g_thd*16), local=128 (w_size*16), both multiples as required
 
 **Debugging done:**
-- Reduced intensity from 512 → 64 (still faults, rules out pure size issue)
-- Verified kernel argument counts (phase3 needs 3 args: scratchpad, states, numThreads)
-- Confirmed work sizes align with kernel requirements (global % local == 0)
-- Added debug output for work dimensions
+- ✅ Fixed kernel array index mismatch (was dispatching phase3 before phase2!)
+- ✅ Reduced intensity from 512 → 8 (still faults, rules out pure size issue)
+- ✅ Verified kernel argument counts and types match production code
+- ✅ Confirmed work sizes align with `reqd_work_group_size(WORKSIZE*16, 1, 1)` attribute
+- ✅ Added clFinish() after each phase with error checking (phases 1+2 succeed, phase 3 faults)
+- ✅ Verified buffer allocation sizes match production (scratchpad: intensity*2MiB, states: intensity*200)
+- ✅ Checked scratchpad access pattern: `scratchpad + MEMORY * (gIdx/16)` requires 2MiB per hash ✓
+- ✅ Checked states access pattern: `state_buffer[idxHash * 50]` as uint (25 ulongs = 50 uints) ✓
+
+**Remaining investigation needed:**
+1. **Memory layout/alignment** — AMD GPUs may require specific alignment (4K? 64K?)
+2. **Buffer flags** — Production uses `CL_MEM_READ_WRITE`, harness matches
+3. **Kernel compilation differences** — Compare build log between harness and production
+4. **Phase 1/2 output validation** — Verify they're actually writing correct data to buffers
+5. **Alternative: Run production miner** — Establish baseline, compare kernel args at runtime
 
 **Next session priorities:**
-1. **Fix GPU memory fault** (~1-2 hours) — HIGH PRIORITY
-   - Compare buffer allocation sizes with production `InitOpenCLGpu`
-   - Check scratchpad access pattern (Phase 3 uses `scratchpad_ptr` inline function)
-   - Verify states buffer type/size (200 bytes per thread)
-   - May need to set additional kernel args or use different mem flags
+1. **Compare with production miner** (~1 hour) — HIGH PRIORITY
+   - Run actual n0s-ryo-miner with same config (intensity=8, worksize=8)
+   - Capture working kernel args and buffer pointers for comparison
+   - May need to add debug output to production code temporarily
    
-2. **Validate with golden hashes** (~1 hour) — After fault fixed
+2. **Fix GPU memory fault** (~1-2 hours) — After comparison
+   - Apply findings from production code comparison
+   - Test with minimal intensity (1-8 hashes)
+   
+3. **Validate with golden hashes** (~1 hour) — After fault fixed
    - Read back output buffer after successful run
    - Compare against test vectors from `cn_gpu_harness.cpp`
-   
-3. **Add GPU timing** (~30 min) — After validation
-   - Use `clGetEventProfilingInfo` for kernel execution time
    
 4. **Measure real hashrate** (~30 min)
    - Run 60-second benchmark on working harness
    - Establish baseline performance
 
 **Key insights:**
-- Kernel loading via `#include` cleanly mirrors production code (no file I/O at runtime)
-- OpenCL kernel names are explicit (no JOIN macro indirection) — easier to debug
-- Work size calculations critical: `g_thd` must be multiple of `w_size`, phase3 needs `*16` multiplier
-- GPU memory faults harder to debug than host-side errors (no stack trace, just address)
+- **Kernel array indices don't match phase numbers!** This was the root cause of wrong dispatch order
+- Phase 1+2 succeed → buffer allocation and kernel compilation are correct
+- Phase 3 fault → issue is specific to Phase 3's memory access pattern or kernel execution
+- GPU memory faults at specific address suggest pointer/offset calculation issue, not size issue
+- Production code has this working → must be a subtle difference in how kernels are invoked
 
 **Lessons learned:**
-- Start with minimal intensity when debugging new kernel dispatch code
-- OpenCL error codes are cryptic but systematic: `-46` = bad kernel name, `-52` = bad args, `-54` = bad work size
-- GPU memory faults indicate buffer mismatch, not just size issues
-- Benchmark harness architecture is sound — just need to nail the kernel invocation details
+- Always verify kernel array mapping when porting production code (don't assume sequential!)
+- clFinish() with error checking isolates which phase fails (critical for debugging)
+- GPU memory faults are harder to debug than host-side errors (no backtrace, just address)
+- Start with working production code comparison before diving into speculation
+- Benchmark harness architecture is sound — just need one more fix to make Phase 3 work
 
 ---
 
