@@ -2,7 +2,7 @@
 
 **High-Level Strategy for the Foundational C++ Rewrite**
 
-*Status: Foundation + dead code removal complete. Structural transformation phase next.*
+*Status: Foundation + dead code removal complete. CUDA consolidated, OpenCL cleanup in progress.*
 
 ---
 
@@ -57,9 +57,23 @@ Take the inherited xmr-stak CryptoNight-GPU implementation and transform it into
 | **S1** | OpenCL context simplification | Program map→single, Kernels map→array[4], ExtraBuffers[6]→[2] |
 | **S1** | OpenCL dead kernel strip | cryptonight.cl: 817→521 (-36%): removed cn0, cn1, dead helpers |
 
-### Cumulative Total (Both Sessions)
+### Session 3 (2026-03-29, continued)
 
-**64 files changed. +2,021 / -11,758 = net -9,737 lines deleted (27% smaller)**
+**5 branches merged. +455 / -542 = net -87 lines. Structural consolidation.**
+
+| Phase | What | Impact |
+|-------|------|--------|
+| **S2.1** | CUDA header consolidation | Merged cuda_device.hpp + cuda_compat.hpp → cuda_extra.hpp (-2 files) |
+| **S2.2** | CUDA context rename | cryptonight.hpp (CUDA) → cuda_context.hpp (eliminates name confusion) |
+| **S2.3** | CUDA kernel consolidation | cuda_extra.cu + cuda_core.cu → cuda_kernels.cu (single file, all 5 phases) |
+| **S3.1** | OpenCL kernel rename | Removed JOIN(name,ALGO) macro — kernels have explicit names (cn_gpu_phase*) |
+| **S3.2** | OpenCL dead code strip | Removed Windows code, JOIN macro, MSVC fallbacks from gpu.cpp/cl (-46 lines) |
+
+Live mining tested on all 3 GPUs after every change — zero rejections.
+
+### Cumulative Total (All Sessions)
+
+**69 files changed. +2,476 / -12,300 = net -9,824 lines deleted (28% smaller)**
 
 ---
 
@@ -70,31 +84,28 @@ n0s/
 └── algorithm/
     └── cn_gpu.hpp              ← NEW: Clean algorithm constants (202 lines)
 
-xmrstak/                         ← CLEANED but still old structure
+xmrstak/                         ← CLEANED, CUDA consolidated, OpenCL partially cleaned
 ├── backend/
-│   ├── amd/                     ← OpenCL backend (3,738 lines)
+│   ├── amd/                     ← OpenCL backend (~3,650 lines)
 │   │   ├── amd_gpu/
-│   │   │   ├── gpu.cpp          ← Host: device init, kernel compile, mining loop
+│   │   │   ├── gpu.cpp          ← Host: device init, kernel compile, mining loop (CLEANED: Windows code removed)
 │   │   │   ├── gpu.hpp          ← Host: context struct
 │   │   │   └── opencl/
-│   │   │       ├── cryptonight.cl      ← Phase 4+5 kernel + shared helpers (521 lines, was 1164)
-│   │   │       ├── cryptonight_gpu.cl  ← Phase 3 FP kernel (RENAMED + DOCUMENTED)
+│   │   │       ├── cryptonight.cl      ← Phase 4+5 kernel + shared helpers (CLEANED: JOIN macro removed)
+│   │   │       ├── cryptonight_gpu.cl  ← Phase 1,2,3 kernels (RENAMED: cn_gpu_phase* names)
 │   │   │       └── wolf-aes.cl         ← AES tables for OpenCL
 │   │   ├── autoAdjust.hpp       ← Auto-config (SIMPLIFIED)
 │   │   ├── jconf.cpp/hpp        ← AMD config parsing
 │   │   └── minethd.cpp/hpp      ← AMD mining thread (SIMPLIFIED)
 │   │
-│   ├── nvidia/                  ← CUDA backend (4,763 lines)
+│   ├── nvidia/                  ← CUDA backend (~4,500 lines, CONSOLIDATED)
 │   │   ├── nvcc_code/
 │   │   │   ├── cuda_cryptonight_gpu.hpp ← Phases 2,3 kernels (RENAMED + DOCUMENTED)
-│   │   │   ├── cuda_core.cu            ← Phase 4 kernel + host dispatch (RENAMED + DOCUMENTED)
-│   │   │   ├── cuda_extra.cu           ← Phases 1,5 kernels + device init (DOCUMENTED)
+│   │   │   ├── cuda_kernels.cu         ← Phases 1,4,5 + host dispatch + device mgmt (CONSOLIDATED from cuda_core.cu + cuda_extra.cu)
 │   │   │   ├── cuda_aes.hpp            ← AES for CUDA (needed)
 │   │   │   ├── cuda_keccak.hpp         ← Keccak for CUDA (needed)
-│   │   │   ├── cuda_device.hpp         ← Tiny (64 lines)
-│   │   │   ├── cuda_compat.hpp         ← Tiny (23 lines)
-│   │   │   ├── cuda_extra.hpp          ← Context struct (127 lines)
-│   │   │   └── cryptonight.hpp         ← CUDA-side algo defs (64 lines)
+│   │   │   ├── cuda_extra.hpp          ← Utility macros + compat shims + error checking (CONSOLIDATED from cuda_device.hpp + cuda_compat.hpp)
+│   │   │   └── cuda_context.hpp        ← nvid_ctx struct + extern "C" ABI (RENAMED from cryptonight.hpp)
 │   │   ├── autoAdjust.hpp       ← CUDA auto-config
 │   │   ├── jconf.cpp/hpp        ← NVIDIA config parsing
 │   │   └── minethd.cpp/hpp      ← NVIDIA mining thread (SIMPLIFIED)
@@ -145,7 +156,7 @@ xmrstak/                         ← CLEANED but still old structure
 └── picosha2/              ← SHA-256 for OpenCL cache (vendored — don't touch)
 ```
 
-**Codebase: ~33K lines (down from ~43K). Our code: ~19K lines (excluding vendored rapidjson/picosha2)**
+**Codebase: ~31K lines (down from ~43K). Our code: ~17K lines (excluding vendored rapidjson/picosha2)**
 
 ---
 
@@ -167,23 +178,28 @@ xmrstak/                         ← CLEANED but still old structure
 | `coinDescription.hpp` | 89 | Deferred — used internally by jconf coin lookup |
 | `read_write_lock.h` | 96 | Kept — used by globalStates::jobLock (replace with std::shared_mutex later) |
 
-### Phase S2: CUDA File Consolidation
+### Phase S2: CUDA File Consolidation ✅ COMPLETE
 
-Merge the scattered CUDA files into fewer, logical units:
+| Target | Status |
+|--------|--------|
+| `cuda_extra.cu` + `cuda_core.cu` → `cuda_kernels.cu` | ✅ Merged |
+| `cuda_device.hpp` + `cuda_compat.hpp` → `cuda_extra.hpp` | ✅ Absorbed |
+| `cryptonight.hpp` (CUDA-side) → `cuda_context.hpp` | ✅ Renamed (not merged with main — different purpose) |
 
-- `cuda_extra.cu` + `cuda_core.cu` → single `cuda_kernels.cu` (all 5 phases)
-- `cuda_device.hpp` + `cuda_compat.hpp` → absorb into `cuda_extra.hpp`
-- `cryptonight.hpp` (CUDA-side) → merge with main `cryptonight.hpp`
+CUDA files reduced from 9 → 5. Live-tested on nos2 (GTX 1070 Ti) and nosnode (RTX 2070).
 
-**Estimated: ~4 hours. Moderate risk (NVCC compilation order matters).**
+### Phase S3: OpenCL Cleanup — IN PROGRESS
 
-### Phase S3: OpenCL Cleanup
+| Target | Status |
+|--------|--------|
+| Rename kernels to explicit names (remove JOIN/ALGO macro) | ✅ Done (cn_gpu_phase*) |
+| Remove KernelNames vector indirection | ✅ Done (static const char*) |
+| Strip dead Windows code from gpu.cpp | ✅ Done (-46 lines) |
+| Remove dead JOIN_DO/JOIN macros | ✅ Done |
+| `gpu.cpp` split (device_init, kernel_compile, mining_loop) | ❌ Future — 1,015 lines, still monolithic |
+| Remove remaining multi-algo conditionals in .cl files | ❌ Future — COMP_MODE, STRIDED_INDEX still present |
 
-- `cryptonight.cl` still has multi-algo infrastructure (cn0/cn1/cn2 with ALGO macro). Simplify to direct function names.
-- `gpu.cpp` (1,142 lines) is a monolith — split into device_init, kernel_compile, mining_loop
-- Remove the `KernelNames` indirection — we know exactly which 4 kernels exist
-
-**Estimated: ~6 hours. Higher risk (OpenCL runtime compilation).**
+**Remaining: gpu.cpp split (~4 hours). Deferred — risk/reward not favorable yet.**
 
 ### Phase S4: Directory Restructuring
 
@@ -262,8 +278,8 @@ n0s/
 │   └── hash_pipeline.hpp       ← Full CPU hash function (from Cryptonight_hash_gpu)
 │
 ├── cuda/
-│   ├── kernels.cu              ← All 5 phases (from cuda_core + cuda_extra + cuda_cryptonight_gpu)
-│   ├── device.cpp/hpp          ← Device init + memory (from cuda_extra)
+│   ├── kernels.cu              ← All 5 phases (PARTIALLY DONE: cuda_kernels.cu has phases 1,4,5 + host; cuda_cryptonight_gpu.hpp has 2,3)
+│   ├── device.cpp/hpp          ← Device init + memory (future: extract from cuda_kernels.cu)
 │   ├── backend.cpp/hpp         ← Mining thread (from nvidia/minethd)
 │   ├── config.cpp/hpp          ← nvidia.txt parsing (from nvidia/jconf)
 │   └── auto_tune.hpp           ← Auto-config (from nvidia/autoAdjust)
