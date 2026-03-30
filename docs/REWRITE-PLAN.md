@@ -2,7 +2,7 @@
 
 **High-Level Strategy for the Foundational C++ Rewrite**
 
-*Status: Foundation + dead code removal complete. CUDA consolidated. Namespace migrated (n0s::). Pool/network documented. Directory restructured (xmrstak/ → n0s/).*
+*Status: Foundation + dead code removal complete. CUDA consolidated. Namespace migrated (n0s::). Pool/network documented. Directory restructured (xmrstak/ → n0s/). Zero-warning build. Modern C++ patterns applied.*
 
 ---
 
@@ -26,7 +26,7 @@ Take the inherited xmr-stak CryptoNight-GPU implementation and transform it into
 
 The `xmrstak/` directory is **GONE**. All source code now lives under `n0s/`.
 
-**~200 files changed. +3,524 / -12,783 = net -9,259 lines. Namespace migrated. Directory restructured. Protocol documented.**
+**~220 files changed. Net -9,380+ lines removed. Namespace migrated. Directory restructured. Protocol documented. Zero-warning build. Modern C++17.**
 
 ---
 
@@ -108,8 +108,7 @@ n0s/
 │   ├── rapidjson/         ← JSON library (vendored, ~14K lines — don't touch)
 │   └── picosha2/          ← SHA-256 for OpenCL cache (vendored — don't touch)
 │
-└── cpputil/
-    └── read_write_lock.h  ← Read-write lock (replace with std::shared_mutex later)
+└── (cpputil/ removed — replaced with std::shared_mutex)
 
 tests/
 ├── cn_gpu_harness.cpp     ← Golden test vectors
@@ -138,7 +137,7 @@ tests/
 | OpenCL cn0/cn1 kernels | 296 | ✅ Stripped from cryptonight.cl |
 | GpuContext maps | ~30 | ✅ Simplified to direct types |
 | `coinDescription.hpp` | 89 | Deferred — used internally by jconf coin lookup |
-| `read_write_lock.h` | 96 | Kept — used by globalStates::jobLock (replace with std::shared_mutex later) |
+| `read_write_lock.h` | 96 | ✅ Removed — replaced with std::shared_mutex (Session 6) |
 
 ### Phase S2: CUDA File Consolidation ✅ COMPLETE
 
@@ -186,13 +185,34 @@ All namespace/type/macro references migrated:
 
 Only `#include "xmrstak/..."` paths remain — intentionally deferred to S4 (directory restructuring).
 
-### Phase S6: Modern C++ Patterns (Ongoing)
+### Phase S6: Modern C++ Patterns — MAJOR PROGRESS (Session 6)
 
-Apply as opportunities arise, not as a bulk pass:
+**S6.1: Zero-Warning Build ✅ COMPLETE**
+Fixed ~80 compiler warnings across 18 files to achieve clean `-Wall -Wextra`:
+- Member initialization order fixes (params, globalStates, coinDescription, msgstruct)
+- Sign-compare: int vs size_t loop variables throughout codebase
+- Unused variables removed (gpu.cpp: isHSAOpenCL, tmpNonce, platforms; cn_gpu_avx: d01/d23)
+- Unused parameters: `[[maybe_unused]]` on callback/API params
+- memset on non-trivial `pool_job` → value initialization
+- **Bug fix**: miner_work move ctor was memcpy'ing sJobID from self (!)
+- **Bug fix**: miner_work move ctor was not initializing bNiceHash
+- Deprecated OpenSSL: replace legacy init with `OPENSSL_init_ssl()`
+- addrinfo: zero-init with `{}` instead of `{0}`
+
+**S6.2: std::shared_mutex Migration ✅ COMPLETE**
+- Replaced custom `cpputil::RWLock` (96 lines) with C++17 `std::shared_mutex`
+- RAII lock guards (`std::shared_lock` / `std::unique_lock`) eliminate manual unlock
+- Deleted `n0s/cpputil/` directory entirely (-121 lines)
+
+**S6.3: Safe Move Semantics ✅ COMPLETE**
+- `pool_job`: default member initializers (zero sJobID, bWorkBlob, iTarget)
+- `miner_work`, `sock_err`, `ex_event`: replaced `assert(this!=&from)` with if-guard
+  (self-move-assign is now safe per the standard)
+
+**Remaining (apply as opportunities arise):**
 - Replace raw `new`/`delete` with smart pointers
 - Replace C-style casts with `static_cast`/`reinterpret_cast`
 - Add `[[nodiscard]]` to functions that return error codes
-- Replace `memcpy` with structured copies where safe
 - Remove global mutable state where possible
 
 ### Phase S7: Pool/Network Documentation ✅ COMPLETE
@@ -228,7 +248,7 @@ Only after all structural work is complete:
 - [ ] No raw `new`/`delete` outside vendored code
 - [ ] No global mutable state outside `main()`
 - [ ] All `constexpr` where possible
-- [ ] Clean compiler output (zero warnings at `-Wall -Wextra`)
+- [x] Clean compiler output (zero warnings at `-Wall -Wextra`) — Session 6
 - [x] Directory restructured to `n0s/` layout (S4, Session 5)
 - [x] `xmrstak` namespace fully replaced → `n0s::` (S5, Session 4)
 
