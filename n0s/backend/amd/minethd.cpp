@@ -46,6 +46,13 @@ namespace n0s
 namespace opencl
 {
 
+// GPU functions are now in n0s::amd namespace (see amd_gpu/*.cpp)
+using n0s::amd::InitOpenCL;
+using n0s::amd::XMRSetJob;
+using n0s::amd::XMRRunJob;
+using n0s::amd::interleaveAdjustDelay;
+using n0s::amd::updateTimings;
+
 minethd::minethd(miner_work& pWork, size_t iNo, GpuContext* ctx, const jconf::thd_cfg cfg)
 {
 	this->backendType = iBackend::AMD;

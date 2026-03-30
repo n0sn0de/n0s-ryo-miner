@@ -200,12 +200,23 @@ namespace
 }
 } // namespace
 
+namespace n0s {
+namespace amd {
+
+// Platform discovery (see gpu_platform.hpp)
 uint32_t getNumPlatforms();
 [[nodiscard]] int getAMDPlatformIdx();
 std::vector<GpuContext> getAMDDevices(int index);
 
+// Device initialization (see gpu_device.hpp)  
+[[nodiscard]] size_t InitOpenCLGpu(cl_context opencl_ctx, GpuContext* ctx, const char* source_code);
+uint64_t updateTimings(GpuContext* ctx, uint64_t t);
+uint64_t interleaveAdjustDelay(GpuContext* ctx, bool enableAutoAdjustment = true);
+
+// Main OpenCL interface (see gpu.cpp)
 [[nodiscard]] size_t InitOpenCL(GpuContext* ctx, size_t num_gpus, size_t platform_idx);
 [[nodiscard]] size_t XMRSetJob(GpuContext* ctx, uint8_t* input, size_t input_len, uint64_t target);
 [[nodiscard]] size_t XMRRunJob(GpuContext* ctx, cl_uint* HashOutput);
-uint64_t interleaveAdjustDelay(GpuContext* ctx, const bool enableAutoAdjustment = true);
-uint64_t updateTimings(GpuContext* ctx, const uint64_t t);
+
+} // namespace amd
+} // namespace n0s
