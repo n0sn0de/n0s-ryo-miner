@@ -109,7 +109,7 @@ void help()
 #ifdef _WIN32
 	cout << "Environment variables:\n"
 		 << endl;
-	cout << "  XMRSTAK_NOWAIT             disable the dialog `Press any key to exit." << std::endl;
+	cout << "  N0S_NOWAIT             disable the dialog `Press any key to exit." << std::endl;
 	cout << "                	            for non UAC execution" << endl;
 	cout << endl;
 #endif

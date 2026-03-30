@@ -2,7 +2,7 @@
  * test_constants.cpp — Verify n0s::cn_gpu constants match original code
  *
  * This test ensures the extracted constants in n0s/algorithm/cn_gpu.hpp
- * are bit-exact with the values used in the original xmr-stak code.
+ * are bit-exact with the values used in the original xmr-stak code (now n0s-ryo-miner).
  */
 #include <cassert>
 #include <cstdio>

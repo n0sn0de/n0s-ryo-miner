@@ -213,7 +213,7 @@ void printer::print_str(const char* str)
 void win_exit(int code)
 {
 	size_t envSize = 0;
-	getenv_s(&envSize, nullptr, 0, "XMRSTAK_NOWAIT");
+	getenv_s(&envSize, nullptr, 0, "N0S_NOWAIT");
 	if(envSize == 0)
 	{
 		printer::inst()->print_str("Press any key to exit.");
