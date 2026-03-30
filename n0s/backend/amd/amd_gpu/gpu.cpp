@@ -25,7 +25,7 @@
 #include <cassert>
 #include <iostream>
 #include <cmath>
-#include <regex>
+
 #include <cstdio>
 #include <cstring>
 #include <vector>
@@ -39,6 +39,16 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+
+static void string_replace_all(std::string& str, const std::string& from, const std::string& to)
+{
+	size_t pos = 0;
+	while((pos = str.find(from, pos)) != std::string::npos)
+	{
+		str.replace(pos, from.length(), to);
+		pos += to.length();
+	}
+}
 
 static inline void create_directory(std::string dirname)
 {
@@ -664,8 +674,8 @@ size_t InitOpenCL(GpuContext* ctx, size_t num_gpus, size_t platform_idx)
 		;
 
 	std::string source_code(cryptonightCL);
-	source_code = std::regex_replace(source_code, std::regex("N0S_INCLUDE_WOLF_AES"), wolfAesCL);
-	source_code = std::regex_replace(source_code, std::regex("N0S_INCLUDE_CN_GPU"), cryptonight_gpu);
+	string_replace_all(source_code, "N0S_INCLUDE_WOLF_AES", wolfAesCL);
+	string_replace_all(source_code, "N0S_INCLUDE_CN_GPU", cryptonight_gpu);
 
 	// create a directory  for the OpenCL compile cache
 	const std::string cache_dir = n0s::params::inst().rootAMDCacheDir;
