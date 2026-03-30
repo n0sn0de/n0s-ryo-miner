@@ -50,12 +50,11 @@ struct plugin
 		}
 	}
 
-	std::vector<iBackend*>* startBackend(uint32_t threadOffset, miner_work& pWork, environment& env)
+	std::vector<iBackend*> startBackend(uint32_t threadOffset, miner_work& pWork, environment& env)
 	{
 		if(fn_startBackend == nullptr)
 		{
-			std::vector<iBackend*>* pvThreads = new std::vector<iBackend*>();
-			return pvThreads;
+			return std::vector<iBackend*>();
 		}
 
 		return fn_startBackend(threadOffset, pWork, env);
@@ -72,7 +71,7 @@ struct plugin
 
 	std::string m_backendName;
 
-	typedef std::vector<iBackend*>* (*startBackend_t)(uint32_t threadOffset, miner_work& pWork, environment& env);
+	typedef std::vector<iBackend*> (*startBackend_t)(uint32_t threadOffset, miner_work& pWork, environment& env);
 
 	startBackend_t fn_startBackend = nullptr;
 

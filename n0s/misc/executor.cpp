@@ -392,12 +392,12 @@ void executor::on_miner_result(size_t pool_id, job_result& oResult)
 {
 	jpsock* pool = pick_pool_by_id(pool_id);
 
-	const char* backend_name = n0s::iBackend::getName(pvThreads->at(oResult.iThreadId)->backendType);
+	const char* backend_name = n0s::iBackend::getName(pvThreads.at(oResult.iThreadId)->backendType);
 	uint64_t backend_hashcount, total_hashcount = 0;
 
-	backend_hashcount = pvThreads->at(oResult.iThreadId)->iHashCount.load(std::memory_order_relaxed);
-	for(size_t i = 0; i < pvThreads->size(); i++)
-		total_hashcount += pvThreads->at(i)->iHashCount.load(std::memory_order_relaxed);
+	backend_hashcount = pvThreads.at(oResult.iThreadId)->iHashCount.load(std::memory_order_relaxed);
+	for(size_t i = 0; i < pvThreads.size(); i++)
+		total_hashcount += pvThreads.at(i)->iHashCount.load(std::memory_order_relaxed);
 
 	if(!pool->is_running() || !pool->is_logged_in())
 	{
@@ -422,26 +422,26 @@ void executor::on_miner_result(size_t pool_id, job_result& oResult)
 		uint64_t* targets = reinterpret_cast<uint64_t*>(oResult.bResult);
 		log_result_ok(t64_to_diff(targets[3]));
 
-		if (pvThreads->at(oResult.iThreadId)->backendType == n0s::iBackend::BackendType::CPU)
+		if (pvThreads.at(oResult.iThreadId)->backendType == n0s::iBackend::BackendType::CPU)
 		{
 			printer::inst()->print_msg(L3, "CPU: Share accepted. Pool: %s", pool->get_pool_addr());
 		}
 		else
 		{
-			printer::inst()->print_msg(L3, "%s GPU %u: Share accepted. Pool: %s", name.c_str(), pvThreads->at(oResult.iThreadId)->iGpuIndex, pool->get_pool_addr());
+			printer::inst()->print_msg(L3, "%s GPU %u: Share accepted. Pool: %s", name.c_str(), pvThreads.at(oResult.iThreadId)->iGpuIndex, pool->get_pool_addr());
 		}
 	}
 	else
 	{
 		if(!pool->have_sock_error())
 		{
-			if (pvThreads->at(oResult.iThreadId)->backendType == n0s::iBackend::BackendType::CPU)
+			if (pvThreads.at(oResult.iThreadId)->backendType == n0s::iBackend::BackendType::CPU)
 			{
 				printer::inst()->print_msg(L3, "CPU: Share rejected. Pool: %s", pool->get_pool_addr());
 			}
 			else
 			{
-				printer::inst()->print_msg(L3, "%s GPU %u: Share rejected. Pool: %s", name.c_str(), pvThreads->at(oResult.iThreadId)->iGpuIndex, pool->get_pool_addr());
+				printer::inst()->print_msg(L3, "%s GPU %u: Share rejected. Pool: %s", name.c_str(), pvThreads.at(oResult.iThreadId)->iGpuIndex, pool->get_pool_addr());
 			}
 
 			std::string error = pool->get_call_error();
@@ -482,13 +482,13 @@ void executor::ex_main()
 	// \todo collect all backend threads
 	pvThreads = n0s::BackendConnector::thread_starter(oWork);
 
-	if(pvThreads->size() == 0)
+	if(pvThreads.size() == 0)
 	{
 		printer::inst()->print_msg(L1, "ERROR: No miner backend enabled.");
 		n0s_exit();
 	}
 
-	telem = std::make_unique<n0s::telemetry>(pvThreads->size());
+	telem = std::make_unique<n0s::telemetry>(pvThreads.size());
 
 	set_timestamp();
 	size_t pc = jconf::inst()->GetPoolCount();
@@ -583,9 +583,9 @@ void executor::ex_main()
 		}
 
 		case EV_PERF_TICK:
-			for(i = 0; i < pvThreads->size(); i++)
-				telem->push_perf_value(i, pvThreads->at(i)->iHashCount.load(std::memory_order_relaxed),
-					pvThreads->at(i)->iTimestamp.load(std::memory_order_relaxed));
+			for(i = 0; i < pvThreads.size(); i++)
+				telem->push_perf_value(i, pvThreads.at(i)->iHashCount.load(std::memory_order_relaxed),
+					pvThreads.at(i)->iTimestamp.load(std::memory_order_relaxed));
 
 			if((cnt++ & 0xF) == 0) //Every 16 ticks
 			{
@@ -593,7 +593,7 @@ void executor::ex_main()
 				double fTelem;
 				bool normal = true;
 
-				for(i = 0; i < pvThreads->size(); i++)
+				for(i = 0; i < pvThreads.size(); i++)
 				{
 					fTelem = telem->calc_telemetry_data(10000, i);
 					if(std::isnormal(fTelem))
@@ -701,7 +701,7 @@ bool executor::motd_filter_web(std::string& motd)
 
 void executor::hashrate_report(std::string& out)
 {
-	out.reserve(2048 + pvThreads->size() * 64);
+	out.reserve(2048 + pvThreads.size() * 64);
 
 	if(jconf::inst()->PrintMotd())
 	{
@@ -724,7 +724,7 @@ void executor::hashrate_report(std::string& out)
 	for(uint32_t b = 0; b < 4u; ++b)
 	{
 		std::vector<n0s::iBackend*> backEnds;
-		std::copy_if(pvThreads->begin(), pvThreads->end(), std::back_inserter(backEnds),
+		std::copy_if(pvThreads.begin(), pvThreads.end(), std::back_inserter(backEnds),
 			[&](n0s::iBackend* backend) {
 				return backend->backendType == b;
 			});
@@ -946,7 +946,7 @@ void executor::http_hashrate_report(std::string& out)
 {
 	char num_a[32], num_b[32], num_c[32], num_d[32];
 	char buffer[4096];
-	size_t nthd = pvThreads->size();
+	size_t nthd = pvThreads.size();
 
 	out.reserve(4096);
 
@@ -988,7 +988,7 @@ void executor::http_hashrate_report(std::string& out)
 	{
 		double fHps[3];
 		char csThreadTag[25];
-		auto bType = static_cast<n0s::iBackend::BackendType>(pvThreads->at(i)->backendType);
+		auto bType = static_cast<n0s::iBackend::BackendType>(pvThreads.at(i)->backendType);
 		if(bTypePrev == bType)
 			j++;
 		else
@@ -1134,7 +1134,7 @@ void executor::http_json_report(std::string& out)
 	char hr_buffer[64];
 	std::string hr_thds, res_error, cn_error;
 
-	size_t nthd = pvThreads->size();
+	size_t nthd = pvThreads.size();
 	double fTotal[3] = {0.0, 0.0, 0.0};
 	hr_thds.reserve(nthd * 32);
 

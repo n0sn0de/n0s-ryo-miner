@@ -99,16 +99,16 @@ bool minethd::self_test()
 
 extern "C"
 {
-		std::vector<iBackend*>* n0s_start_backend(uint32_t threadOffset, miner_work& pWork, environment& env)
+	std::vector<iBackend*> n0s_start_backend(uint32_t threadOffset, miner_work& pWork, environment& env)
 	{
 		environment::inst(&env);
 		return cuda::minethd::thread_starter(threadOffset, pWork);
 	}
 } // extern "C"
 
-std::vector<iBackend*>* minethd::thread_starter(uint32_t threadOffset, miner_work& pWork)
+std::vector<iBackend*> minethd::thread_starter(uint32_t threadOffset, miner_work& pWork)
 {
-	std::vector<iBackend*>* pvThreads = new std::vector<iBackend*>();
+	std::vector<iBackend*> pvThreads;
 
 	auto miner_algo = ::jconf::inst()->GetMiningAlgo();
 
@@ -136,7 +136,7 @@ std::vector<iBackend*>* minethd::thread_starter(uint32_t threadOffset, miner_wor
 	}
 
 	size_t i, n = jconf::inst()->GetGPUThreadCount();
-	pvThreads->reserve(n);
+	pvThreads.reserve(n);
 
 	cuInit(0);
 
@@ -153,12 +153,12 @@ std::vector<iBackend*>* minethd::thread_starter(uint32_t threadOffset, miner_wor
 			printer::inst()->print_msg(L1, "Starting NVIDIA GPU thread %d, no affinity.", i);
 
 		minethd* thd = new minethd(pWork, i + threadOffset, cfg);
-		pvThreads->push_back(thd);
+		pvThreads.push_back(thd);
 	}
 
 	for(i = 0; i < n; i++)
 	{
-		static_cast<minethd*>((*pvThreads)[i])->start_mining();
+		static_cast<minethd*>(pvThreads[i])->start_mining();
 	}
 
 	return pvThreads;

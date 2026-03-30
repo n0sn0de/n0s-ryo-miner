@@ -19,7 +19,7 @@ namespace opencl
 class minethd : public iBackend
 {
   public:
-	static std::vector<iBackend*>* thread_starter(uint32_t threadOffset, miner_work& pWork);
+	static std::vector<iBackend*> thread_starter(uint32_t threadOffset, miner_work& pWork);
 	static bool init_gpus();
 
   private:
