@@ -42,27 +42,16 @@
 #include <thread>
 #include <vector>
 
-#ifndef USE_PRECOMPILED_HEADERS
-#ifdef WIN32
-#include <direct.h>
-#include <windows.h>
-#else
 #include <dlfcn.h>
-#include <sys/types.h>
-#endif
 #include <iostream>
-#endif
+#include <sys/types.h>
 
 namespace n0s
 {
 namespace cuda
 {
 
-#ifdef WIN32
-HINSTANCE lib_handle;
-#else
 void* lib_handle;
-#endif
 
 minethd::minethd(miner_work& pWork, size_t iNo, const jconf::thd_cfg& cfg)
 {
@@ -111,9 +100,6 @@ bool minethd::self_test()
 
 extern "C"
 {
-#ifdef WIN32
-	__declspec(dllexport)
-#endif
 		std::vector<iBackend*>* n0s_start_backend(uint32_t threadOffset, miner_work& pWork, environment& env)
 	{
 		environment::inst(&env);
@@ -136,7 +122,7 @@ std::vector<iBackend*>* minethd::thread_starter(uint32_t threadOffset, miner_wor
 
 	if(!jconf::inst()->parse_config())
 	{
-		win_exit();
+		n0s_exit();
 	}
 
 	int deviceCount = 0;
@@ -162,10 +148,6 @@ std::vector<iBackend*>* minethd::thread_starter(uint32_t threadOffset, miner_wor
 
 		if(cfg.cpu_aff >= 0)
 		{
-#if defined(__APPLE__)
-			printer::inst()->print_msg(L1, "WARNING on macOS thread affinity is only advisory.");
-#endif
-
 			printer::inst()->print_msg(L1, "Starting NVIDIA GPU thread %d, affinity: %d.", i, (int)cfg.cpu_aff);
 		}
 		else

@@ -68,9 +68,7 @@
 #include <thread>
 #include <time.h>
 
-#ifdef _WIN32
-#define strncasecmp _strnicmp
-#endif // _WIN32
+
 
 executor::executor()
 {
@@ -462,10 +460,9 @@ void executor::on_miner_result(size_t pool_id, job_result& oResult)
 	}
 }
 
-#ifndef _WIN32
-
 #include <signal.h>
-void disable_sigpipe()
+
+static void disable_sigpipe()
 {
 	struct sigaction sa;
 	memset(&sa, 0, sizeof(sa));
@@ -474,12 +471,6 @@ void disable_sigpipe()
 	if(sigaction(SIGPIPE, &sa, 0) == -1)
 		printer::inst()->print_msg(L1, "ERROR: Call to sigaction failed!");
 }
-
-#else
-inline void disable_sigpipe()
-{
-}
-#endif
 
 void executor::ex_main()
 {
@@ -495,7 +486,7 @@ void executor::ex_main()
 	if(pvThreads->size() == 0)
 	{
 		printer::inst()->print_msg(L1, "ERROR: No miner backend enabled.");
-		win_exit();
+		n0s_exit();
 	}
 
 	telem = new n0s::telemetry(pvThreads->size());
@@ -512,7 +503,7 @@ void executor::ex_main()
 		if(cfg.tls)
 		{
 			printer::inst()->print_msg(L1, "ERROR: No miner was compiled without TLS support.");
-			win_exit();
+			n0s_exit();
 		}
 #endif
 
@@ -539,7 +530,7 @@ void executor::ex_main()
 		if(params.poolUsername.empty())
 		{
 			printer::inst()->print_msg(L1, "ERROR: You didn't specify the username / wallet address for %s", n0s::params::inst().poolURL.c_str());
-			win_exit();
+			n0s_exit();
 		}
 
 		pools.emplace_back(i + 1, params.poolURL.c_str(), params.poolUsername.c_str(), params.poolRigid.c_str(), params.poolPasswd.c_str(), 9.9, params.poolUseTls, "", params.nicehashMode);
@@ -816,11 +807,7 @@ char* time_format(char* buf, size_t len, std::chrono::system_clock::time_point t
 	 * And of course C++ implements unsafe version because... reasons
 	 */
 
-#ifdef _WIN32
-	localtime_s(&stime, &ctime);
-#else
 	localtime_r(&ctime, &stime);
-#endif // __WIN32
 	strftime(buf, len, "%F %T", &stime);
 
 	return buf;

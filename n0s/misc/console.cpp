@@ -27,71 +27,8 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
-#include <time.h>
-
-#ifdef _WIN32
-#include <windows.h>
-
-int get_key()
-{
-	DWORD mode, rd;
-	HANDLE h;
-
-	if((h = GetStdHandle(STD_INPUT_HANDLE)) == NULL)
-		return -1;
-
-	GetConsoleMode(h, &mode);
-	SetConsoleMode(h, mode & ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT));
-
-	int c = 0;
-	ReadConsole(h, &c, 1, &rd, NULL);
-	SetConsoleMode(h, mode);
-
-	return c;
-}
-
-void set_colour(out_colours cl)
-{
-	WORD attr = 0;
-
-	switch(cl)
-	{
-	case K_RED:
-		attr = FOREGROUND_RED | FOREGROUND_INTENSITY;
-		break;
-	case K_GREEN:
-		attr = FOREGROUND_GREEN | FOREGROUND_INTENSITY;
-		break;
-	case K_BLUE:
-		attr = FOREGROUND_BLUE | FOREGROUND_INTENSITY;
-		break;
-	case K_YELLOW:
-		attr = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY;
-		break;
-	case K_CYAN:
-		attr = FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_INTENSITY;
-		break;
-	case K_MAGENTA:
-		attr = FOREGROUND_BLUE | FOREGROUND_RED | FOREGROUND_INTENSITY;
-		break;
-	case K_WHITE:
-		attr = FOREGROUND_BLUE | FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY;
-		break;
-	default:
-		break;
-	}
-
-	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), attr);
-}
-
-void reset_colour()
-{
-	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
-}
-
-#else
-#include <stdio.h>
 #include <termios.h>
+#include <time.h>
 #include <unistd.h>
 
 int get_key()
@@ -141,22 +78,11 @@ void reset_colour()
 {
 	fputs("\x1B[0m", stdout);
 }
-#endif // _WIN32
-
-inline void comp_localtime(const time_t* ctime, tm* stime)
-{
-#ifdef _WIN32
-	localtime_s(stime, ctime);
-#else
-	localtime_r(ctime, stime);
-#endif // __WIN32
-}
 
 printer::printer()
 {
 	verbose_level = LINF;
 	logfile = nullptr;
-	// Windows doesn't do line buffering, so it needs to enable full buffering and manually flush the buffer
 	setvbuf(stdout, NULL, _IOFBF, BUFSIZ);
 }
 
@@ -176,7 +102,7 @@ void printer::print_msg(verbosity verbose, const char* fmt, ...)
 	tm stime;
 
 	time_t now = time(nullptr);
-	comp_localtime(&now, &stime);
+	localtime_r(&now, &stime);
 	strftime(buf, sizeof(buf), "[%F %T] : ", &stime);
 	bpos = strlen(buf);
 
@@ -208,23 +134,7 @@ void printer::print_str(const char* str)
 	}
 }
 
-// Do a press any key for the windows folk. *insert any key joke here*
-#ifdef _WIN32
-void win_exit(int code)
-{
-	size_t envSize = 0;
-	getenv_s(&envSize, nullptr, 0, "N0S_NOWAIT");
-	if(envSize == 0)
-	{
-		printer::inst()->print_str("Press any key to exit.");
-		get_key();
-	}
-	std::exit(code);
-}
-
-#else
-void win_exit(int code)
+void n0s_exit(int code)
 {
 	std::exit(code);
 }
-#endif // _WIN32

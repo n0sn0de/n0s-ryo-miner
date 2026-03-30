@@ -21,18 +21,7 @@
 
 #define N0S_NAME "n0s-ryo-miner"
 #define N0S_VERSION "1.0.0"
-
-#if defined(_WIN32)
-#define OS_TYPE "win"
-#elif defined(__APPLE__)
-#define OS_TYPE "mac"
-#elif defined(__FreeBSD__)
-#define OS_TYPE "bsd"
-#elif defined(__linux__)
 #define OS_TYPE "lin"
-#else
-#define OS_TYPE "unk"
-#endif
 
 #define N0S_PP_TOSTRING1(str) #str
 #define N0S_PP_TOSTRING(str) N0S_PP_TOSTRING1(str)

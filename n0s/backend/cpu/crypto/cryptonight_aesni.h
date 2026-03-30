@@ -47,11 +47,7 @@ extern "C"
 
 inline void set_float_rounding_mode_nearest()
 {
-#ifdef _MSC_VER
-	_control87(RC_NEAR, MCW_RC);
-#else
 	std::fesetround(FE_TONEAREST);
-#endif
 }
 
 // ============================================================

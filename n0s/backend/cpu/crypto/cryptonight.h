@@ -4,11 +4,7 @@
 
 #include "n0s/backend/cryptonight.hpp"
 
-#if defined _MSC_VER
-#define ABI_ATTRIBUTE
-#else
 #define ABI_ATTRIBUTE __attribute__((ms_abi))
-#endif
 
 struct cryptonight_ctx;
 

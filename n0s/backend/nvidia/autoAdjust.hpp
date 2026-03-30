@@ -48,14 +48,8 @@ class autoAdjust
 			ctx.device_threads = -1;
 
 			// set all device option those marked as auto (-1) to a valid value
-#ifndef _WIN32
 			ctx.device_bfactor = 0;
 			ctx.device_bsleep = 0;
-#else
-			// windows pass, try to avoid that windows kills the miner if the gpu is blocked for 2 seconds
-			ctx.device_bfactor = 6;
-			ctx.device_bsleep = 25;
-#endif
 			if(cuda_get_deviceinfo(&ctx) == 0)
 				nvidCtxVec.push_back(ctx);
 			else

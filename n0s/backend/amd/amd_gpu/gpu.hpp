@@ -3,11 +3,7 @@
 #include "n0s/jconf.hpp"
 #include "n0s/misc/console.hpp"
 
-#if defined(__APPLE__)
-#include <OpenCL/cl.h>
-#else
 #include <CL/cl.h>
-#endif
 
 #include <array>
 #include <memory>
