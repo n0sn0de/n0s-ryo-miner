@@ -117,6 +117,13 @@ tests/
 
 ## Cumulative Progress (All Sessions)
 
+**Session 17 (2026-03-30 02:50 AM):**
+- ✅ Added `[[nodiscard]]` to 40+ critical error-returning functions (network, backends, executor, httpd)
+- ✅ Properly handled all call sites (error checks in AMD minethd, (void) casts for error logging)
+- ✅ Added `constexpr` to compile-time computable functions (iBackend::getName, executor::sec_to_ticks)
+- Improves code safety by making it a compiler error to ignore critical error returns
+- Zero new warnings, zero behavior changes, bit-exact hashes verified
+
 **Session 16 (2026-03-30):**
 - ✅ Eliminated pointer-to-vector pattern in thread_starter (AMD, NVIDIA, CPU, BackendConnector)
 - ✅ Fixed socket memory leak in jpsock (sck → unique_ptr<base_socket>)
@@ -124,7 +131,7 @@ tests/
 - Net: -10 raw new/delete pairs, 6 memory leaks fixed
 - Remaining raw `new`: 13 (8 singletons, 3 minethd thread objects, 2 backend singletons)
 
-~315 files changed. Net -10,500+ lines removed. Our code: 16,136 lines (down from ~43K). Clean C++17, zero warnings, zero C files, Linux-only, single-purpose. Smart pointers + RAII replacing manual memory management.
+~320 files changed. Net -10,500+ lines removed. Our code: 16,136 lines (down from ~43K). Clean C++17, zero warnings, zero C files, Linux-only, single-purpose. Smart pointers + RAII replacing manual memory management. [[nodiscard]] on critical functions.
 
 ---
 
@@ -134,10 +141,12 @@ tests/
 
 **Next Session Targets:**
 1. **gpu.cpp split** (~4 hours) — Extract device_init, kernel_compile, mining_loop into separate functions. Current gpu.cpp is 1,200+ lines and hard to reason about.
-2. **[[nodiscard]]** — Add to error-returning functions (connect, send, recv, etc.)
-3. **constexpr where possible** — Algorithm constants, compile-time computables
+2. **More constexpr** — Expand to more compile-time constants (remaining simple getters, lookup tables)
+3. **Final cleanup pass** — Review for any remaining modernization opportunities
 
 **Completed Modernizations:**
+- ✅ **[[nodiscard]]** — 40+ critical error-returning functions (S17)
+- ✅ **constexpr** — Compile-time functions (S17: getName, sec_to_ticks). Algorithm constants already done
 - ✅ **Smart pointers** — Thread vectors, socket, PIMPL (S16). Telemetry, jpsock buffers/thread, executor telem (S9). 13 raw `new` remain (singletons + minethd — intentional)
 - ✅ **Modern casts** — Host code done (S9). Only CUDA device code + soft_aes macro retain C-style casts
 - ✅ **NULL → nullptr** — Host code done (S9, 68 replacements)
@@ -183,6 +192,33 @@ Only after structural work is complete (check the Remaining things in succes cri
 - **Realistic file mapping** — each target file has a clear source file
 - **Tests at top level** — not buried in the tree
 - **No abstract GPU interface** — CUDA and OpenCL are too different to share a meaningful base class. Separate implementations with shared algorithm constants is the right pattern.
+
+---
+
+## Session 17 Notes (2026-03-30 02:50 AM)
+
+**What we accomplished:**
+- Added `[[nodiscard]]` to 40+ critical functions — compiler now enforces checking error returns
+- Properly handled all AMD GPU error paths (XMRSetJob/XMRRunJob now checked with logging/retry)
+- Socket error logging uses explicit (void) casts to document intentional ignore
+- Added constexpr to compile-time functions (iBackend::getName, executor::sec_to_ticks)
+- Zero warnings, bit-exact hashes verified, all tests pass
+
+**Key insights:**
+- `[[nodiscard]]` is powerful for safety — compiler catches silent failures at compile time
+- Some error-logging functions return false by design (return set_error(...) pattern)
+- For standalone error logs in already-failed paths, (void) cast documents intentional ignore
+- constexpr opportunities exist but need careful analysis (macros → constexpr needs full namespace support)
+
+**Next session priorities:**
+1. **gpu.cpp refactor** — Split 1000+ line file into device_init + kernel_compile + mining_loop
+2. **More constexpr** — Look for remaining opportunities (simple getters, lookup tables)
+3. **Documentation pass** — Add function-level comments to complex GPU kernels
+
+**Lessons learned:**
+- Modern C++ safety features (nodiscard, constexpr) improve code quality without changing behavior
+- Test harness gives confidence — every change verified bit-exact
+- Small focused branches → quick merge → tight feedback loop works well
 
 ---
 
