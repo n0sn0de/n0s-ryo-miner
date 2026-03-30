@@ -40,6 +40,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <string>
+#include <cinttypes>
+#include <cmath>
 #include <ctime>
 
 #ifndef CONF_NO_TLS
@@ -66,6 +68,7 @@ void help()
 	cout << "  --benchmark BLOCKVERSION   ONLY do a benchmark and exit" << endl;
 	cout << "  --benchwait WAIT_SEC             ... benchmark wait time" << endl;
 	cout << "  --benchwork WORK_SEC             ... benchmark work time" << endl;
+	cout << "  --benchmark-json FILE            ... write benchmark results as JSON" << endl;
 #ifndef CONF_NO_OPENCL
 	cout << "  --noAMD                    disable the AMD miner backend" << endl;
 	cout << "  --amdGpus GPUS             indices of AMD GPUs to use. Example: 0,2,3" << endl;
@@ -742,6 +745,17 @@ int main(int argc, char* argv[])
 			}
 			params::inst().benchmark_work_sec = worksec;
 		}
+		else if(opName.compare("--benchmark-json") == 0)
+		{
+			++i;
+			if(i >= argc_sz)
+			{
+				printer::inst()->print_msg(L0, "No argument for parameter '--benchmark-json' given");
+				n0s_exit();
+				return 1;
+			}
+			params::inst().benchmark_json = argv[i];
+		}
 		else
 		{
 			printer::inst()->print_msg(L0, "Parameter unknown '%s'", argv[i]);
@@ -878,8 +892,8 @@ int do_benchmark(int block_version, int wait_sec, int work_sec)
 		return 1;
 	}
 
-	uint8_t work[128];
-	memset(work, 0, 128);
+	alignas(16) uint8_t work[128];
+	memset(work, 0, sizeof(work));
 	work[0] = static_cast<uint8_t>(block_version);
 
 	n0s::pool_data dat;
@@ -887,32 +901,142 @@ int do_benchmark(int block_version, int wait_sec, int work_sec)
 	n0s::miner_work oWork = n0s::miner_work();
 	pvThreads = n0s::BackendConnector::thread_starter(oWork);
 
+	if(pvThreads.empty())
+	{
+		printer::inst()->print_msg(L0, "ERROR: No mining backends started.");
+		return 1;
+	}
+
 	printer::inst()->print_msg(L0, "Wait %d sec until all backends are initialized", wait_sec);
 	std::this_thread::sleep_for(std::chrono::seconds(wait_sec));
 
-	/* AMD and NVIDIA benchmark work size: XMRSetJob validates input_len <= 124
-	 * (appends 0x01 padding byte, total 128 with trailing zeros)
-	 */
 	printer::inst()->print_msg(L0, "Start a %d second benchmark...", work_sec);
-	n0s::globalStates::inst().switch_work(n0s::miner_work("", work, 76, 0, false, 1, 0), dat);
+	constexpr uint32_t work_size = 76; // Realistic CryptoNight-GPU block size
+	n0s::globalStates::inst().switch_work(n0s::miner_work("bench", work, work_size, 0, false, 1, 0), dat);
 	uint64_t iStartStamp = get_timestamp_ms();
 
-	std::this_thread::sleep_for(std::chrono::seconds(work_sec));
-	n0s::globalStates::inst().switch_work(n0s::miner_work("", work, 76, 0, false, 0, 0), dat);
-
-	double fTotalHps = 0.0;
-	for(uint32_t i = 0; i < pvThreads.size(); i++)
+	// Sample hashrate at intervals for stability tracking
+	constexpr int sample_interval_sec = 5;
+	const int num_samples = std::max(1, work_sec / sample_interval_sec);
+	struct thread_sample
 	{
-		double fHps = pvThreads.at(i)->iHashCount;
-		fHps /= (pvThreads.at(i)->iTimestamp - iStartStamp) / 1000.0;
+		uint64_t hash_count;
+		uint64_t timestamp;
+	};
+	// Per-thread sample history: samples[thread_idx][sample_idx]
+	std::vector<std::vector<thread_sample>> samples(pvThreads.size());
+	for(auto& s : samples)
+		s.reserve(static_cast<size_t>(num_samples) + 1);
 
-		auto bType = static_cast<n0s::iBackend::BackendType>(pvThreads.at(i)->backendType);
-		std::string name(n0s::iBackend::getName(bType));
+	// Take initial sample
+	for(size_t i = 0; i < pvThreads.size(); i++)
+		samples[i].push_back({pvThreads[i]->iHashCount.load(), get_timestamp_ms()});
 
-		printer::inst()->print_msg(L0, "Benchmark Thread %u %s: %.1f H/S", i, name.c_str(), fHps);
-		fTotalHps += fHps;
+	for(int s = 0; s < num_samples; s++)
+	{
+		int sleep_time = (s < num_samples - 1) ? sample_interval_sec : (work_sec - s * sample_interval_sec);
+		std::this_thread::sleep_for(std::chrono::seconds(sleep_time));
+
+		for(size_t i = 0; i < pvThreads.size(); i++)
+			samples[i].push_back({pvThreads[i]->iHashCount.load(), get_timestamp_ms()});
 	}
 
-	printer::inst()->print_msg(L0, "Benchmark Total: %.1f H/S", fTotalHps);
+	// Stop mining
+	n0s::globalStates::inst().switch_work(n0s::miner_work("bench_stop", work, work_size, 0, false, 0, 0), dat);
+
+	// Wait for threads to notice the stop
+	std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+	// Calculate per-thread results
+	double fTotalHps = 0.0;
+	bool json_output = !n0s::params::inst().benchmark_json.empty();
+
+	// JSON output buffer
+	std::string json;
+	if(json_output)
+	{
+		json = "{\n  \"benchmark\": {\n";
+		json += "    \"block_version\": " + std::to_string(block_version) + ",\n";
+		json += "    \"wait_sec\": " + std::to_string(wait_sec) + ",\n";
+		json += "    \"work_sec\": " + std::to_string(work_sec) + ",\n";
+		json += "    \"threads\": [\n";
+	}
+
+	for(size_t i = 0; i < pvThreads.size(); i++)
+	{
+		auto bType = static_cast<n0s::iBackend::BackendType>(pvThreads[i]->backendType);
+		std::string name(n0s::iBackend::getName(bType));
+
+		// Overall hashrate from total hashes / total time
+		auto& ts = samples[i];
+		double elapsed_ms = static_cast<double>(ts.back().timestamp - ts.front().timestamp);
+		uint64_t total_hashes = ts.back().hash_count - ts.front().hash_count;
+		double avg_hps = (elapsed_ms > 0) ? (static_cast<double>(total_hashes) / (elapsed_ms / 1000.0)) : 0.0;
+
+		// Per-interval hashrates for stability analysis
+		std::vector<double> interval_rates;
+		interval_rates.reserve(ts.size() - 1);
+		for(size_t j = 1; j < ts.size(); j++)
+		{
+			double dt_ms = static_cast<double>(ts[j].timestamp - ts[j - 1].timestamp);
+			uint64_t dh = ts[j].hash_count - ts[j - 1].hash_count;
+			if(dt_ms > 0)
+				interval_rates.push_back(static_cast<double>(dh) / (dt_ms / 1000.0));
+		}
+
+		// Calculate stability metrics (coefficient of variation)
+		double mean = 0.0, variance = 0.0, cv = 0.0;
+		if(!interval_rates.empty())
+		{
+			for(double r : interval_rates)
+				mean += r;
+			mean /= static_cast<double>(interval_rates.size());
+
+			for(double r : interval_rates)
+				variance += (r - mean) * (r - mean);
+			variance /= static_cast<double>(interval_rates.size());
+
+			cv = (mean > 0) ? (std::sqrt(variance) / mean * 100.0) : 0.0;
+		}
+
+		printer::inst()->print_msg(L0, "Thread %zu [%s]: %.1f H/s avg | CV: %.1f%% | %zu samples",
+			i, name.c_str(), avg_hps, cv, interval_rates.size());
+		fTotalHps += avg_hps;
+
+		if(json_output)
+		{
+			if(i > 0)
+				json += ",\n";
+			char buf[512];
+			snprintf(buf, sizeof(buf),
+				"      { \"id\": %zu, \"backend\": \"%s\", \"avg_hps\": %.1f, \"cv_pct\": %.2f, \"samples\": %zu, \"total_hashes\": %" PRIu64 " }",
+				i, name.c_str(), avg_hps, cv, interval_rates.size(), total_hashes);
+			json += buf;
+		}
+	}
+
+	printer::inst()->print_msg(L0, "Benchmark Total: %.1f H/s", fTotalHps);
+
+	if(json_output)
+	{
+		char buf[256];
+		snprintf(buf, sizeof(buf),
+			"\n    ],\n    \"total_hps\": %.1f,\n    \"timestamp\": %" PRIu64 "\n  }\n}\n",
+			fTotalHps, static_cast<uint64_t>(system_clock::to_time_t(system_clock::now())));
+		json += buf;
+
+		FILE* f = fopen(n0s::params::inst().benchmark_json.c_str(), "w");
+		if(f)
+		{
+			fputs(json.c_str(), f);
+			fclose(f);
+			printer::inst()->print_msg(L0, "Benchmark results written to: %s", n0s::params::inst().benchmark_json.c_str());
+		}
+		else
+		{
+			printer::inst()->print_msg(L0, "ERROR: Could not write to: %s", n0s::params::inst().benchmark_json.c_str());
+		}
+	}
+
 	return 0;
 }

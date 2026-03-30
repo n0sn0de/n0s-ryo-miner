@@ -64,6 +64,7 @@ struct params
 	int benchmark_block_version = -1;
 	int benchmark_wait_sec = 30;
 	int benchmark_work_sec = 60;
+	std::string benchmark_json;
 
 	params() :
 		executablePrefix(""),

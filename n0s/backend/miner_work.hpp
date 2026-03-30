@@ -43,7 +43,8 @@ struct miner_work
 	{
 		assert(iWorkSize <= sizeof(bWorkBlob));
 		memcpy(this->bWorkBlob, bWork, iWorkSize);
-		memcpy(this->sJobID, sJobID, sizeof(miner_work::sJobID));
+		strncpy(this->sJobID, sJobID, sizeof(miner_work::sJobID) - 1);
+		this->sJobID[sizeof(miner_work::sJobID) - 1] = '\0';
 	}
 
 	miner_work(miner_work&& from) :
