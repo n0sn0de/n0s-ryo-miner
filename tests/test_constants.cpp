@@ -9,7 +9,7 @@
 #include <cstring>
 
 #include "n0s/algorithm/cn_gpu.hpp"
-#include "xmrstak/backend/cryptonight.hpp"
+#include "n0s/backend/cryptonight.hpp"
 
 // Original CUDA __constant__ arrays (copied from cuda_cryptonight_gpu.hpp)
 static const uint32_t orig_look[16][4] = {

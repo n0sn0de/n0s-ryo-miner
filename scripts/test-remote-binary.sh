@@ -23,7 +23,7 @@ echo "Timeout: ${TIMEOUT}s"
 echo "====================================="
 
 # Verify binary exists locally
-if [ ! -f "${BINARY_DIR}/n0s-ryo-miner" ] || [ ! -f "${BINARY_DIR}/libxmrstak_cuda_backend.so" ]; then
+if [ ! -f "${BINARY_DIR}/n0s-ryo-miner" ] || [ ! -f "${BINARY_DIR}/libn0s_cuda_backend.so" ]; then
     echo "❌ Binary not found in ${BINARY_DIR}/"
     ls -la "${BINARY_DIR}/" 2>/dev/null
     exit 1
@@ -33,7 +33,7 @@ fi
 echo "Deploying binary to ${REMOTE}..."
 ssh "${REMOTE}" "rm -rf ${REMOTE_DIR} && mkdir -p ${REMOTE_DIR}"
 cat "${BINARY_DIR}/n0s-ryo-miner" | ssh "${REMOTE}" "cat > ${REMOTE_DIR}/n0s-ryo-miner && chmod +x ${REMOTE_DIR}/n0s-ryo-miner"
-cat "${BINARY_DIR}/libxmrstak_cuda_backend.so" | ssh "${REMOTE}" "cat > ${REMOTE_DIR}/libxmrstak_cuda_backend.so"
+cat "${BINARY_DIR}/libn0s_cuda_backend.so" | ssh "${REMOTE}" "cat > ${REMOTE_DIR}/libn0s_cuda_backend.so"
 echo "Deployed $(du -sh "${BINARY_DIR}" | cut -f1) to ${REMOTE}:${REMOTE_DIR}/"
 
 # Mine test

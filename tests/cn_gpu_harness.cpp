@@ -12,13 +12,13 @@
  * Build (from repo root):
  *   g++ -std=c++17 -O2 -march=native -msse2 -maes -mavx2 \
  *       -I. tests/cn_gpu_harness.cpp \
- *       xmrstak/backend/cpu/crypto/cn_gpu_avx.cpp \
- *       xmrstak/backend/cpu/crypto/cn_gpu_ssse3.cpp \
- *       xmrstak/backend/cpu/crypto/c_blake256.c \
- *       xmrstak/backend/cpu/crypto/c_groestl.c \
- *       xmrstak/backend/cpu/crypto/c_jh.c \
- *       xmrstak/backend/cpu/crypto/c_keccak.c \
- *       xmrstak/backend/cpu/crypto/c_skein.c \
+ *       n0s/backend/cpu/crypto/cn_gpu_avx.cpp \
+ *       n0s/backend/cpu/crypto/cn_gpu_ssse3.cpp \
+ *       n0s/backend/cpu/crypto/c_blake256.c \
+ *       n0s/backend/cpu/crypto/c_groestl.c \
+ *       n0s/backend/cpu/crypto/c_jh.c \
+ *       n0s/backend/cpu/crypto/c_keccak.c \
+ *       n0s/backend/cpu/crypto/c_skein.c \
  *       -o tests/cn_gpu_harness -lpthread
  */
 
@@ -31,7 +31,7 @@
 #include <chrono>
 #include <cfenv>
 
-#include "xmrstak/backend/cryptonight.hpp"
+#include "n0s/backend/cryptonight.hpp"
 
 // Stub out jconf dependency — we don't need runtime config for hashing
 namespace n0s { class globalStates; }
@@ -51,8 +51,8 @@ private:
     coinDescription cd_;
 };
 
-#include "xmrstak/backend/cpu/crypto/cryptonight.h"
-#include "xmrstak/backend/cpu/crypto/cn_gpu.hpp"
+#include "n0s/backend/cpu/crypto/cryptonight.h"
+#include "n0s/backend/cpu/crypto/cn_gpu.hpp"
 
 // Import keccak
 extern "C" {
@@ -102,7 +102,7 @@ static inline void set_float_rounding_mode_nearest() {
 // to avoid pulling in the entire macro nightmare from cryptonight_aesni.h
 
 // AES key generation and round functions
-#include "xmrstak/backend/cpu/crypto/soft_aes.hpp"
+#include "n0s/backend/cpu/crypto/soft_aes.hpp"
 
 static inline __m128i sl_xor_h(__m128i tmp1) {
     __m128i tmp4;

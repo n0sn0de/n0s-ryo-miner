@@ -78,11 +78,11 @@ podman run --rm \
         cmake --build . -j\$(nproc) 2>&1 | tail -10
 
         # Verify
-        test -f bin/n0s-ryo-miner && test -f bin/libxmrstak_cuda_backend.so
+        test -f bin/n0s-ryo-miner && test -f bin/libn0s_cuda_backend.so
 
         # Copy artifacts
         cp bin/n0s-ryo-miner /out/
-        cp bin/libxmrstak_cuda_backend.so /out/
+        cp bin/libn0s_cuda_backend.so /out/
         echo ''
         echo '=== Build artifacts ==='
         ls -lh /out/

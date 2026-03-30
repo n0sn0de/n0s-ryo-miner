@@ -5,7 +5,7 @@ cd "$(dirname "$0")/.."
 
 echo "Compiling C crypto sources..."
 gcc -c -O2 -march=native -msse2 -I. \
-    xmrstak/backend/cpu/crypto/c_keccak.c \
+    n0s/backend/cpu/crypto/c_keccak.c \
     -o tests/c_keccak.o
 
 echo "Compiling C++ sources..."
@@ -13,10 +13,10 @@ g++ -std=c++17 -O2 -march=native -msse2 -maes -mavx2 \
     -I. -c tests/cn_gpu_harness.cpp -o tests/cn_gpu_harness.o
 
 g++ -std=c++17 -O2 -march=native -msse2 -maes -mavx2 \
-    -I. -c xmrstak/backend/cpu/crypto/cn_gpu_avx.cpp -o tests/cn_gpu_avx.o
+    -I. -c n0s/backend/cpu/crypto/cn_gpu_avx.cpp -o tests/cn_gpu_avx.o
 
 g++ -std=c++17 -O2 -march=native -msse2 -maes \
-    -I. -c xmrstak/backend/cpu/crypto/cn_gpu_ssse3.cpp -o tests/cn_gpu_ssse3.o
+    -I. -c n0s/backend/cpu/crypto/cn_gpu_ssse3.cpp -o tests/cn_gpu_ssse3.o
 
 echo "Linking..."
 g++ -O2 -march=native \
