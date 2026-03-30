@@ -28,9 +28,9 @@ struct iBackend
 		NVIDIA = 3u
 	};
 
-	static const char* getName(const BackendType type)
+	static constexpr const char* getName(const BackendType type)
 	{
-		const char* backendNames[] = {
+		constexpr const char* backendNames[] = {
 			"unknown",
 			"cpu",
 			"amd",

@@ -189,5 +189,5 @@ class executor
 	[[nodiscard]] bool get_live_pools(std::vector<jpsock*>& eval_pools);
 	void eval_pool_choice();
 
-	inline size_t sec_to_ticks(size_t sec) { return sec * (1000 / iTickTime); }
+	constexpr size_t sec_to_ticks(size_t sec) const { return sec * (1000 / iTickTime); }
 };
