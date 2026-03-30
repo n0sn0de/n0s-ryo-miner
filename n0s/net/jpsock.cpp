@@ -135,11 +135,11 @@ jpsock::jpsock(size_t id, const char* sAddr, const char* sLogin, const char* sRi
 {
 	sock_init();
 
-	bJsonCallMem = (uint8_t*)malloc(iJsonMemSize);
-	bJsonRecvMem = (uint8_t*)malloc(iJsonMemSize);
-	bJsonParseMem = (uint8_t*)malloc(iJsonMemSize);
+	bJsonCallMem = std::make_unique<uint8_t[]>(iJsonMemSize);
+	bJsonRecvMem = std::make_unique<uint8_t[]>(iJsonMemSize);
+	bJsonParseMem = std::make_unique<uint8_t[]>(iJsonMemSize);
 
-	prv = new opaque_private(bJsonCallMem, bJsonRecvMem, bJsonParseMem);
+	prv = new opaque_private(bJsonCallMem.get(), bJsonRecvMem.get(), bJsonParseMem.get());
 
 #ifndef CONF_NO_TLS
 	if(tls)
@@ -163,9 +163,7 @@ jpsock::~jpsock()
 	delete prv;
 	prv = nullptr;
 
-	free(bJsonCallMem);
-	free(bJsonRecvMem);
-	free(bJsonParseMem);
+	// bJsonCallMem, bJsonRecvMem, bJsonParseMem freed automatically by unique_ptr
 }
 
 std::string&& jpsock::get_call_error()

@@ -6,6 +6,7 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -108,9 +109,9 @@ class jpsock
 	std::atomic<bool> quiet_close;
 	std::atomic<bool> call_error;
 
-	uint8_t* bJsonRecvMem;
-	uint8_t* bJsonParseMem;
-	uint8_t* bJsonCallMem;
+	std::unique_ptr<uint8_t[]> bJsonRecvMem;
+	std::unique_ptr<uint8_t[]> bJsonParseMem;
+	std::unique_ptr<uint8_t[]> bJsonCallMem;
 
 	static constexpr size_t iJsonMemSize = 4096;
 	static constexpr size_t iSockBufferSize = 4096;
