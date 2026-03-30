@@ -228,7 +228,13 @@ void minethd::work_main()
 		assert(sizeof(job_result::sJobID) == sizeof(pool_job::sJobID));
 		uint64_t target = oWork.iTarget;
 
-		XMRSetJob(pGpuCtx, oWork.bWorkBlob, oWork.iWorkSize, target);
+		if(XMRSetJob(pGpuCtx, oWork.bWorkBlob, oWork.iWorkSize, target) != ERR_SUCCESS)
+		{
+			printer::inst()->print_msg(L0, "AMD GPU %u|%u: XMRSetJob failed, skipping job",
+				pGpuCtx->deviceIdx, pGpuCtx->idWorkerOnDevice);
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			continue;
+		}
 
 		if(oWork.bNiceHash)
 			pGpuCtx->Nonce = *reinterpret_cast<uint32_t*>(oWork.bWorkBlob + 39);
@@ -251,7 +257,13 @@ void minethd::work_main()
 			cl_uint results[0x100];
 			memset(results, 0, sizeof(cl_uint) * (0x100));
 
-			XMRRunJob(pGpuCtx, results);
+			if(XMRRunJob(pGpuCtx, results) != ERR_SUCCESS)
+			{
+				printer::inst()->print_msg(L0, "AMD GPU %u|%u: XMRRunJob failed, retrying",
+					pGpuCtx->deviceIdx, pGpuCtx->idWorkerOnDevice);
+				std::this_thread::sleep_for(std::chrono::milliseconds(100));
+				continue;
+			}
 
 			for(size_t i = 0; i < results[0xFF]; i++)
 			{
@@ -310,7 +322,11 @@ void minethd::work_main()
 							bestIntensity);
 					}
 					// update gpu with new intensity
-					XMRSetJob(pGpuCtx, oWork.bWorkBlob, oWork.iWorkSize, target);
+					if(XMRSetJob(pGpuCtx, oWork.bWorkBlob, oWork.iWorkSize, target) != ERR_SUCCESS)
+					{
+						printer::inst()->print_msg(L0, "AMD GPU %u|%u: XMRSetJob failed during auto-tune",
+							pGpuCtx->deviceIdx, pGpuCtx->idWorkerOnDevice);
+					}
 				}
 				// use 3 rounds to warm up with the new intensity
 				else if(cntTestRounds == autoTune + 3)

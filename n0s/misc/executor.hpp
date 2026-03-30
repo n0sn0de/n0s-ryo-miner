@@ -86,8 +86,8 @@ class executor
 	void pool_connect(jpsock* pool);
 
 	constexpr static size_t motd_max_length = 512;
-	bool motd_filter_console(std::string& motd);
-	bool motd_filter_web(std::string& motd);
+	[[nodiscard]] bool motd_filter_console(std::string& motd);
+	[[nodiscard]] bool motd_filter_web(std::string& motd);
 
 	void hashrate_report(std::string& out);
 	void result_report(std::string& out);
@@ -186,7 +186,7 @@ class executor
 	void on_pool_have_job(size_t pool_id, pool_job& oPoolJob);
 	void on_miner_result(size_t pool_id, job_result& oResult);
 	void connect_to_pools(std::list<jpsock*>& eval_pools);
-	bool get_live_pools(std::vector<jpsock*>& eval_pools);
+	[[nodiscard]] bool get_live_pools(std::vector<jpsock*>& eval_pools);
 	void eval_pool_choice();
 
 	inline size_t sec_to_ticks(size_t sec) { return sec * (1000 / iTickTime); }

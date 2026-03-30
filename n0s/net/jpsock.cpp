@@ -219,10 +219,10 @@ bool jpsock::set_socket_error_strerr(const char* a, int res)
 
 void jpsock::jpsock_thread()
 {
-	jpsock_thd_main();
+	(void)jpsock_thd_main();
 
 	if(!bHaveSocketError)
-		set_socket_error("Socket closed.");
+		(void)set_socket_error("Socket closed.");
 
 	executor::inst()->push_event(ex_event(std::move(sSocketError), quiet_close, pool_id));
 
@@ -592,7 +592,7 @@ bool jpsock::cmd_ret_wait(const char* sPacket, opq_json_val& poResult, uint64_t&
 	//This means that there was no socket error, but the server is not taking to us
 	if(!bResult)
 	{
-		set_socket_error("CALL error: Timeout while waiting for a reply");
+		(void)set_socket_error("CALL error: Timeout while waiting for a reply");
 		disconnect();
 		return false;
 	}
@@ -621,7 +621,7 @@ bool jpsock::cmd_login()
 
 	if(!oResult.val->IsObject())
 	{
-		set_socket_error("PARSE error: Login protocol error 1");
+		(void)set_socket_error("PARSE error: Login protocol error 1");
 		disconnect();
 		return false;
 	}
@@ -632,14 +632,14 @@ bool jpsock::cmd_login()
 
 	if(id == nullptr || job == nullptr || !id->IsString())
 	{
-		set_socket_error("PARSE error: Login protocol error 2");
+		(void)set_socket_error("PARSE error: Login protocol error 2");
 		disconnect();
 		return false;
 	}
 
 	if(id->GetStringLength() >= sizeof(sMinerId))
 	{
-		set_socket_error("PARSE error: Login protocol error 3");
+		(void)set_socket_error("PARSE error: Login protocol error 3");
 		disconnect();
 		return false;
 	}

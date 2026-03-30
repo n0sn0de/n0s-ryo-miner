@@ -9,10 +9,10 @@ class base_socket
 {
   public:
 	virtual ~base_socket() = default;
-	virtual bool set_hostname(const char* sAddr) = 0;
-	virtual bool connect() = 0;
-	virtual int recv(char* buf, unsigned int len) = 0;
-	virtual bool send(const char* buf) = 0;
+	[[nodiscard]] virtual bool set_hostname(const char* sAddr) = 0;
+	[[nodiscard]] virtual bool connect() = 0;
+	[[nodiscard]] virtual int recv(char* buf, unsigned int len) = 0;
+	[[nodiscard]] virtual bool send(const char* buf) = 0;
 	virtual void close(bool free) = 0;
 
   protected:
@@ -24,10 +24,10 @@ class plain_socket : public base_socket
   public:
 	plain_socket(jpsock* err_callback);
 
-	bool set_hostname(const char* sAddr) override;
-	bool connect() override;
-	int recv(char* buf, unsigned int len) override;
-	bool send(const char* buf) override;
+	[[nodiscard]] bool set_hostname(const char* sAddr) override;
+	[[nodiscard]] bool connect() override;
+	[[nodiscard]] int recv(char* buf, unsigned int len) override;
+	[[nodiscard]] bool send(const char* buf) override;
 	void close(bool free) override;
 
   private:
@@ -46,10 +46,10 @@ class tls_socket : public base_socket
   public:
 	tls_socket(jpsock* err_callback);
 
-	bool set_hostname(const char* sAddr) override;
-	bool connect() override;
-	int recv(char* buf, unsigned int len) override;
-	bool send(const char* buf) override;
+	[[nodiscard]] bool set_hostname(const char* sAddr) override;
+	[[nodiscard]] bool connect() override;
+	[[nodiscard]] int recv(char* buf, unsigned int len) override;
+	[[nodiscard]] bool send(const char* buf) override;
 	void close(bool free) override;
 
   private:

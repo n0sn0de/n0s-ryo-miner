@@ -31,13 +31,13 @@ class jpsock
 	jpsock(size_t id, const char* sAddr, const char* sLogin, const char* sRigId, const char* sPassword, double pool_weight, bool tls, const char* tls_fp, bool nicehash);
 	~jpsock();
 
-	bool connect(std::string& sConnectError);
+	[[nodiscard]] bool connect(std::string& sConnectError);
 	void disconnect(bool quiet = false);
 
-	bool cmd_login();
-	bool cmd_submit(const char* sJobId, uint32_t iNonce, const uint8_t* bResult, const char* backend_name, uint64_t backend_hashcount, uint64_t total_hashcount, const n0s_algo& algo);
+	[[nodiscard]] bool cmd_login();
+	[[nodiscard]] bool cmd_submit(const char* sJobId, uint32_t iNonce, const uint8_t* bResult, const char* backend_name, uint64_t backend_hashcount, uint64_t total_hashcount, const n0s_algo& algo);
 
-	static bool hex2bin(const char* in, unsigned int len, unsigned char* out);
+	[[nodiscard]] static bool hex2bin(const char* in, unsigned int len, unsigned char* out);
 	static void bin2hex(const unsigned char* in, unsigned int len, char* out);
 
 	inline double get_pool_weight(bool gross_weight)
@@ -65,21 +65,21 @@ class jpsock
 	inline const char* get_rigid() { return usr_rigid.c_str(); }
 	inline bool is_nicehash() { return nicehash; }
 
-	bool get_pool_motd(std::string& strin);
+	[[nodiscard]] bool get_pool_motd(std::string& strin);
 
 	std::string&& get_call_error();
-	bool have_call_error() { return call_error; }
-	bool have_sock_error() { return bHaveSocketError; }
+	[[nodiscard]] bool have_call_error() { return call_error; }
+	[[nodiscard]] bool have_sock_error() { return bHaveSocketError; }
 	inline uint64_t get_current_diff() { return iJobDiff; }
 
 	void save_nonce(uint32_t nonce);
-	bool get_current_job(pool_job& job);
+	[[nodiscard]] bool get_current_job(pool_job& job);
 
-	bool set_socket_error(const char* a);
-	bool set_socket_error(const char* a, const char* b);
-	bool set_socket_error(const char* a, size_t len);
-	bool set_socket_error_strerr(const char* a);
-	bool set_socket_error_strerr(const char* a, int res);
+	[[nodiscard]] bool set_socket_error(const char* a);
+	[[nodiscard]] bool set_socket_error(const char* a, const char* b);
+	[[nodiscard]] bool set_socket_error(const char* a, size_t len);
+	[[nodiscard]] bool set_socket_error_strerr(const char* a);
+	[[nodiscard]] bool set_socket_error_strerr(const char* a, int res);
 
   private:
 	std::string net_addr;
@@ -121,10 +121,10 @@ class jpsock
 	struct opq_json_val;
 
 	void jpsock_thread();
-	bool jpsock_thd_main();
-	bool process_line(char* line, size_t len);
-	bool process_pool_job(const opq_json_val* params, const uint64_t messageId);
-	bool cmd_ret_wait(const char* sPacket, opq_json_val& poResult, uint64_t& messageId);
+	[[nodiscard]] bool jpsock_thd_main();
+	[[nodiscard]] bool process_line(char* line, size_t len);
+	[[nodiscard]] bool process_pool_job(const opq_json_val* params, const uint64_t messageId);
+	[[nodiscard]] bool cmd_ret_wait(const char* sPacket, opq_json_val& poResult, uint64_t& messageId);
 
 	char sMinerId[64];
 	std::atomic<uint64_t> iJobDiff;
