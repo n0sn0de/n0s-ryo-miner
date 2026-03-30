@@ -74,7 +74,7 @@ minethd::minethd(miner_work& pWork, size_t iNo, GpuContext* ctx, const jconf::th
 
 extern "C"
 {
-		std::vector<iBackend*>* n0s_start_backend(uint32_t threadOffset, miner_work& pWork, environment& env)
+	std::vector<iBackend*> n0s_start_backend(uint32_t threadOffset, miner_work& pWork, environment& env)
 	{
 		environment::inst(&env);
 		return opencl::minethd::thread_starter(threadOffset, pWork);
@@ -105,9 +105,9 @@ bool minethd::init_gpus()
 
 std::vector<GpuContext> minethd::vGpuData;
 
-std::vector<iBackend*>* minethd::thread_starter(uint32_t threadOffset, miner_work& pWork)
+std::vector<iBackend*> minethd::thread_starter(uint32_t threadOffset, miner_work& pWork)
 {
-	std::vector<iBackend*>* pvThreads = new std::vector<iBackend*>();
+	std::vector<iBackend*> pvThreads;
 
 	if(!configEditor::file_exist(params::inst().configFileAMD))
 	{
@@ -130,7 +130,7 @@ std::vector<iBackend*>* minethd::thread_starter(uint32_t threadOffset, miner_wor
 	}
 
 	size_t i, n = jconf::inst()->GetThreadCount();
-	pvThreads->reserve(n);
+	pvThreads.reserve(n);
 
 	jconf::thd_cfg cfg;
 	for(i = 0; i < n; i++)
@@ -147,7 +147,7 @@ std::vector<iBackend*>* minethd::thread_starter(uint32_t threadOffset, miner_wor
 			printer::inst()->print_msg(L1, "Starting %s GPU (OpenCL) thread %d, no affinity.", backendName.c_str(), i);
 
 		minethd* thd = new minethd(pWork, i + threadOffset, &vGpuData[i], cfg);
-		pvThreads->push_back(thd);
+		pvThreads.push_back(thd);
 	}
 
 	return pvThreads;

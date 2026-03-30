@@ -51,10 +51,9 @@ bool BackendConnector::self_test()
 	return cpu::minethd::self_test();
 }
 
-std::vector<iBackend*>* BackendConnector::thread_starter(miner_work& pWork)
+std::vector<iBackend*> BackendConnector::thread_starter(miner_work& pWork)
 {
-
-	std::vector<iBackend*>* pvThreads = new std::vector<iBackend*>;
+	std::vector<iBackend*> pvThreads;
 
 #ifndef CONF_NO_OPENCL
 	if(params::inst().useAMD)
@@ -62,13 +61,11 @@ std::vector<iBackend*>* BackendConnector::thread_starter(miner_work& pWork)
 		const std::string backendName = n0s::params::inst().openCLVendor;
 		plugin amdplugin;
 		amdplugin.load(backendName, "n0s_opencl_backend");
-		std::vector<iBackend*>* amdThreads = amdplugin.startBackend(static_cast<uint32_t>(pvThreads->size()), pWork, environment::inst());
-		size_t numWorkers = 0u;
-		if(amdThreads != nullptr)
+		std::vector<iBackend*> amdThreads = amdplugin.startBackend(static_cast<uint32_t>(pvThreads.size()), pWork, environment::inst());
+		size_t numWorkers = amdThreads.size();
+		if(numWorkers > 0)
 		{
-			pvThreads->insert(std::end(*pvThreads), std::begin(*amdThreads), std::end(*amdThreads));
-			numWorkers = amdThreads->size();
-			delete amdThreads;
+			pvThreads.insert(std::end(pvThreads), std::begin(amdThreads), std::end(amdThreads));
 		}
 		if(numWorkers == 0)
 			printer::inst()->print_msg(L0, "WARNING: backend %s (OpenCL) disabled.", backendName.c_str());
@@ -87,12 +84,11 @@ std::vector<iBackend*>* BackendConnector::thread_starter(miner_work& pWork)
 			{
 				printer::inst()->print_msg(L0, "NVIDIA: try to load library '%s'", name.c_str());
 				nvidiaplugin.load("NVIDIA", name);
-				std::vector<iBackend*>* nvidiaThreads = nvidiaplugin.startBackend(static_cast<uint32_t>(pvThreads->size()), pWork, environment::inst());
-				if(nvidiaThreads != nullptr)
+				std::vector<iBackend*> nvidiaThreads = nvidiaplugin.startBackend(static_cast<uint32_t>(pvThreads.size()), pWork, environment::inst());
+				numWorkers = nvidiaThreads.size();
+				if(numWorkers > 0)
 				{
-					pvThreads->insert(std::end(*pvThreads), std::begin(*nvidiaThreads), std::end(*nvidiaThreads));
-					numWorkers = nvidiaThreads->size();
-					delete nvidiaThreads;
+					pvThreads.insert(std::end(pvThreads), std::begin(nvidiaThreads), std::end(nvidiaThreads));
 				}
 				else
 				{
@@ -112,7 +108,7 @@ std::vector<iBackend*>* BackendConnector::thread_starter(miner_work& pWork)
 	}
 #endif
 
-	globalStates::inst().iThreadCount = pvThreads->size();
+	globalStates::inst().iThreadCount = pvThreads.size();
 	return pvThreads;
 }
 

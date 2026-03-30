@@ -868,7 +868,7 @@ int main(int argc, char* argv[])
 int do_benchmark(int block_version, int wait_sec, int work_sec)
 {
 	using namespace std::chrono;
-	std::vector<n0s::iBackend*>* pvThreads;
+	std::vector<n0s::iBackend*> pvThreads;
 
 	printer::inst()->print_msg(L0, "Prepare benchmark for block version %d", block_version);
 
@@ -900,12 +900,12 @@ int do_benchmark(int block_version, int wait_sec, int work_sec)
 	n0s::globalStates::inst().switch_work(n0s::miner_work("", work, 128, 0, false, 0, 0), dat);
 
 	double fTotalHps = 0.0;
-	for(uint32_t i = 0; i < pvThreads->size(); i++)
+	for(uint32_t i = 0; i < pvThreads.size(); i++)
 	{
-		double fHps = pvThreads->at(i)->iHashCount;
-		fHps /= (pvThreads->at(i)->iTimestamp - iStartStamp) / 1000.0;
+		double fHps = pvThreads.at(i)->iHashCount;
+		fHps /= (pvThreads.at(i)->iTimestamp - iStartStamp) / 1000.0;
 
-		auto bType = static_cast<n0s::iBackend::BackendType>(pvThreads->at(i)->backendType);
+		auto bType = static_cast<n0s::iBackend::BackendType>(pvThreads.at(i)->backendType);
 		std::string name(n0s::iBackend::getName(bType));
 
 		printer::inst()->print_msg(L0, "Benchmark Thread %u %s: %.1f H/S", i, name.c_str(), fHps);
