@@ -117,6 +117,13 @@ tests/
 
 ## Cumulative Progress (All Sessions)
 
+**Session 18 (2026-03-30 03:35 AM):**
+- ✅ Split AMD `gpu.cpp` (1003 lines) into focused modules: gpu_utils, gpu_platform, gpu_device, gpu (4 files, 373-421 lines each)
+- ✅ Wrapped all AMD GPU functions in `n0s::amd` namespace (was global scope)
+- ✅ Updated minethd.cpp and autoAdjust.hpp with cross-namespace `using` declarations
+- Net: +220 lines (8 new files, better organization), zero behavior changes
+- AMD backend now cleanly organized: utilities, platform discovery, device init, main interface
+
 **Session 17 (2026-03-30 02:50 AM):**
 - ✅ Added `[[nodiscard]]` to 40+ critical error-returning functions (network, backends, executor, httpd)
 - ✅ Properly handled all call sites (error checks in AMD minethd, (void) casts for error logging)
@@ -131,7 +138,7 @@ tests/
 - Net: -10 raw new/delete pairs, 6 memory leaks fixed
 - Remaining raw `new`: 13 (8 singletons, 3 minethd thread objects, 2 backend singletons)
 
-~320 files changed. Net -10,500+ lines removed. Our code: 16,136 lines (down from ~43K). Clean C++17, zero warnings, zero C files, Linux-only, single-purpose. Smart pointers + RAII replacing manual memory management. [[nodiscard]] on critical functions.
+~330 files changed. Net -10,300+ lines removed. Our code: ~16,350 lines (down from ~43K). Clean C++17, zero warnings, zero C files, Linux-only, single-purpose. Smart pointers + RAII replacing manual memory management. [[nodiscard]] on critical functions. AMD backend now modular.
 
 ---
 
@@ -140,11 +147,12 @@ tests/
 ### Near-Term Opportunities
 
 **Next Session Targets:**
-1. **gpu.cpp split** (~4 hours) — Extract device_init, kernel_compile, mining_loop into separate functions. Current gpu.cpp is 1,200+ lines and hard to reason about.
-2. **More constexpr** — Expand to more compile-time constants (remaining simple getters, lookup tables)
-3. **Final cleanup pass** — Review for any remaining modernization opportunities
+1. **More constexpr** (~2 hours) — Expand to remaining compile-time constants (lookup tables, simple getters, config values)
+2. **NVIDIA backend modularization** (~4 hours) — Similar split for CUDA code (currently cuda_kernels.cu is 1400+ lines)
+3. **Documentation pass** (~2 hours) — Add function-level comments to complex GPU kernels (Phase 2, Phase 3, etc.)
 
 **Completed Modernizations:**
+- ✅ **AMD GPU modularization** — Monolithic 1003-line gpu.cpp split into 4 focused modules (S18)
 - ✅ **[[nodiscard]]** — 40+ critical error-returning functions (S17)
 - ✅ **constexpr** — Compile-time functions (S17: getName, sec_to_ticks). Algorithm constants already done
 - ✅ **Smart pointers** — Thread vectors, socket, PIMPL (S16). Telemetry, jpsock buffers/thread, executor telem (S9). 13 raw `new` remain (singletons + minethd — intentional)
@@ -210,15 +218,35 @@ Only after structural work is complete (check the Remaining things in succes cri
 - For standalone error logs in already-failed paths, (void) cast documents intentional ignore
 - constexpr opportunities exist but need careful analysis (macros → constexpr needs full namespace support)
 
+---
+
+## Session 18 Notes (2026-03-30 03:35 AM)
+
+**What we accomplished:**
+- Split monolithic AMD `gpu.cpp` (1003 lines) into focused modules:
+  - `gpu_utils.cpp/hpp` (78 lines): Helper functions (LoadTextFile, string_replace_all, etc.)
+  - `gpu_platform.cpp/hpp` (212 lines): Platform/device discovery (getNumPlatforms, getAMDPlatformIdx, getAMDDevices)
+  - `gpu_device.cpp/hpp` (421 lines): Device initialization + timing (InitOpenCLGpu, updateTimings, interleaveAdjustDelay)
+  - `gpu.cpp` (373 lines): Main OpenCL interface (InitOpenCL, XMRSetJob, XMRRunJob)
+- Wrapped all functions in `n0s::amd` namespace (was global scope)
+- Updated `minethd.cpp` and `autoAdjust.hpp` with `using` declarations for cross-namespace access
+- Zero warnings, bit-exact hashes verified via test harness
+
+**Key insights:**
+- Single-responsibility modules are far easier to reason about than 1000-line monoliths
+- Namespace wrapping forces explicit visibility — no more accidental global pollution
+- CMake glob patterns (`*.cpp`) automatically pick up new files — no manual listing needed
+- Cross-namespace `using` declarations keep client code clean without polluting every file
+
 **Next session priorities:**
-1. **gpu.cpp refactor** — Split 1000+ line file into device_init + kernel_compile + mining_loop
-2. **More constexpr** — Look for remaining opportunities (simple getters, lookup tables)
+1. **More constexpr** — Expand to remaining compile-time constants (lookup tables, simple getters)
+2. **NVIDIA gpu code consolidation** — Similar split for CUDA backend (currently ~4500 lines in cuda_kernels.cu)
 3. **Documentation pass** — Add function-level comments to complex GPU kernels
 
 **Lessons learned:**
-- Modern C++ safety features (nodiscard, constexpr) improve code quality without changing behavior
-- Test harness gives confidence — every change verified bit-exact
-- Small focused branches → quick merge → tight feedback loop works well
+- Extract early, extract often — waiting until a file is 2000+ lines makes it painful
+- Test-driven refactoring gives confidence — every structural change verified bit-exact
+- Namespace hygiene matters — wrap everything, `using` only what you need
 
 ---
 
