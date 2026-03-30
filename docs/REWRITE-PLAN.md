@@ -143,7 +143,7 @@ tests/
 ### Performance Optimization (P1)
 - ⏳ Deeply review the CN-GPU-WHITEPAPER.md to understand the algo in conjunction with the codebase to assess approach to optimization opportunities
 - ✅ Profile on AMD RDNA4 (S37: --profile flag, per-phase timing, baseline established)
-- ⏳ Profile on NVIDIA Pascal/Turing/Ampere (port --profile to CUDA backend)
+- ✅ Profile on NVIDIA Pascal/Turing (S38: --profile ported to CUDA, baselines established)
 - ⏳ Optimize shared memory usage in Phase 3 kernel
 - ⏳ Explore occupancy improvements
 - ⏳ Consider CUDA Graphs for kernel chaining
@@ -168,36 +168,6 @@ tests/
 
 ---
 
-## Session 36 Notes (2026-03-30 04:12 PM) — Benchmark Harness with Stability Metrics ⚡
-
-**What we accomplished:**
-- ✅ **Fixed benchmark mode** — work_size was 128 bytes, exceeding OpenCL's 124-byte limit → XMRSetJob failed every time. Changed to 76 bytes (realistic cn_gpu block size)
-- ✅ **Added interval sampling** — benchmark now samples hashrate every 5 seconds and computes coefficient of variation (CV%) for stability tracking
-- ✅ **Added `--benchmark-json` CLI flag** — structured JSON output with per-thread avg H/s, CV%, sample count, and total hashes for A/B comparison scripting
-- ✅ **Fixed miner_work sJobID buffer overread** — `memcpy` copied 64 bytes from a 1-byte string literal `""`, replaced with `strncpy` + null termination (eliminated GCC -Wstringop-overread warning)
-- ✅ **Created `tests/benchmark.sh`** — wrapper script with `--quick`/`--long`/`--compare` modes for easy benchmarking
-- ✅ **Verified**: Zero warnings (our code), 3/3 golden hashes pass, live mining accepted shares, benchmark produces **4505.4 H/s @ 3.2% CV on RX 9070 XT**
-
-**Key insights:**
-- The built-in benchmark was completely broken (XMRSetJob always failed) — now it actually works and produces meaningful data
-- CV% is a better stability metric than min/max because it normalizes against the mean
-- JSON output enables automated A/B perf comparison — critical for optimization work
-- The `strncpy` fix for sJobID was a real buffer overread bug, not just a warning
-
-**Baseline established:**
-- **RX 9070 XT (RDNA4)**: 4505.4 H/s, CV 3.2% (very stable)
-- CUDA nodes (nos2/nosnode) need testing when available
-
-**Next session priorities:**
-1. **Performance profiling with `rocprof`** — Identify kernel-level hotspots on AMD
-2. **Run benchmark on CUDA nodes** — Establish NVIDIA baselines (GTX 1070 Ti, RTX 2070)
-3. **Kernel documentation pass** — Phase 2/3 GPU kernels need function-level comments
-4. **Begin autotuning framework** — Use benchmark harness as the scoring backend
-
----
-
----
-
 ## Session 37 Notes (2026-03-30 04:49 PM) — Per-Kernel Profiling + RDNA4 Baseline 🧘
 
 **What we accomplished:**
@@ -208,28 +178,39 @@ tests/
 - ✅ **Established RDNA4 baseline** — `docs/benchmarks/BASELINE-RX9070XT.md`
 - ✅ **Verified**: Zero warnings, 3/3 golden hashes, live mining all shares accepted with profiling active
 
-**RX 9070 XT Profiling Results:**
+---
 
-| Phase | Benchmark (µs) | % | Live Mining (µs) | % |
-|-------|---------------|---|-------------------|---|
-| Phase 1: Keccak prepare | 127 | 0.0% | 213 | 0.1% |
-| Phase 2: Scratchpad expand | 39,795 | 11.6% | 34,212 | 8.2% |
-| **Phase 3: GPU compute** | **239,331** | **69.8%** | **310,201** | **74.1%** |
-| Phase 4+5: Implode+final | 63,543 | 18.5% | 73,969 | 17.7% |
+## Session 38 Notes (2026-03-30 05:52 PM) — CUDA Profiling + 3-GPU Baseline Matrix 🔔
+
+**What we accomplished:**
+- ✅ **Ported `--profile` to CUDA backend** — `cryptonight_core_cpu_hash_profile()` using `cudaEvent_t` timing
+- ✅ **Shared `n0s::KernelProfile` struct** — `kernel_profile.hpp` with `print_summary(backend_name, intensity)`
+- ✅ **Wired into CUDA minethd** — 50-dispatch profiling with automatic summary, matches OpenCL behavior
+- ✅ **Built + tested on all 3 nodes** — nitro (OpenCL), nos2 (CUDA 11.8), nosnode (CUDA 12.6)
+- ✅ **Established full 3-GPU baseline** — `docs/benchmarks/BASELINE-ALL-GPUS.md`
+- ✅ **Verified**: Clean builds, golden hashes pass, benchmark runs with profiling on all GPUs
+
+**3-GPU Profiling Results:**
+
+| Phase | RX 9070 XT (RDNA4) | GTX 1070 Ti (Pascal) | RTX 2070 (Turing) |
+|-------|--------------------:|---------------------:|-------------------:|
+| Phase 2: Scratchpad | 41,532 µs (12.0%) | 16,997 µs (2.5%) | 23,983 µs (3.1%) |
+| **Phase 3: GPU compute** | **241,069 µs (69.5%)** | **549,414 µs (82.4%)** | **665,811 µs (85.3%)** |
+| Phase 4+5: Implode | 64,201 µs (18.5%) | 100,656 µs (15.1%) | 91,047 µs (11.7%) |
+| **Hashrate** | **4,427.5 H/s** | **1,595.0 H/s** | **2,213.0 H/s** |
 
 **Key insights:**
-- Phase 3 dominates at 70-74% — this is the 49,152-iteration FP math loop with 16 cooperative threads
-- Phase 3 has 4 `mem_fence()` calls per iteration = 196,608 barriers total — potential reduction target
-- Phase 3 does 32 FP divisions per thread per iteration — division is the most expensive FP op
-- Phase 4+5 at 18% is secondary — AES over full 2MB scratchpad
-- Live mining overhead ~18% from pool network + interleave delays (not kernel-side)
-- `clFinish()` between phases adds ~10% overhead vs pipelined execution — profile numbers are conservative
+- Phase 3 dominates even MORE on NVIDIA (82-85%) than AMD (69.5%) — NVIDIA's FP division is relatively slower
+- RTX 2070 is slower than expected given its CUDA core count — confirms Phase 3 is division-bound, not compute-bound
+- Phase 2 (Keccak expand) is very cheap on NVIDIA — their scalar pipeline handles it well
+- AMD RDNA4's wider SIMD + faster division pipeline gives it a huge edge on this algo
+- Full baseline matrix now enables A/B testing on any optimization across all 3 architectures
 
 **Next session priorities:**
-1. **Phase 3 optimization** — Analyze shared memory bank conflicts, barrier reduction opportunities
-2. **CUDA profiling** — Port `--profile` to NVIDIA backend, establish Pascal/Turing baselines
-3. **Occupancy analysis** — Check if workgroup size (WORKSIZE * 16) is optimal for RDNA4
-4. **Begin autotuning** — Use profiling + benchmark harness to sweep intensity/worksize combos
+1. **Phase 3 optimization** — Analyze shared memory bank conflicts, barrier reduction
+2. **Occupancy analysis** — Check workgroup sizing across all 3 architectures
+3. **Begin autotuning** — Sweep intensity/worksize combos using benchmark harness
+4. **Phase 3 FP division alternatives** — Can we reduce division count or use approximations?
 
 ---
 
