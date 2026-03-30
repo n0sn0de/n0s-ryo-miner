@@ -53,12 +53,10 @@ struct params
 	std::string configFileAMD;
 	std::string rootAMDCacheDir;
 	std::string configFileNVIDIA;
-	std::string configFileCPU;
 
 	std::string outputFile;
 	int h_print_time = -1;
 
-	bool allowUAC = true;
 	std::string minerArg0;
 	std::string minerArgs;
 
@@ -78,8 +76,7 @@ struct params
 		configFilePools("pools.txt"),
 		configFileAMD("amd.txt"),
 		rootAMDCacheDir(get_home() + "/.openclcache/"),
-		configFileNVIDIA("nvidia.txt"),
-		configFileCPU("cpu.txt")
+		configFileNVIDIA("nvidia.txt")
 	{
 	}
 };

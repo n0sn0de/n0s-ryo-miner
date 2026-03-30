@@ -254,7 +254,7 @@ std::vector<iBackend*> minethd::thread_starter(uint32_t threadOffset, miner_work
 {
 	std::vector<iBackend*> pvThreads;
 
-	if(!configEditor::file_exist(params::inst().configFileCPU))
+	if(!configEditor::file_exist(std::string("cpu.txt")))
 	{
 #ifndef CONF_NO_HWLOC
 		autoAdjustHwloc adjustHwloc;

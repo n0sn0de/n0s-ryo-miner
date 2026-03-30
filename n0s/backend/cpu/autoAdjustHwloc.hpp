@@ -47,7 +47,7 @@ public:
 
 		if(useCryptonight_gpu)
 		{
-			printer::inst()->print_msg(L0, "WARNING: CPU mining will be disabled because cryptonight_gpu is not suitable for CPU mining. You can uncomment the auto generated config in %s to enable CPU mining.", params::inst().configFileCPU.c_str());
+			printer::inst()->print_msg(L0, "WARNING: CPU mining will be disabled because cryptonight_gpu is not suitable for CPU mining. You can uncomment the auto generated config in %s to enable CPU mining.", std::string("cpu.txt").c_str());
 			conf += "/*\n//CPU config is disabled by default because cryptonight_gpu is not suitable for CPU mining.\n";
 		}
 
@@ -86,8 +86,8 @@ public:
 			conf += "*/\n";
 
 		configTpl.replace("CPUCONFIG", conf);
-		configTpl.write(params::inst().configFileCPU);
-		printer::inst()->print_msg(L0, "CPU configuration stored in file '%s'", params::inst().configFileCPU.c_str());
+		configTpl.write(std::string("cpu.txt"));
+		printer::inst()->print_msg(L0, "CPU configuration stored in file '%s'", std::string("cpu.txt").c_str());
 		/* Destroy topology object. */
 		hwloc_topology_destroy(topology);
 

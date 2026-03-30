@@ -49,7 +49,7 @@ class autoAdjust
 
 		if(useCryptonight_gpu)
 		{
-			printer::inst()->print_msg(L0, "WARNING: CPU mining will be disabled because cryptonight_gpu is not suitable for CPU mining. You can uncomment the auto generated config in %s to enable CPU mining.", params::inst().configFileCPU.c_str());
+			printer::inst()->print_msg(L0, "WARNING: CPU mining will be disabled because cryptonight_gpu is not suitable for CPU mining. You can uncomment the auto generated config in %s to enable CPU mining.", std::string("cpu.txt").c_str());
 			conf += "/*\n//CPU config is disabled by default because cryptonight_gpu is not suitable for CPU mining.\n";
 		}
 		if(!detectL3Size() || L3KB_size < halfHashMemSizeKB || L3KB_size > (halfHashMemSizeKB * 2048u))
@@ -106,8 +106,8 @@ class autoAdjust
 			conf += "*/\n";
 
 		configTpl.replace("CPUCONFIG", conf);
-		configTpl.write(params::inst().configFileCPU);
-		printer::inst()->print_msg(L0, "CPU configuration stored in file '%s'", params::inst().configFileCPU.c_str());
+		configTpl.write(std::string("cpu.txt"));
+		printer::inst()->print_msg(L0, "CPU configuration stored in file '%s'", std::string("cpu.txt").c_str());
 
 		return true;
 	}
