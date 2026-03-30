@@ -38,11 +38,9 @@
 #include "hwlocMemory.hpp"
 #include "n0s/backend/miner_work.hpp"
 
+#include "autoAdjust.hpp"
 #ifndef CONF_NO_HWLOC
 #include "autoAdjustHwloc.hpp"
-#include "autoAdjust.hpp"
-#else
-#include "autoAdjust.hpp"
 #endif
 
 #include <cassert>

@@ -56,7 +56,6 @@
 #include "n0s/backend/miner_work.hpp"
 
 #include "n0s/http/webdesign.hpp"
-#include "n0s/jconf.hpp"
 #include "n0s/misc/console.hpp"
 #include "n0s/version.hpp"
 
