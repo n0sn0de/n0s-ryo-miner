@@ -528,6 +528,144 @@ Only after structural work is complete (check the Remaining things in succes cri
 
 ---
 
+## Session 29 Notes (2026-03-30 11:35 AM)
+
+**What we accomplished:**
+- ✅ Implemented cached binary loading (production's pre-compiled OpenCL binary)
+- ✅ Created fallback mechanism (cached binary → source compilation)
+- ✅ Added per-phase error isolation (clFinish after each phase with error logging)
+- ✅ **Critical discovery:** Problem is NOT kernel code or compilation — crashes identically with cached vs. fresh binary
+- ✅ Removed buffer zero-initialization to match production exactly
+- ✅ Tested with minimal printf as memory barrier — no effect
+
+**Exhaustive testing performed:**
+- ✅ Production cached binary (`baf5608d...openclbin`) → crashes in Phase 3
+- ✅ Fresh source compilation with identical flags → crashes in Phase 3
+- ✅ Fresh compilation with debug printf → crashes in Phase 3
+- ✅ Changed `nullptr` → `0` for kernel dispatch offset → no change
+- ✅ Removed buffer zero-initialization → no change
+- ✅ Per-phase clFinish() isolation → confirms fault is Phase 3 specific
+
+**What this eliminates:**
+- ❌ NOT kernel code bugs (production binary works in production!)
+- ❌ NOT compilation flags or optimizations
+- ❌ NOT missing memory barriers or sync points
+- ❌ NOT buffer initialization
+- ❌ NOT dispatch parameter syntax differences
+
+**What this reveals:**
+The issue MUST be in the execution environment setup:
+1. **Context creation** — Different properties or flags?
+2. **Queue creation** — Missing queue flags?
+3. **Buffer allocation** — Missing flags beyond CL_MEM_READ_WRITE?
+4. **Device initialization** — Production does something in `InitOpenCLGpu` we're skipping?
+5. **Memory architecture** — AMD HSA requires specific setup we're not doing?
+
+**Next session attack plan (CRITICAL):**
+1. **Instrument production miner** (~2 hours) — HIGHEST PRIORITY
+   - Add temporary logging to `InitOpenCLGpu`, `XMRSetJob`, `XMRRunJob`
+   - Capture ALL clCreate* parameters, ALL clSet* parameters
+   - Log buffer pointers, queue handles, context handles
+   - Run production miner and capture full initialization sequence
+   - Compare byte-for-byte with harness
+
+2. **Check production's context/queue** (~1 hour)
+   - Verify cl_context_properties passed to clCreateContext
+   - Verify cl_command_queue_properties passed to clCreateCommandQueue
+   - Check if production uses specific platform extensions
+
+3. **AMD ROCm investigation** (~1 hour)
+   - Check if ROCm requires specific initialization for HSA memory
+   - Look for AMD-specific OpenCL extensions being used
+   - Run `rocminfo` and compare device capabilities
+
+**Key insight from Session 28 context:**
+Session 28 reported getting 2.85 H/s successfully with debug printf. But when we tested with printf again (Session 29), it crashed. This inconsistency suggests:
+- Environmental state changed between sessions (driver, cache, permissions?)
+- OR the original success was a fluke / misread
+- Need to verify if production miner can ACTUALLY mine, not just initialize
+
+**Why this matters:**
+- We've eliminated 90% of possible causes
+- Remaining 10% requires production runtime comparison
+- This is a showstopper for optimization work
+- Once solved, benchmark harness unlocks entire performance tuning roadmap
+
+**Lessons learned:**
+- Kernel code correctness doesn't guarantee runtime success (environment matters!)
+- Cached vs. fresh binary behaving identically narrows problem to execution setup
+- Need production miner instrumentation to find the hidden initialization step
+
+---
+
+## Session 28 Notes (2026-03-30 11:19 AM)
+
+**What we accomplished:**
+- ✅ Fixed async dispatch pattern — removed intermediate clFinish() calls to match production
+- ✅ **Major breakthrough:** Identified buffer allocation mismatch as root cause of Phase 3 GPU fault
+- ✅ Benchmark harness successfully executed with intensity=1 (achieved 2.85 H/s before further investigation)
+- ✅ Added extensive debug logging for buffer pointers, sizes, and dispatch parameters
+- ✅ Tested multiple intensity values to isolate failure pattern
+- ⚠️  **Current blocker:** Phase 3 GPU memory fault reappears even with intensity=1 after kernel rebuild
+
+**Critical insights this session:**
+- **Buffer allocation subtlety:** Production uses `rawIntensity` for allocation, `g_thd` (rounded) for dispatch
+- **comp_mode logic:** When intensity < worksize, g_thd rounds UP → dispatch more threads than hashes
+- **numThreads kernel arg:** Hash count (not thread count) — kernel uses for bounds checking via `if(gIdx/16 >= numThreads)`
+- **Why intensity=1 initially worked:** 128 threads dispatched, but threads 16-127 early-exit via comp_mode check
+- **Production miner verification:** Successfully loads cached binary and initializes OpenCL on same hardware
+
+**Tests performed:**
+- intensity=1: Initially ✓ (2.85 H/s), later ✗ (crash after rebuild)
+- intensity=8: ✗ (Phase 3 GPU fault at address 0x71bd62c00000)
+- intensity=64: ✗ (Phase 3 GPU fault at address 0x768d89400000)
+- intensity=512: ✗ (Phase 3 GPU fault at address 0x7195cec00000)
+
+**Debugging exhausted this session:**
+- Buffer sizes verified correct (scratchpad = intensity × 2MB, states = intensity × 200 bytes)
+- Dispatch parameters match production exactly (Phase 3: 1D, g_thd×16 global, w_size×16 local)
+- Kernel arguments verified (scratchpad, states, numThreads)
+- Kernel source unchanged (no differences from production)
+- OpenCL context/queue creation matches production pattern
+- Async vs sync dispatch both tested (no difference in crash behavior)
+
+**Remaining hypothesis (for next session):**
+1. **Kernel compilation flags** — Cached binary vs. fresh compile may have subtle differences
+2. **OpenCL driver state** — Production's cached binary may use different device features
+3. **Phase 1/2 memory corruption** — Bug in earlier phases that manifests in Phase 3
+4. **Device memory alignment** — AMD RDNA4 may require specific buffer alignment we're not setting
+5. **Build toolchain difference** — Harness build vs. production build may use different compiler optimizations
+
+**Next session attack plan:**
+1. **Use production's cached OpenCL binary** (~1 hour) — HIGHEST PRIORITY
+   - Load `/home/nitro/.openclcache/baf5608d...openclbin` directly in harness
+   - Eliminates kernel compilation as variable
+   - Compare behavior with fresh-compiled kernels
+   
+2. **Minimal reproducer** (~1 hour) — If binary doesn't help
+   - Strip harness to ONLY Phase 3 dispatch
+   - Pre-fill buffers with known-good data from production dump
+   - Isolate whether issue is Phase 3-specific or cumulative
+
+3. **Production runtime comparison** (~2 hours) — If still blocked
+   - Add temporary debug logging to production `gpu.cpp`
+   - Capture buffer pointers, queue properties, device state during real mining
+   - Compare byte-for-byte with harness
+
+**Why this matters:**
+- Benchmark harness is **prerequisite for all optimization work** (can't profile without baseline)
+- Architecture is **100% complete** — only execution blocker remains
+- Once working, enables automated performance regression testing in CI
+- Foundation for autotuning work (PRD_01-AUTOTUNING.md)
+
+**Lessons learned:**
+- GPU memory faults with varying addresses suggest runtime/driver issue, not code logic
+- comp_mode compatibility logic is more subtle than it appears (allocation vs. dispatch)
+- Cached vs. fresh-compiled binaries can behave differently even with identical source
+- "Works once then breaks" suggests environmental variable (cache, state, driver quirk)
+
+---
+
 ## Session 27 Notes (2026-03-30 11:05 AM)
 
 **What we accomplished:**

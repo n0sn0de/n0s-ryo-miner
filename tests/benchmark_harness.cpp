@@ -232,17 +232,6 @@ static bool init_opencl_device(OpenCLDevice* dev, int device_idx, size_t intensi
     check_cl(err, "clCreateBuffer(output)");
     fprintf(stderr, "[OPENCL] Created output buffer: ptr=%p\n", (void*)dev->output_buf);
 
-    // Zero out buffers to ensure proper GPU memory mapping
-    {
-        std::vector<char> zero_buf(scratchpad_bytes, 0);
-        err = clEnqueueWriteBuffer(dev->queue, dev->scratchpad, CL_TRUE, 0, scratchpad_bytes, zero_buf.data(), 0, nullptr, nullptr);
-        check_cl(err, "clEnqueueWriteBuffer(zero scratchpad)");
-        
-        zero_buf.resize(states_bytes);
-        err = clEnqueueWriteBuffer(dev->queue, dev->states, CL_TRUE, 0, states_bytes, zero_buf.data(), 0, nullptr, nullptr);
-        check_cl(err, "clEnqueueWriteBuffer(zero states)");
-    }
-
     fprintf(stderr, "[OPENCL] Device %d: %s (intensity=%zu, worksize=%zu, g_thd=%zu)\n", 
             device_idx, dev->device_name, intensity, worksize, g_thd);
     fprintf(stderr, "[OPENCL] Buffer sizes: scratchpad=%zu MB (%.1f MB/hash), states=%zu bytes (%zu bytes/hash)\n",
@@ -251,7 +240,69 @@ static bool init_opencl_device(OpenCLDevice* dev, int device_idx, size_t intensi
     return true;
 }
 
-// Load and compile CN-GPU OpenCL kernels
+// Load precompiled binary from production miner's cache
+static bool load_cached_binary(OpenCLDevice* dev) {
+    cl_int err;
+    
+    // Production miner's cached binary (known working on this hardware)
+    const char* cache_path = "/home/nitro/.openclcache/baf5608de33f91d22d0975bd8b068b9f62878386a60416e87336e9d2c0bf1669.openclbin";
+    
+    // Load binary file
+    std::ifstream bin_file(cache_path, std::ios::binary);
+    if (!bin_file.good()) {
+        fprintf(stderr, "[OPENCL] Cached binary not found: %s\n", cache_path);
+        return false;
+    }
+    
+    bin_file.seekg(0, std::ios::end);
+    size_t bin_size = bin_file.tellg();
+    bin_file.seekg(0, std::ios::beg);
+    
+    std::vector<unsigned char> binary(bin_size);
+    bin_file.read(reinterpret_cast<char*>(binary.data()), bin_size);
+    bin_file.close();
+    
+    fprintf(stderr, "[OPENCL] Loaded cached binary: %zu bytes from %s\n", bin_size, cache_path);
+    
+    // Create program from binary
+    const unsigned char* bin_ptr = binary.data();
+    cl_int bin_status = CL_SUCCESS;
+    dev->program = clCreateProgramWithBinary(dev->context, 1, &dev->device, &bin_size, &bin_ptr, &bin_status, &err);
+    check_cl(err, "clCreateProgramWithBinary");
+    check_cl(bin_status, "clCreateProgramWithBinary (binary status)");
+    
+    // Build (no options needed — binary is pre-compiled)
+    err = clBuildProgram(dev->program, 1, &dev->device, nullptr, nullptr, nullptr);
+    if (err != CL_SUCCESS) {
+        fprintf(stderr, "[OPENCL] Binary build failed (code %d)\n", err);
+        size_t log_size;
+        clGetProgramBuildInfo(dev->program, dev->device, CL_PROGRAM_BUILD_LOG, 0, nullptr, &log_size);
+        std::vector<char> log(log_size);
+        clGetProgramBuildInfo(dev->program, dev->device, CL_PROGRAM_BUILD_LOG, log_size, log.data(), nullptr);
+        fprintf(stderr, "%s\n", log.data());
+        return false;
+    }
+    
+    fprintf(stderr, "[OPENCL] Using production's cached binary (worksize=8, intensity compatible)\n");
+    
+    // Extract kernel handles
+    dev->kernel_phase1 = clCreateKernel(dev->program, "cn_gpu_phase1_keccak", &err);
+    check_cl(err, "clCreateKernel(cn_gpu_phase1_keccak)");
+    
+    dev->kernel_phase3 = clCreateKernel(dev->program, "cn_gpu_phase3_compute", &err);
+    check_cl(err, "clCreateKernel(cn_gpu_phase3_compute)");
+    
+    dev->kernel_phase4_5 = clCreateKernel(dev->program, "cn_gpu_phase4_finalize", &err);
+    check_cl(err, "clCreateKernel(cn_gpu_phase4_finalize)");
+    
+    dev->kernel_phase2 = clCreateKernel(dev->program, "cn_gpu_phase2_expand", &err);
+    check_cl(err, "clCreateKernel(cn_gpu_phase2_expand)");
+    
+    fprintf(stderr, "[OPENCL] Kernels extracted from cached binary\n");
+    return true;
+}
+
+// Load and compile CN-GPU OpenCL kernels from source
 static bool compile_kernels(OpenCLDevice* dev) {
     cl_int err;
     
@@ -295,7 +346,7 @@ static bool compile_kernels(OpenCLDevice* dev) {
     options += " -DIS_WINDOWS_OS=0";
     options += " -cl-fp32-correctly-rounded-divide-sqrt";  // IEEE 754 compliance
     
-    fprintf(stderr, "[OPENCL] Compiling with WORKSIZE=%zu (device-specific)\n", dev->worksize);
+    fprintf(stderr, "[OPENCL] Compiling from source with WORKSIZE=%zu\n", dev->worksize);
     
     err = clBuildProgram(dev->program, 1, &dev->device, options.c_str(), nullptr, nullptr);
     
@@ -308,6 +359,8 @@ static bool compile_kernels(OpenCLDevice* dev) {
         fprintf(stderr, "%s\n", log.data());
         return false;
     }
+    
+    fprintf(stderr, "[OPENCL] Kernels compiled successfully from source\n");
     
     // Extract kernel handles — CRITICAL: array indices don't match phase numbers!
     // Production code mapping: Kernels[0]=phase1, [1]=phase3, [2]=phase4+5, [3]=phase2
@@ -323,7 +376,7 @@ static bool compile_kernels(OpenCLDevice* dev) {
     dev->kernel_phase2 = clCreateKernel(dev->program, "cn_gpu_phase2_expand", &err);
     check_cl(err, "clCreateKernel(cn_gpu_phase2_expand)");
     
-    fprintf(stderr, "[OPENCL] Kernels compiled successfully (phase1, phase3, phase4+5, phase2)\n");
+    fprintf(stderr, "[OPENCL] Kernels extracted successfully (phase1, phase3, phase4+5, phase2)\n");
     return true;
 }
 
@@ -352,8 +405,16 @@ static BenchmarkResult benchmark_opencl(int device_id, int duration_sec) {
         exit(1);
     }
     
-    if (!compile_kernels(&dev)) {
-        fprintf(stderr, "[BENCHMARK] Failed to compile kernels\n");
+    // DEBUGGING: Force source compilation to test printf hypothesis
+    // bool kernel_load_ok = load_cached_binary(&dev);
+    // if (!kernel_load_ok) {
+    //     fprintf(stderr, "[OPENCL] Cached binary failed, compiling from source...\n");
+    //     kernel_load_ok = compile_kernels(&dev);
+    // }
+    bool kernel_load_ok = compile_kernels(&dev);  // Force fresh compile with printf
+    
+    if (!kernel_load_ok) {
+        fprintf(stderr, "[BENCHMARK] Failed to load/compile kernels\n");
         exit(1);
     }
     
@@ -365,9 +426,9 @@ static BenchmarkResult benchmark_opencl(int device_id, int duration_sec) {
     cl_int err = clEnqueueWriteBuffer(dev.queue, dev.input_buf, CL_TRUE, 0, 128, test_input, 0, nullptr, nullptr);
     check_cl(err, "clEnqueueWriteBuffer(input)");
     
-    // Set kernel arguments
-    cl_uint num_threads = (cl_uint)INTENSITY;
-    cl_ulong target = 0xFFFFFFFFFFFFFFFFULL;  // Always accept (benchmark mode)
+    // Set kernel arguments (declared here for scope visibility in benchmark loop)
+    const cl_uint num_threads = (cl_uint)INTENSITY;
+    const cl_ulong target = 0xFFFFFFFFFFFFFFFFULL;  // Always accept (benchmark mode)
     
     // Phase 1 kernel: Keccak + AES key expansion
     clSetKernelArg(dev.kernel_phase1, 0, sizeof(cl_mem), &dev.input_buf);
@@ -420,18 +481,25 @@ static BenchmarkResult benchmark_opencl(int device_id, int duration_sec) {
         size_t local_1[2] = {8, 8};
         err = clEnqueueNDRangeKernel(dev.queue, dev.kernel_phase1, 2, nonce_offset, global_1, local_1, 0, nullptr, nullptr);
         check_cl(err, "clEnqueueNDRangeKernel(phase1)");
+        err = clFinish(dev.queue);
+        if (err != CL_SUCCESS) { fprintf(stderr, "[ERROR] Phase 1 failed: %d\n", err); break; }
         
         // Phase 2: Scratchpad expansion (1D dispatch, 64 threads per hash)
         size_t global_2 = g_intensity * 64;
         size_t local_2 = 64;
-        err = clEnqueueNDRangeKernel(dev.queue, dev.kernel_phase2, 1, nullptr, &global_2, &local_2, 0, nullptr, nullptr);
+        err = clEnqueueNDRangeKernel(dev.queue, dev.kernel_phase2, 1, 0, &global_2, &local_2, 0, nullptr, nullptr);
         check_cl(err, "clEnqueueNDRangeKernel(phase2)");
+        err = clFinish(dev.queue);
+        if (err != CL_SUCCESS) { fprintf(stderr, "[ERROR] Phase 2 failed: %d\n", err); break; }
         
         // Phase 3: Main loop (1D dispatch, MUST use g_thd * 16 and w_size * 16)
         size_t global_3 = g_thd * 16;
         size_t local_3 = w_size * 16;
-        err = clEnqueueNDRangeKernel(dev.queue, dev.kernel_phase3, 1, nullptr, &global_3, &local_3, 0, nullptr, nullptr);
+        fprintf(stderr, "[DEBUG] Dispatching Phase 3: global=%zu, local=%zu, numThreads=%u\n", global_3, local_3, num_threads);
+        err = clEnqueueNDRangeKernel(dev.queue, dev.kernel_phase3, 1, 0, &global_3, &local_3, 0, nullptr, nullptr);
         check_cl(err, "clEnqueueNDRangeKernel(phase3)");
+        err = clFinish(dev.queue);
+        if (err != CL_SUCCESS) { fprintf(stderr, "[ERROR] Phase 3 failed: %d\n", err); break; }
         
         // Phase 4+5: Finalize (2D dispatch)
         size_t nonce_offset_45[2] = {0, dev.nonce};
@@ -439,14 +507,10 @@ static BenchmarkResult benchmark_opencl(int device_id, int duration_sec) {
         size_t local_45[2] = {8, w_size};
         err = clEnqueueNDRangeKernel(dev.queue, dev.kernel_phase4_5, 2, nonce_offset_45, global_45, local_45, 0, nullptr, nullptr);
         check_cl(err, "clEnqueueNDRangeKernel(phase4_5)");
-        
-        // CRITICAL: Only one clFinish() at the end, like production code
-        // (Production uses blocking clEnqueueReadBuffer which implies clFinish)
         err = clFinish(dev.queue);
-        if (err != CL_SUCCESS) {
-            fprintf(stderr, "[ERROR] GPU pipeline execution failed: %d\n", err);
-            break;
-        }
+        if (err != CL_SUCCESS) { fprintf(stderr, "[ERROR] Phase 4+5 failed: %d\n", err); break; }
+        
+        fprintf(stderr, "[DEBUG] All phases completed successfully\n");
         
         hashes += g_intensity;
         dev.nonce += g_intensity;
