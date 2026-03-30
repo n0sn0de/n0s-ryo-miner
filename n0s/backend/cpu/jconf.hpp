@@ -20,7 +20,7 @@ class jconf
 		return oInst;
 	};
 
-	bool parse_config(const char* sFilename = params::inst().configFileCPU.c_str());
+	bool parse_config(const char* sFilename = "cpu.txt");
 
 	struct thd_cfg
 	{

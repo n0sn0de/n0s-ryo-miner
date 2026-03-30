@@ -82,11 +82,7 @@ std::vector<iBackend*>* BackendConnector::thread_starter(miner_work& pWork)
 	if(params::inst().useNVIDIA)
 	{
 		plugin nvidiaplugin;
-#ifdef N0S_DEV_RELEASE
-		std::vector<std::string> libNames = {"n0s_cuda_backend_cuda10_0", "n0s_cuda_backend"};
-#else
 		std::vector<std::string> libNames = {"n0s_cuda_backend"};
-#endif
 		size_t numWorkers = 0u;
 
 		{

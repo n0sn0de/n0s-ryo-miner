@@ -66,10 +66,6 @@ void help()
 	cout << "  --benchmark BLOCKVERSION   ONLY do a benchmark and exit" << endl;
 	cout << "  --benchwait WAIT_SEC             ... benchmark wait time" << endl;
 	cout << "  --benchwork WORK_SEC             ... benchmark work time" << endl;
-#ifndef CONF_NO_CPU
-	cout << "  --noCPU                    disable the CPU miner backend" << endl;
-	cout << "  --cpu FILE                 CPU backend miner config file" << endl;
-#endif
 #ifndef CONF_NO_OPENCL
 	cout << "  --noAMD                    disable the AMD miner backend" << endl;
 	cout << "  --amdGpus GPUS             indices of AMD GPUs to use. Example: 0,2,3" << endl;
@@ -688,10 +684,6 @@ int main(int argc, char* argv[])
 			}
 
 			params::inst().httpd_port = ret;
-		}
-		else if(opName.compare("--noUAC") == 0)
-		{
-			params::inst().allowUAC = false;
 		}
 		else if(opName.compare("--benchmark") == 0)
 		{
