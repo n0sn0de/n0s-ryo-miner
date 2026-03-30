@@ -412,7 +412,7 @@ void executor::on_miner_result(size_t pool_id, job_result& oResult)
 
 	if(t_len > 0xFFFF)
 		t_len = 0xFFFF;
-	iPoolCallTimes.push_back((uint16_t)t_len);
+	iPoolCallTimes.push_back(static_cast<uint16_t>(t_len));
 
 	std::string name(backend_name);
 	std::transform(name.begin(), name.end(), name.begin(), ::toupper);

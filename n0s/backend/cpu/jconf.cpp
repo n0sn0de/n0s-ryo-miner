@@ -127,7 +127,7 @@ bool jconf::GetThreadConfig(size_t id, thd_cfg& cfg)
 		return false;
 
 	if(mode->IsNumber())
-		cfg.iMultiway = (int)mode->GetInt64();
+		cfg.iMultiway = static_cast<int>(mode->GetInt64());
 	else
 		cfg.iMultiway = mode->GetBool() ? 2 : 1;
 
@@ -182,7 +182,7 @@ bool jconf::parse_config(const char* sFilename)
 		return false;
 	}
 
-	buffer = (char*)malloc(flen + 3);
+	buffer = static_cast<char*>(malloc(flen + 3));
 	if(fread(buffer + 1, flen, 1, pFile) != 1)
 	{
 		free(buffer);

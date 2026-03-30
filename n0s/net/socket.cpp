@@ -140,7 +140,7 @@ bool plain_socket::set_hostname(const char* sAddr)
 
 	int flag = 1;
 	/* If it fails, it fails, we won't loose too much sleep over it */
-	setsockopt(hSocket, IPPROTO_TCP, TCP_NODELAY, (char*)&flag, sizeof(int));
+	setsockopt(hSocket, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<char*>(&flag), sizeof(int));
 
 	return true;
 }
@@ -148,7 +148,7 @@ bool plain_socket::set_hostname(const char* sAddr)
 bool plain_socket::connect()
 {
 	sock_closed = false;
-	int ret = ::connect(hSocket, pSockAddr->ai_addr, (int)pSockAddr->ai_addrlen);
+	int ret = ::connect(hSocket, pSockAddr->ai_addr, static_cast<int>(pSockAddr->ai_addrlen));
 
 	freeaddrinfo(pAddrRoot);
 	pAddrRoot = nullptr;
@@ -268,7 +268,7 @@ bool tls_socket::set_hostname(const char* sAddr)
 
 	int flag = 1;
 	/* If it fails, it fails, we won't loose too much sleep over it */
-	setsockopt(BIO_get_fd(bio, nullptr), IPPROTO_TCP, TCP_NODELAY, (char*)&flag, sizeof(int));
+	setsockopt(BIO_get_fd(bio, nullptr), IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<char*>(&flag), sizeof(int));
 
 	if(BIO_set_conn_hostname(bio, sAddr) != 1)
 	{
@@ -353,12 +353,12 @@ bool tls_socket::connect()
 
 	if(strlen(conf_md) == 0)
 	{
-		printer::inst()->print_msg(L1, "TLS fingerprint [%s] %.*s", pCallback->get_pool_addr(), (int)b64_len, b64_md);
+		printer::inst()->print_msg(L1, "TLS fingerprint [%s] %.*s", pCallback->get_pool_addr(), static_cast<int>(b64_len), b64_md);
 	}
 	else if(strncmp(b64_md, conf_md, b64_len) != 0)
 	{
 		printer::inst()->print_msg(L0, "FINGERPRINT FAILED CHECK [%s] %.*s was given, %s was configured",
-			pCallback->get_pool_addr(), (int)b64_len, b64_md, conf_md);
+			pCallback->get_pool_addr(), static_cast<int>(b64_len), b64_md, conf_md);
 
 		pCallback->set_socket_error("FINGERPRINT FAILED CHECK");
 		BIO_free_all(b64);

@@ -348,7 +348,7 @@ bool jconf::parse_file(const char* sFilename, bool main_conf)
 		return false;
 	}
 
-	buffer = (char*)malloc(flen + 3);
+	buffer = static_cast<char*>(malloc(flen + 3));
 	if(fread(buffer + 1, flen, 1, pFile) != 1)
 	{
 		free(buffer);

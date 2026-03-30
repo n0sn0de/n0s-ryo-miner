@@ -71,7 +71,7 @@ minethd::minethd(miner_work& pWork, size_t iNo, int iMultiway, bool no_prefetch,
 	this->backendType = iBackend::CPU;
 	oWork = pWork;
 	bQuit = 0;
-	iThreadNo = (uint8_t)iNo;
+	iThreadNo = static_cast<uint8_t>(iNo);
 	iJobNo = 0;
 	bNoPrefetch = no_prefetch;
 	this->affinity = affinity;
@@ -290,7 +290,7 @@ std::vector<iBackend*> minethd::thread_starter(uint32_t threadOffset, miner_work
 
 		if(cfg.iCpuAff >= 0)
 		{
-			printer::inst()->print_msg(L1, "Starting %dx thread, affinity: %d.", cfg.iMultiway, (int)cfg.iCpuAff);
+			printer::inst()->print_msg(L1, "Starting %dx thread, affinity: %d.", cfg.iMultiway, static_cast<int>(cfg.iCpuAff));
 		}
 		else
 			printer::inst()->print_msg(L1, "Starting %dx thread, no affinity.", cfg.iMultiway);

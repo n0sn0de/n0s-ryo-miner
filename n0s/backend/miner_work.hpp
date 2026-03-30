@@ -29,7 +29,7 @@ struct miner_work
 		bNiceHash(false),
 		bStall(true),
 		iPoolId(invalid_pool_id),
-		ref_ptr((uint8_t*)&iBlockHeight) {}
+		ref_ptr(reinterpret_cast<uint8_t*>(&iBlockHeight)) {}
 
 	miner_work(const char* sJobID, const uint8_t* bWork, uint32_t iWorkSize,
 		uint64_t iTarget, bool bNiceHash, size_t iPoolId, uint64_t iBlockHeiht) :
@@ -39,7 +39,7 @@ struct miner_work
 		bStall(false),
 		iPoolId(iPoolId),
 		iBlockHeight(iBlockHeiht),
-		ref_ptr((uint8_t*)&iBlockHeight)
+		ref_ptr(reinterpret_cast<uint8_t*>(&iBlockHeight))
 	{
 		assert(iWorkSize <= sizeof(bWorkBlob));
 		memcpy(this->bWorkBlob, bWork, iWorkSize);
@@ -53,7 +53,7 @@ struct miner_work
 		bStall(from.bStall),
 		iPoolId(from.iPoolId),
 		iBlockHeight(from.iBlockHeight),
-		ref_ptr((uint8_t*)&iBlockHeight)
+		ref_ptr(reinterpret_cast<uint8_t*>(&iBlockHeight))
 	{
 		assert(iWorkSize <= sizeof(bWorkBlob));
 		memcpy(bWorkBlob, from.bWorkBlob, iWorkSize);

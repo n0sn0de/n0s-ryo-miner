@@ -294,7 +294,7 @@ bool jpsock::jpsock_thd_main()
 
 		char* lnend;
 		char* lnstart = buf;
-		while((lnend = (char*)memchr(lnstart, '\n', datalen)) != nullptr)
+		while((lnend = static_cast<char*>(memchr(lnstart, '\n', datalen))) != nullptr)
 		{
 			lnend++;
 			int lnlen = lnend - lnstart;
@@ -713,7 +713,7 @@ bool jpsock::cmd_submit(const char* sJobId, uint32_t iNonce, const uint8_t* bRes
 		// the real algorithm with three degrees of freedom
 		snprintf(sBaseAlgo, sizeof(sBaseAlgo), ",\"base_algo\":\"%s\"", algo.BaseName().c_str());
 		snprintf(sIterations, sizeof(sIterations), ",\"iterations\":\"0x%08x\"", algo.Iter());
-		snprintf(sMemory, sizeof(sMemory), ",\"scratchpad\":\"0x%08x\"", (uint32_t)algo.Mem());
+		snprintf(sMemory, sizeof(sMemory), ",\"scratchpad\":\"0x%08x\"", static_cast<uint32_t>(algo.Mem()));
 		snprintf(sMemAlignBytes, sizeof(sMemAlignBytes), ",\"mask\":\"0x%08x\"", algo.Mask());
 	}
 
