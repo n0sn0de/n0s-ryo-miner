@@ -120,22 +120,29 @@ tests/
 **Session 16 (2026-03-30):**
 - ✅ Eliminated pointer-to-vector pattern in thread_starter (AMD, NVIDIA, CPU, BackendConnector)
 - ✅ Fixed socket memory leak in jpsock (sck → unique_ptr<base_socket>)
-- Net: -5 raw new/delete pairs, cleaner RAII semantics
+- ✅ Modernized all PIMPL patterns (5x opaque_private → unique_ptr)
+- Net: -10 raw new/delete pairs, 6 memory leaks fixed
+- Remaining raw `new`: 13 (8 singletons, 3 minethd thread objects, 2 backend singletons)
 
-~305 files changed. Net -10,500+ lines removed. Our code: 16,136 lines (down from ~43K). Clean C++17, zero warnings, zero C files, Linux-only, single-purpose. Smart pointers + RAII replacing manual memory management.
+~315 files changed. Net -10,500+ lines removed. Our code: 16,136 lines (down from ~43K). Clean C++17, zero warnings, zero C files, Linux-only, single-purpose. Smart pointers + RAII replacing manual memory management.
 
 ---
 
 ## Remaining Work
 
 ### Near-Term Opportunities
-- **gpu.cpp split** (~4 hours) — device_init, kernel_compile, mining_loop extraction
-- **Smart pointers** — ✅ Thread vectors, socket (Session 16). ✅ Telemetry, jpsock buffers, jpsock thread, executor telem (Session 9). ~24 raw `new` remain — mostly singletons, PIMPL, minethd objects
-- **Modern casts** — ✅ Host code done (Session 9). Only CUDA device code + soft_aes macro retain C-style casts
-- **[[nodiscard]]** — Add to error-returning functions
-- **std::regex removal** — ✅ gpu.cpp done (Session 9). configEditor.hpp still uses regex (genuine pattern matching)
-- **NULL → nullptr** — ✅ Host code done (Session 9, 68 replacements)
-- **Unused includes** — ✅ 13 removed (Session 9). Remaining includes verified needed
+
+**Next Session Targets:**
+1. **gpu.cpp split** (~4 hours) — Extract device_init, kernel_compile, mining_loop into separate functions. Current gpu.cpp is 1,200+ lines and hard to reason about.
+2. **[[nodiscard]]** — Add to error-returning functions (connect, send, recv, etc.)
+3. **constexpr where possible** — Algorithm constants, compile-time computables
+
+**Completed Modernizations:**
+- ✅ **Smart pointers** — Thread vectors, socket, PIMPL (S16). Telemetry, jpsock buffers/thread, executor telem (S9). 13 raw `new` remain (singletons + minethd — intentional)
+- ✅ **Modern casts** — Host code done (S9). Only CUDA device code + soft_aes macro retain C-style casts
+- ✅ **NULL → nullptr** — Host code done (S9, 68 replacements)
+- ✅ **std::regex removal** — gpu.cpp done (S9). configEditor.hpp still uses regex (genuine pattern matching — keep it)
+- ✅ **Unused includes** — 13 removed (S9). Remaining verified needed
 
 ### Performance Optimization (P1)
 Only after structural work is complete (check the Remaining things in succes criteria):
