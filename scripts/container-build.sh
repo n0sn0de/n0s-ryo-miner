@@ -69,6 +69,7 @@ podman run --rm \
             -DCUDA_ENABLE=ON \
             -DOpenCL_ENABLE=OFF \
             -DMICROHTTPD_ENABLE=ON \
+            -DHWLOC_ENABLE=OFF \
             -DCUDA_ARCH='${CUDA_ARCH}' \
             -DCMAKE_BUILD_TYPE=Release \
             -DN0S_COMPILE=generic \
