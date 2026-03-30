@@ -181,7 +181,7 @@ REMOTE=nos2 ./test-mine-remote.sh      # Build on remote, mine for 40s
 │   ├── matrix-test.sh          # Full 10-platform compile validation
 │   ├── test-remote-binary.sh   # Deploy + mine-test on remote GPU host
 │   └── test-nosnode.sh         # nosnode-specific test script
-├── xmrstak/
+├── n0s/
 │   ├── cli/                    # CLI entry point
 │   ├── backend/
 │   │   ├── amd/                # AMD OpenCL backend

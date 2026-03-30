@@ -176,7 +176,7 @@ add_definitions("-DCONF_NO_CPU")
 
 # AVX2 for Clang
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    set_source_files_properties(xmrstak/backend/cpu/crypto/cn_gpu_avx.cpp PROPERTIES COMPILE_FLAGS "-mavx2")
+    set_source_files_properties(n0s/backend/cpu/crypto/cn_gpu_avx.cpp PROPERTIES COMPILE_FLAGS "-mavx2")
 endif()
 
 ################################################################################
@@ -295,7 +295,7 @@ endif()
 # ASM library removed — cryptonight_v8 mainloop was only used by removed algorithms
 
 # C crypto library
-file(GLOB SRCFILES_C "xmrstak/backend/cpu/crypto/*.c")
+file(GLOB SRCFILES_C "n0s/backend/cpu/crypto/*.c")
 add_library(n0s-c STATIC ${SRCFILES_C})
 set_property(TARGET n0s-c PROPERTY C_STANDARD 99)
 if(MICROHTTPD_ENABLE)
@@ -305,21 +305,21 @@ target_link_libraries(n0s-c ${LIBS})
 
 # Core backend library
 file(GLOB BACKEND_CPP
-    "xmrstak/*.cpp"
-    "xmrstak/backend/cpu/*.cpp"
-    "xmrstak/backend/*.cpp"
-    "xmrstak/backend/cpu/crypto/*.cpp"
-    "xmrstak/http/*.cpp"
-    "xmrstak/misc/*.cpp"
-    "xmrstak/net/*.cpp")
+    "n0s/*.cpp"
+    "n0s/backend/cpu/*.cpp"
+    "n0s/backend/*.cpp"
+    "n0s/backend/cpu/crypto/*.cpp"
+    "n0s/http/*.cpp"
+    "n0s/misc/*.cpp"
+    "n0s/net/*.cpp")
 add_library(n0s-backend STATIC ${BACKEND_CPP})
 target_link_libraries(n0s-backend n0s-c ${CMAKE_DL_LIBS})
 
 # CUDA backend (shared library, loaded via dlopen)
 if(CUDA_FOUND)
     file(GLOB CUDASRCFILES
-        "xmrstak/backend/nvidia/nvcc_code/*.cu"
-        "xmrstak/backend/nvidia/*.cpp")
+        "n0s/backend/nvidia/nvcc_code/*.cu"
+        "n0s/backend/nvidia/*.cpp")
 
     cuda_add_library(n0s_cuda_backend SHARED ${CUDASRCFILES})
 
@@ -331,15 +331,15 @@ endif()
 # OpenCL backend (shared library, loaded via dlopen)
 if(OpenCL_FOUND)
     file(GLOB OPENCLSRCFILES
-        "xmrstak/backend/amd/amd_gpu/*.cpp"
-        "xmrstak/backend/amd/*.cpp")
+        "n0s/backend/amd/amd_gpu/*.cpp"
+        "n0s/backend/amd/*.cpp")
     add_library(n0s_opencl_backend SHARED ${OPENCLSRCFILES})
     target_link_libraries(n0s_opencl_backend ${OpenCL_LIBRARY})
     target_link_libraries(n0s_opencl_backend n0s-backend)
 endif()
 
 # Main executable
-file(GLOB SRCFILES_CPP "xmrstak/cli/*.cpp")
+file(GLOB SRCFILES_CPP "n0s/cli/*.cpp")
 set_source_files_properties(${SRCFILES_CPP} PROPERTIES LANGUAGE CXX)
 add_executable(n0s-ryo-miner ${SRCFILES_CPP})
 
