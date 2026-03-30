@@ -150,7 +150,6 @@ jpsock::jpsock(size_t id, const char* sAddr, const char* sLogin, const char* sRi
 	sck = new plain_socket(this);
 #endif
 
-	oRecvThd = nullptr;
 	bRunning = false;
 	bLoggedIn = false;
 	iJobDiff = 0;
@@ -539,7 +538,7 @@ bool jpsock::connect(std::string& sConnectError)
 	{
 		bRunning = true;
 		disconnect_time = 0;
-		oRecvThd = new std::thread(&jpsock::jpsock_thread, this);
+		oRecvThd = std::make_unique<std::thread>(&jpsock::jpsock_thread, this);
 		return true;
 	}
 
@@ -556,8 +555,7 @@ void jpsock::disconnect(bool quiet)
 	if(oRecvThd != nullptr)
 	{
 		oRecvThd->join();
-		delete oRecvThd;
-		oRecvThd = nullptr;
+		oRecvThd.reset();
 	}
 
 	sck->close(true);

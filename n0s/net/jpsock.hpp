@@ -134,7 +134,7 @@ class jpsock
 
 	std::mutex call_mutex;
 	std::condition_variable call_cond;
-	std::thread* oRecvThd;
+	std::unique_ptr<std::thread> oRecvThd;
 
 	std::mutex job_mutex;
 	pool_job oCurrentJob;
