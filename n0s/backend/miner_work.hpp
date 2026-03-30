@@ -49,6 +49,7 @@ struct miner_work
 	miner_work(miner_work&& from) :
 		iWorkSize(from.iWorkSize),
 		iTarget(from.iTarget),
+		bNiceHash(from.bNiceHash),
 		bStall(from.bStall),
 		iPoolId(from.iPoolId),
 		iBlockHeight(from.iBlockHeight),
@@ -56,7 +57,7 @@ struct miner_work
 	{
 		assert(iWorkSize <= sizeof(bWorkBlob));
 		memcpy(bWorkBlob, from.bWorkBlob, iWorkSize);
-		memcpy(this->sJobID, sJobID, sizeof(miner_work::sJobID));
+		memcpy(this->sJobID, from.sJobID, sizeof(miner_work::sJobID));
 	}
 
 	miner_work(miner_work const&) = delete;

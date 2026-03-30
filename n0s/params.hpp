@@ -68,8 +68,8 @@ struct params
 	int benchmark_work_sec = 60;
 
 	params() :
-		binaryName("n0s-ryo-miner"),
 		executablePrefix(""),
+		binaryName("n0s-ryo-miner"),
 		useAMD(true),
 		AMDCache(true),
 		useNVIDIA(true),
@@ -78,8 +78,8 @@ struct params
 		configFilePools("pools.txt"),
 		configFileAMD("amd.txt"),
 		rootAMDCacheDir(get_home() + "/.openclcache/"),
-		configFileCPU("cpu.txt"),
-		configFileNVIDIA("nvidia.txt")
+		configFileNVIDIA("nvidia.txt"),
+		configFileCPU("cpu.txt")
 	{
 	}
 };

@@ -90,7 +90,7 @@ class autoAdjust
 				enabled = false;
 				std::stringstream ss(enabledGpus);
 
-				int i = -1;
+				size_t i = 0;
 				while (ss >> i)
 				{
 					if (i == ctx.deviceIdx)

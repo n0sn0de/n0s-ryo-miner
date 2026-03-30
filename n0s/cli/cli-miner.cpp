@@ -388,17 +388,16 @@ void do_guided_config()
 int main(int argc, char* argv[])
 {
 #ifndef CONF_NO_TLS
-	SSL_library_init();
-	SSL_load_error_strings();
-	ERR_load_BIO_strings();
-	ERR_load_crypto_strings();
-	SSL_load_error_strings();
+	// OpenSSL 3.0+: single call replaces all legacy init functions
+	OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS | OPENSSL_INIT_LOAD_CRYPTO_STRINGS, nullptr);
 	OpenSSL_add_all_digests();
 #endif
 
 	srand(time(0));
 
 	using namespace n0s;
+
+	const size_t argc_sz = static_cast<size_t>(argc);
 
 	std::string pathWithName(argv[0]);
 	std::string separator("/");
@@ -418,22 +417,22 @@ int main(int argc, char* argv[])
 	}
 
 	params::inst().minerArg0 = argv[0];
-	params::inst().minerArgs.reserve(argc * 16);
-	for(int i = 1; i < argc; i++)
+	params::inst().minerArgs.reserve(argc_sz * 16);
+	for(size_t i = 1; i < argc_sz; i++)
 	{
 		params::inst().minerArgs += " ";
 		params::inst().minerArgs += argv[i];
 	}
 
 	bool pool_url_set = false;
-	for(size_t i = 1; i < argc - 1; i++)
+	for(size_t i = 1; i < argc_sz - 1; i++)
 	{
 		std::string opName(argv[i]);
 		if(opName == "-o" || opName == "-O" || opName == "--url" || opName == "--tls-url")
 			pool_url_set = true;
 	}
 
-	for(size_t i = 1; i < argc; ++i)
+	for(size_t i = 1; i < argc_sz; ++i)
 	{
 		std::string opName(argv[i]);
 		if(opName.compare("-h") == 0 || opName.compare("--help") == 0)
@@ -461,7 +460,7 @@ int main(int argc, char* argv[])
 		else if (opName.compare("--amdGpus") == 0)
 		{
 			++i;
-			if (i >= argc)
+			if (i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '--amdGpus' given");
 				win_exit();
@@ -472,7 +471,7 @@ int main(int argc, char* argv[])
 		else if(opName.compare("--openCLVendor") == 0)
 		{
 			++i;
-			if(i >= argc)
+			if(i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '--openCLVendor' given");
 				win_exit();
@@ -498,7 +497,7 @@ int main(int argc, char* argv[])
 		else if (opName.compare("--nvidiaGpus") == 0)
 		{
 			++i;
-			if (i >= argc)
+			if (i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '--nvidiaGpus' given");
 				win_exit();
@@ -509,7 +508,7 @@ int main(int argc, char* argv[])
 		else if(opName.compare("--amd") == 0)
 		{
 			++i;
-			if(i >= argc)
+			if(i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '--amd' given");
 				win_exit();
@@ -520,7 +519,7 @@ int main(int argc, char* argv[])
 		else if(opName.compare("--amdCacheDir") == 0)
 		{
 			++i;
-			if(i >= argc)
+			if(i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '--amdCacheDir' given");
 				win_exit();
@@ -531,7 +530,7 @@ int main(int argc, char* argv[])
 		else if(opName.compare("--nvidia") == 0)
 		{
 			++i;
-			if(i >= argc)
+			if(i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '--nvidia' given");
 				win_exit();
@@ -542,13 +541,13 @@ int main(int argc, char* argv[])
 		else if(opName.compare("--currency") == 0)
 		{
 			++i; // consume argument for backward compatibility
-			if(i < argc)
+			if(i < argc_sz)
 				printer::inst()->print_msg(L0, "WARNING: --currency is deprecated. Algorithm is hardcoded to cryptonight_gpu.");
 		}
 		else if(opName.compare("-o") == 0 || opName.compare("--url") == 0)
 		{
 			++i;
-			if(i >= argc)
+			if(i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '-o/--url' given");
 				win_exit();
@@ -560,7 +559,7 @@ int main(int argc, char* argv[])
 		else if(opName.compare("-O") == 0 || opName.compare("--tls-url") == 0)
 		{
 			++i;
-			if(i >= argc)
+			if(i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '-O/--tls-url' given");
 				win_exit();
@@ -579,7 +578,7 @@ int main(int argc, char* argv[])
 			}
 
 			++i;
-			if(i >= argc)
+			if(i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '-u/--user' given");
 				win_exit();
@@ -597,7 +596,7 @@ int main(int argc, char* argv[])
 			}
 
 			++i;
-			if(i >= argc)
+			if(i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '-p/--pass' given");
 				win_exit();
@@ -616,7 +615,7 @@ int main(int argc, char* argv[])
 			}
 
 			++i;
-			if(i >= argc)
+			if(i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '-r/--rigid' given");
 				win_exit();
@@ -633,7 +632,7 @@ int main(int argc, char* argv[])
 		else if(opName.compare("-c") == 0 || opName.compare("--config") == 0)
 		{
 			++i;
-			if(i >= argc)
+			if(i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '-c/--config' given");
 				win_exit();
@@ -644,7 +643,7 @@ int main(int argc, char* argv[])
 		else if(opName.compare("-C") == 0 || opName.compare("--poolconf") == 0)
 		{
 			++i;
-			if(i >= argc)
+			if(i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '-C/--poolconf' given");
 				win_exit();
@@ -655,7 +654,7 @@ int main(int argc, char* argv[])
 		else if(opName.compare("--log") == 0)
 		{
 			++i;
-			if(i >= argc)
+			if(i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '--log' given");
 				win_exit();
@@ -666,7 +665,7 @@ int main(int argc, char* argv[])
 		else if (opName.compare("--h-print-time") == 0)
 		{
 			++i;
-			if (i >= argc)
+			if (i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '--h-print-time' given");
 				win_exit();
@@ -685,7 +684,7 @@ int main(int argc, char* argv[])
 		else if(opName.compare("-i") == 0 || opName.compare("--httpd") == 0)
 		{
 			++i;
-			if(i >= argc)
+			if(i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '-i/--httpd' given");
 				win_exit();
@@ -711,7 +710,7 @@ int main(int argc, char* argv[])
 		else if(opName.compare("--benchmark") == 0)
 		{
 			++i;
-			if(i >= argc)
+			if(i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '--benchmark' given");
 				win_exit();
@@ -730,7 +729,7 @@ int main(int argc, char* argv[])
 		else if(opName.compare("--benchwait") == 0)
 		{
 			++i;
-			if(i >= argc)
+			if(i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '--benchwait' given");
 				win_exit();
@@ -749,7 +748,7 @@ int main(int argc, char* argv[])
 		else if(opName.compare("--benchwork") == 0)
 		{
 			++i;
-			if(i >= argc)
+			if(i >= argc_sz)
 			{
 				printer::inst()->print_msg(L0, "No argument for parameter '--benchwork' given");
 				win_exit();

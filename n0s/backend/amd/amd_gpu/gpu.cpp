@@ -322,7 +322,7 @@ size_t InitOpenCLGpu(cl_context opencl_ctx, GpuContext* ctx, const char* source_
 				int p_id = 0;
 				size_t mem_size = 0;
 				// create memory  structure to query all OpenCL program binaries
-				for(auto& p : all_programs)
+				for([[maybe_unused]] auto& p : all_programs)
 				{
 					program_storage.emplace_back(std::vector<char>(binary_sizes[p_id]));
 					all_programs[p_id] = program_storage[p_id].data();
@@ -415,7 +415,6 @@ const char* const attributeNames[] = {
 uint32_t getNumPlatforms()
 {
 	cl_uint num_platforms = 0;
-	cl_platform_id* platforms = NULL;
 	cl_int clStatus;
 
 	// Get platform and device information
@@ -520,8 +519,6 @@ std::vector<GpuContext> getAMDDevices(int index)
 				continue;
 			}
 
-			bool isHSAOpenCL = std::string(openCLDriverVer.data()).find("HSA") != std::string::npos;
-
 			// if environment variable GPU_SINGLE_ALLOC_PERCENT is not set we can not allocate the full memory
 			ctx.deviceIdx = k;
 			ctx.name = std::string(devNameVec.data());
@@ -557,7 +554,7 @@ int getAMDPlatformIdx()
 
 	if(clStatus == CL_SUCCESS)
 	{
-		for(int i = 0; i < numPlatforms; i++)
+		for(uint32_t i = 0; i < numPlatforms; i++)
 		{
 			size_t infoSize;
 			clGetPlatformInfo(platforms[i], CL_PLATFORM_VENDOR, 0, NULL, &infoSize);
@@ -643,7 +640,7 @@ size_t InitOpenCL(GpuContext* ctx, size_t num_gpus, size_t platform_idx)
 	}
 
 	// Same as the platform index sanity check, except we must check all requested device indexes
-	for(int i = 0; i < num_gpus; ++i)
+	for(size_t i = 0; i < num_gpus; ++i)
 	{
 		if(ctx[i].deviceIdx >= entries)
 		{
@@ -663,7 +660,7 @@ size_t InitOpenCL(GpuContext* ctx, size_t num_gpus, size_t platform_idx)
 	std::vector<cl_device_id> TempDeviceList(num_gpus, nullptr);
 
 	printer::inst()->print_msg(LDEBUG, "Number of OpenCL GPUs %d", entries);
-	for(int i = 0; i < num_gpus; ++i)
+	for(size_t i = 0; i < num_gpus; ++i)
 	{
 		ctx[i].DeviceID = DeviceIDList[ctx[i].deviceIdx];
 		TempDeviceList[i] = DeviceIDList[ctx[i].deviceIdx];
@@ -697,7 +694,7 @@ size_t InitOpenCL(GpuContext* ctx, size_t num_gpus, size_t platform_idx)
 
 	std::vector<std::shared_ptr<InterleaveData>> interleaveData(num_gpus, nullptr);
 
-	for(int i = 0; i < num_gpus; ++i)
+	for(size_t i = 0; i < num_gpus; ++i)
 	{
 		printer::inst()->print_msg(LDEBUG, "OpenCL Init device %d", ctx[i].deviceIdx);
 		const size_t devIdx = ctx[i].deviceIdx;
@@ -899,13 +896,13 @@ uint64_t interleaveAdjustDelay(GpuContext* ctx, const bool enableAutoAdjustment)
 
 			if(enableAutoAdjustment)
 			{
-				if(ctx->lastDelay == delay && delay > maxDelay)
+				if(ctx->lastDelay == static_cast<uint64_t>(delay) && static_cast<uint64_t>(delay) > maxDelay)
 					ctx->interleaveData->adjustThreshold -= 0.001;
 				// if the delay doubled than increase the adjustThreshold
-				else if(delay > 1 && ctx->lastDelay * 2 < delay)
+				else if(delay > 1 && ctx->lastDelay * 2 < static_cast<uint64_t>(delay))
 					ctx->interleaveData->adjustThreshold += 0.001;
 			}
-			ctx->lastDelay = delay;
+			ctx->lastDelay = static_cast<uint64_t>(delay);
 
 			ctx->interleaveData->adjustThreshold = std::clamp(ctx->interleaveData->adjustThreshold,
 				ctx->interleaveData->startAdjustThreshold - maxAutoAdjust,
@@ -971,8 +968,6 @@ size_t XMRRunJob(GpuContext* ctx, cl_uint* HashOutput)
 		printer::inst()->print_msg(L1, "Error %s when calling clEnqueueNDRangeKernel for kernel %d.", err_to_str(ret), 0);
 		return ERR_OCL_API;
 	}
-
-	size_t tmpNonce = ctx->Nonce;
 
 	// cn_gpu: run scratchpad preparation kernel (Kernel 7), then main kernel (Kernel 1)
 	{

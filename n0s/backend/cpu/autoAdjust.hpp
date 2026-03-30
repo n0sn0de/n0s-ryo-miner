@@ -81,7 +81,7 @@ class autoAdjust
 				if(L3KB_size <= 0)
 					break;
 
-				double_mode = L3KB_size / hashMemSizeKB > (int32_t)(corecnt - i);
+				double_mode = L3KB_size / hashMemSizeKB > static_cast<size_t>(corecnt - i);
 
 				conf += std::string("    { \"low_power_mode\" : ");
 				conf += std::string(double_mode ? "true" : "false");
@@ -180,7 +180,7 @@ class autoAdjust
 #endif // _WIN32
 	}
 
-	int32_t L3KB_size = 0;
+	size_t L3KB_size = 0;
 	uint32_t corecnt;
 	bool old_amd = false;
 	bool linux_layout;
