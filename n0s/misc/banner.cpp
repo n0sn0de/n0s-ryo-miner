@@ -42,19 +42,19 @@ void print_banner()
 		RYO_DARK  "    ╔═══════════════════════════════════════════════════════════╗\n" RST
 		RYO_DARK  "    ║" RYO_MED   "                                                           " RYO_DARK "║\n" RST
 		RYO_DARK  "    ║" RST
-			RYO_MED  "  ███╗   ██╗ ██████╗ ███████╗" RYO_CYAN "      ██████╗ ██╗   ██╗ ██████╗ " RYO_DARK "║\n" RST
+			RYO_MED  "   ███╗   ██╗ ██████╗ ███████╗" RYO_CYAN "     ██████╗ ██╗   ██╗ ██████╗ " RYO_DARK "║\n" RST
 		RYO_DARK  "    ║" RST
-			RYO_MED  "  ████╗  ██║██╔═══██╗██╔════╝" RYO_CYAN "      ██╔══██╗╚██╗ ██╔╝██╔═══██╗" RYO_DARK "║\n" RST
+			RYO_MED  "   ████╗  ██║██╔═══██╗██╔════╝" RYO_CYAN "     ██╔══██╗╚██╗ ██╔╝██╔═══██╗" RYO_DARK "║\n" RST
 		RYO_DARK  "    ║" RST
-			RYO_LIGHT "  ██╔██╗ ██║██║   ██║███████╗" RYO_BCYAN "█████╗██████╔╝ ╚████╔╝ ██║   ██║" RYO_DARK "║\n" RST
+			RYO_LIGHT "   ██╔██╗ ██║██║   ██║███████╗" RYO_BCYAN "█████╗██████╔╝ ╚████╔╝ ██║   ██║" RYO_DARK "║\n" RST
 		RYO_DARK  "    ║" RST
-			RYO_LIGHT "  ██║╚██╗██║██║   ██║╚════██║" RYO_BCYAN "╚════╝██╔══██╗  ╚██╔╝  ██║   ██║" RYO_DARK "║\n" RST
+			RYO_LIGHT "   ██║╚██╗██║██║   ██║╚════██║" RYO_BCYAN "╚════╝██╔══██╗  ╚██╔╝  ██║   ██║" RYO_DARK "║\n" RST
 		RYO_DARK  "    ║" RST
-			RYO_CYAN  "  ██║ ╚████║╚██████╔╝███████║" RYO_BCYAN "      ██║  ██║   ██║   ╚██████╔╝" RYO_DARK "║\n" RST
+			RYO_CYAN  "   ██║ ╚████║╚██████╔╝███████║" RYO_BCYAN "     ██║  ██║   ██║   ╚██████╔╝" RYO_DARK "║\n" RST
 		RYO_DARK  "    ║" RST
-			RYO_CYAN  "  ╚═╝  ╚═══╝ ╚═════╝ ╚══════╝" RYO_BCYAN "      ╚═╝  ╚═╝   ╚═╝    ╚═════╝" RYO_DARK " ║\n" RST
+			RYO_CYAN  "   ╚═╝  ╚═══╝ ╚═════╝ ╚══════╝" RYO_BCYAN "     ╚═╝  ╚═╝   ╚═╝    ╚═════╝ " RYO_DARK "║\n" RST
 		RYO_DARK  "    ║" RYO_MED   "                                                           " RYO_DARK "║\n" RST
-		RYO_DARK  "    ║" CLR_DIM "    GPU Miner for RYO Currency • CryptoNight-GPU • v3.1.0  " RYO_DARK "║\n" RST
+		RYO_DARK  "    ║" CLR_DIM "   GPU Miner for RYO Currency • CryptoNight-GPU • v3.1.0   " RYO_DARK "║\n" RST
 		RYO_DARK  "    ╚═══════════════════════════════════════════════════════════╝\n" RST
 	);
 

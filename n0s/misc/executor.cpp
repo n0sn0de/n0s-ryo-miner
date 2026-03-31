@@ -741,10 +741,10 @@ void executor::hashrate_report(std::string& out)
 			std::string name(n0s::iBackend::getName(bType));
 			std::transform(name.begin(), name.end(), name.begin(), ::toupper);
 
-			out.append("\x1B[96m    ══ HASHRATE ══ \x1B[97m").append(name).append("\x1B[0m\n");
+			out.append("\n\x1B[96;1m    ═══ HASHRATE ═══ \x1B[97m").append(name).append("\x1B[0m\n");
 			out.append("\x1B[2;37m    | ID |    10s |    60s |    15m |\x1B[0m");
 			if(nthd != 1)
-				out.append("\x1B[2;37m ID |    10s |    60s |    15m |\x1B[0m\n");
+				out.append("\x1B[2;37m  ID |    10s |    60s |    15m |\x1B[0m\n");
 			else
 				out.append(1, '\n');
 
@@ -811,14 +811,14 @@ void executor::hashrate_report(std::string& out)
 		}
 	}
 
-	out.append("\n\x1B[1;97m    TOTAL:  ");
+	out.append("\n\x1B[1;97m    TOTAL:  \x1B[0m");
 	out.append(n0s::format_hashrate_colored(fTotal[0]));
 	out.append(hps_format(fTotal[1], num, sizeof(num)));
 	out.append(hps_format(fTotal[2], num, sizeof(num)));
-	out.append(" H/s\x1B[0m\n");
-	out.append("\x1B[2;37m    Peak:   ");
+	out.append("\x1B[97m H/s\x1B[0m\n");
+	out.append("\x1B[2;37m    Peak:   \x1B[0m");
 	out.append(hps_format(fHighestHps, num, sizeof(num)));
-	out.append(" H/s\x1B[0m\n");
+	out.append("\x1B[2;37m H/s\x1B[0m\n");
 	out.append("\x1B[38;5;25m    ═══════════════════════════════════════════════════════════\x1B[0m\n");
 }
 
@@ -852,11 +852,11 @@ void executor::result_report(std::string& out)
 	for(size_t i = 1; i < ln; i++)
 		iTotalRes += vMineResults[i].count;
 
-	out.append("RESULT REPORT\n");
-	out.append("Currency         : ").append(jconf::inst()->GetMiningCoin()).append("\n");
+	out.append("\n\x1B[96;1m    ═══ RESULT REPORT ═══\x1B[0m\n");
+	out.append("\x1B[97m    Currency         : \x1B[96m").append(jconf::inst()->GetMiningCoin()).append("\x1B[0m\n");
 	if(iTotalRes == 0)
 	{
-		out.append("You haven't found any results yet.\n");
+		out.append("\x1B[2;37m    You haven't found any results yet.\x1B[0m\n");
 		return;
 	}
 
@@ -866,40 +866,41 @@ void executor::result_report(std::string& out)
 		dConnSec = (double)duration_cast<seconds>(system_clock::now() - tPoolConnTime).count();
 	}
 
-	snprintf(num, sizeof(num), " (%.1f %%)\n", 100.0 * iGoodRes / iTotalRes);
+	snprintf(num, sizeof(num), " \x1B[2;37m(%.1f %%)\x1B[0m\n", 100.0 * iGoodRes / iTotalRes);
 
-	out.append("Difficulty       : ").append(std::to_string(iPoolDiff)).append(1, '\n');
-	out.append("Good results     : ").append(std::to_string(iGoodRes)).append(" / ").append(std::to_string(iTotalRes)).append(num);
+	out.append("\x1B[97m    Difficulty       : \x1B[93m").append(std::to_string(iPoolDiff)).append("\x1B[0m\n");
+	out.append("\x1B[97m    Good results     : \x1B[92m").append(std::to_string(iGoodRes)).append(" \x1B[2;37m/ ").append(std::to_string(iTotalRes)).append(num);
 
 	if(iPoolCallTimes.size() != 0)
 	{
 		// Here we use iPoolCallTimes since it also gets reset when we disconnect
-		snprintf(num, sizeof(num), "%.1f sec\n", dConnSec / iPoolCallTimes.size());
-		out.append("Avg result time  : ").append(num);
+		snprintf(num, sizeof(num), "\x1B[96m%.1f sec\x1B[0m\n", dConnSec / iPoolCallTimes.size());
+		out.append("\x1B[97m    Avg result time  : \x1B[0m").append(num);
 	}
-	out.append("Pool-side hashes : ").append(std::to_string(iPoolHashes)).append(2, '\n');
-	out.append("Top 10 best results found:\n");
+	out.append("\x1B[97m    Pool-side hashes : \x1B[96m").append(std::to_string(iPoolHashes)).append("\x1B[0m\n\n");
+	out.append("\x1B[97;1m    Top 10 best results found:\x1B[0m\n");
+	out.append("\x1B[2;37m    | # |            Diff | # |            Diff |\x1B[0m\n");
 
 	for(size_t i = 0; i < 10; i += 2)
 	{
-		snprintf(num, sizeof(num), "| %2zu | %16zu | %2zu | %16zu |\n",
+		snprintf(num, sizeof(num), "\x1B[2;37m    | \x1B[96m%2zu \x1B[2;37m| \x1B[93m%16zu \x1B[2;37m| \x1B[96m%2zu \x1B[2;37m| \x1B[93m%16zu \x1B[2;37m|\x1B[0m\n",
 			i, iTopDiff[i], i + 1, iTopDiff[i + 1]);
 		out.append(num);
 	}
 
-	out.append("\nError details:\n");
+	out.append("\n\x1B[97;1m    Error details:\x1B[0m\n");
 	if(ln > 1)
 	{
-		out.append("| Count | Error text                       | Last seen           |\n");
+		out.append("\x1B[2;37m    | Count | Error text                       | Last seen           |\x1B[0m\n");
 		for(size_t i = 1; i < ln; i++)
 		{
-			snprintf(num, sizeof(num), "| %5zu | %-32.32s | %s |\n", vMineResults[i].count,
+			snprintf(num, sizeof(num), "\x1B[2;37m    | \x1B[93m%5zu \x1B[2;37m| \x1B[91m%-32.32s \x1B[2;37m| \x1B[96m%s \x1B[2;37m|\x1B[0m\n", vMineResults[i].count,
 				vMineResults[i].msg.c_str(), time_format(date, sizeof(date), vMineResults[i].time));
 			out.append(num);
 		}
 	}
 	else
-		out.append("Yay! No errors.\n");
+		out.append("\x1B[92m    Yay! No errors.\x1B[0m\n");
 }
 
 void executor::connection_report(std::string& out)
