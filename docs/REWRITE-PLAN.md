@@ -105,12 +105,14 @@ n0s/
 │   ├── (coinDescription.hpp removed — Session 7)
 │   └── [other utilities]
 │
-├── autotune/              ← Autotuning framework (Session 40)
+├── autotune/              ← Autotuning framework (Session 40-41, ~2,600 lines)
 │   ├── autotune_types.hpp       ← Core types: fingerprint, candidates, scores, state
 │   ├── autotune_score.hpp       ← Scoring model + guardrail rejection
 │   ├── autotune_candidates.hpp  ← Candidate generation (AMD + NVIDIA)
 │   ├── autotune_persist.cpp/hpp ← JSON persistence (autotune.json)
-│   └── autotune_manager.cpp/hpp ← Orchestrator (coarse→stability→winner)
+│   ├── autotune_manager.cpp/hpp ← Orchestrator (coarse→stability→winner)
+│   ├── autotune_runner.cpp/hpp  ← Subprocess benchmark evaluator + fingerprinting
+│   └── autotune_entry.cpp/hpp   ← Top-level entry point + config writing
 │
 ├── cli/cli-miner.cpp     ← Entry point (1012 lines, +65 for autotune CLI)
 ├── jconf.cpp/hpp          ← Main config (727 lines)
@@ -157,7 +159,7 @@ tests/
 - ⏳ Explore occupancy improvements
 - ⏳ Consider CUDA Graphs for kernel chaining
 - ✅ Algorithm/Kernel Autotuning framework — Phase 1 complete (S40: types, scoring, candidates, persistence, CLI, 20 unit tests)
-- ⏳ Algorithm/Kernel Autotuning — Phase 2: Wire backends to evaluator callbacks, implement `--autotune` end-to-end
+- ✅ Algorithm/Kernel Autotuning — Phase 2: End-to-end `--autotune` (S41: subprocess benchmark eval, fingerprinting, config writing, 3-GPU validated)
 - ⏳ Profile hotspots on AMD RDNA4 + NVIDIA Pascal/Turing/Ampere
 - ✅ Fix or rebuild benchmark harness for reproducible measurements (S36: --benchmark-json + stability CV% + tests/benchmark.sh)
 
@@ -178,41 +180,50 @@ tests/
 
 ---
 
-## Session 39 Notes (2026-03-30 06:49 PM) — Phase 3 Optimization Analysis + First Performance Win 🧘
-
-**What we accomplished:**
-- ✅ +2.3% hashrate improvement on AMD (4,427.5 → 4,531.0 H/s) via debug printf removal + div→mul optimization
-- ✅ Deep CUDA register/shared memory analysis — Phase 3 already at optimal occupancy on Pascal
-- ✅ Key insight: algorithm is intentionally optimization-resistant (fma_break, data-dependent addresses)
-
----
-
 ## Session 40 Notes (2026-03-30 08:13 PM) — Autotune Framework (Phase 1 of PRD) 🎵
 
 **What we accomplished:**
-- ✅ **Built complete autotune orchestration framework** — `n0s/autotune/` module (6 files, ~1,650 lines)
-- ✅ **autotune_types.hpp** — DeviceFingerprint, AmdCandidate, NvidiaCandidate, BenchmarkMetrics, CandidateScore, AutotuneState, AutotuneResult
-- ✅ **autotune_score.hpp** — Scoring model: steady hashrate base, stability penalty (CV-based), error penalty (invalid shares, backend errors), guardrail rejection (>5% error, >25% CV, zero hashrate)
-- ✅ **autotune_candidates.hpp** — Mode-aware candidate generation for AMD (intensity/worksize sweep) and NVIDIA (threads/blocks/bfactor grid), VRAM-bounded, deduped
-- ✅ **autotune_persist.cpp/hpp** — Full JSON round-trip via rapidjson for autotune.json, fingerprint-based cache lookup
-- ✅ **autotune_manager.cpp/hpp** — Orchestrator: coarse search → stability validation → winner selection, with backend callbacks (CandidateEvaluator, FingerprintCollector)
-- ✅ **CLI integration** — 10 `--autotune*` flags parsed into params (mode, backend, gpu, reset, resume, benchmark-seconds, stability-seconds, target, export)
-- ✅ **20 unit tests** — Scoring, rejection, candidate generation (AMD+NVIDIA), fingerprint compatibility, JSON persistence round-trips (AMD+NVIDIA)
-- ✅ **3-GPU build validation** — nitro (OpenCL), nos2 (CUDA 11.8), nosnode (CUDA 12.6) all build clean
-- ✅ **All tests pass on all 3 nodes** — 20/20 unit tests + golden hash harness
+- ✅ Built complete autotune orchestration framework — `n0s/autotune/` module (6 files, ~1,650 lines)
+- ✅ Types, scoring, candidate generation, JSON persistence, manager orchestrator
+- ✅ 10 `--autotune*` CLI flags, 20 unit tests, 3-GPU build validation
+
+---
+
+## Session 41 Notes (2026-03-30 09:18 PM) — Autotune End-to-End (Phase 2 of PRD) 🎵⚡
+
+**What we accomplished:**
+- ✅ **Subprocess-based candidate evaluation** — `autotune_runner.cpp/hpp` (531 lines)
+  - Fork/exec with timeout + SIGKILL crash safety
+  - Generates temp config files per candidate (amd.txt / nvidia.txt)
+  - Spawns miner in `--benchmark` mode with `--benchmark-json` output
+  - Creates isolated dummy pools.txt (no pool connection needed)
+  - Full process isolation — GPU context cleanup, no state leakage
+- ✅ **Device fingerprinting** — clinfo for AMD, nvidia-smi for NVIDIA
+  - SM count estimation fallback for NVIDIA (name-based lookup table for 20+ GPU models)
+  - Robust parsing: digit-prefix validation, 0-1024 range check for SM count
+- ✅ **Entry point** — `autotune_entry.cpp/hpp` wires manager + runner + config writing
+  - Writes winning params to amd.txt / nvidia.txt in production format
+  - Persists full results to autotune.json with fingerprint-based caching
+  - Skip guided pool config in autotune/benchmark modes
+- ✅ **3-GPU live autotune validation:**
+  - **AMD RX 9070 XT**: 9 candidates, winner intensity=1536 worksize=8 → **4,454 H/s** ✓
+  - **NVIDIA GTX 1070 Ti**: 9 candidates (3 OK, 6 OOM=handled), winner threads=8 blocks=114 → **1,642 H/s** ✓
+  - **NVIDIA RTX 2070**: 7 candidates (3 OK, 4 OOM=handled), winner threads=8 blocks=144 → **2,189 H/s** ✓
+- ✅ **All stability validations passed** on all 3 GPUs
 - ✅ **Merged to master**, branch deleted
 
-**Architecture decisions:**
-- Backend-agnostic framework uses callback pattern — AMD and NVIDIA backends will implement CandidateEvaluator to run actual GPU benchmarks
-- Fingerprint compatibility ignores miner_version changes (only hardware+driver changes invalidate cache)
-- Scoring strictly penalizes instability: even 1% invalid share rate = 50% score hit
-- Candidate generation is mode-aware: Quick (5-9 candidates), Balanced (15-25), Exhaustive (50+)
+**Key bugs found & fixed during session:**
+- DeviceFingerprint `compute_units`/`vram_bytes` not zero-initialized → garbage values
+- nvidia-smi `gpu_sm_count` error printed to stdout → garbage parsed by stoul
+- clinfo output parsing needed robust trimming + key matching
+- Subprocess needed isolated pools.txt to avoid guided config wizard
 
-**Next session priorities (Session 41):**
-1. **Wire AMD backend to autotune** — Implement CandidateEvaluator for OpenCL: init device → set intensity/worksize → run benchmark → collect metrics. This makes `--autotune` work end-to-end on AMD
-2. **Wire NVIDIA backend to autotune** — Same for CUDA: threads/blocks/bfactor evaluation
-3. **Config writing** — After tuning, write winning params back to amd.txt / nvidia.txt
-4. **Live test on all 3 GPUs** — Full autotune run with real hash verification
+**Next session priorities (Session 42):**
+1. **Balanced mode testing** — Quick mode is proven; test balanced mode for better candidate coverage
+2. **Multi-GPU support** — Test with `--autotune-gpu 0,1` on multi-GPU rigs
+3. **Resume support** — Interrupted autotune should resume from autotune.json
+4. **Phase 4+5 AES optimization** — Secondary kernel optimization target (11-18% of time)
+5. **CUDA launch config experiments** — Now that autotune works, systematically test block sizes
 
 ---
 
