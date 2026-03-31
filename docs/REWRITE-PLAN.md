@@ -180,43 +180,62 @@ tests/
 
 ---
 
-## Session 41 Notes (2026-03-30 09:18 PM) — Autotune End-to-End (Phase 2 of PRD) 🎵⚡
-
-**What we accomplished:**
-- ✅ Subprocess-based candidate evaluation (fork/exec + crash safety)
-- ✅ Device fingerprinting via clinfo/nvidia-smi with SM count estimation fallback
-- ✅ 3-GPU live autotune with stability validation on all 3 architectures
-- ✅ Fixed: uninitialized DeviceFingerprint fields, nvidia-smi stdout error parsing
-
----
-
 ## Session 42 Notes (2026-03-30 10:00 PM) — cn_gpu-Aware Candidates + Balanced Mode Validation 🎵🎯
 
 **What we accomplished:**
-- ✅ **Rewrote NVIDIA candidate generator** with cn_gpu kernel constraints:
-  - `threads` MUST be 8 (8 groups × 16 threads/hash = 128 matching __launch_bounds__)
-  - `blocks` sweeps around architecture-optimal: Pascal=7×SM, Turing+=6×SM
-  - Per-hash memory: 2 MiB scratchpad + 16 KiB local + 680 B metadata (from cuda_device.cu)
-  - Quick: 3 candidates (optimal ± 1), Balanced: 6, Exhaustive: 11
-- ✅ **Eliminated 100% of NVIDIA OOM crashes** — was 67% failure rate, now 0%
-- ✅ **Balanced mode tested on AMD** — 10/10 candidates successful, confirms i=1536/ws=8 optimal
-- ✅ **21 unit tests** (added `nvidia_candidates_pascal_vs_turing` architecture test)
-- ✅ **Full 3-GPU validation with v2 candidates:**
+- ✅ Rewrote NVIDIA candidate generator with cn_gpu constraints (threads=8 fixed, blocks sweep)
+- ✅ Eliminated 100% NVIDIA OOM crashes (was 67% → 0%)
+- ✅ Balanced mode confirmed i=1536/ws=8 optimal on AMD (10/10 candidates OK)
+- ✅ Full 3-GPU validation: 100% success rate on all candidates
 
-| GPU | Candidates | Success | Winner | H/s | Time |
-|-----|-----------|---------|--------|-----|------|
-| AMD RX 9070 XT | 9 (quick) | 9/9 ✅ | i=1536 ws=8 | 4,531 | 372s |
-| AMD RX 9070 XT | 10 (balanced) | 10/10 ✅ | i=1536 ws=8 | 4,403 | 346s |
-| NVIDIA GTX 1070 Ti | 3 (quick) | 3/3 ✅ | t=8 b=114 (6×SM) | 1,687 | 155s |
-| NVIDIA RTX 2070 | 3 (quick) | 3/3 ✅ | t=8 b=216 (6×SM) | 2,160 | 154s |
+---
 
-**Key insight:** Turing+ prefers 6× SM block multiplier, Pascal prefers 6-7×. The kernel's `__launch_bounds__(128, 8)` means max 8 blocks/SM with 128 threads each = 32 warps/SM — already maxing occupancy on Pascal.
+## Session 43 Notes (2026-03-30 10:36 PM) — Documentation, Release v3.1.0, Deep Kernel Analysis 📝⚡
 
-**Next session priorities (Session 43):**
-1. **Documentation update** — Add autotune usage to README, document architecture decisions
-2. **Live mining validation** — Test accepted shares with autotuned configs on real pool
-3. **Phase 4+5 AES optimization** — Secondary kernel target (11-18% of total time)
-4. **Balanced NVIDIA sweep** — Test balanced mode on NVIDIA for more block count data points
+**What we accomplished:**
+- ✅ **README overhaul** — Added comprehensive autotune section with:
+  - Full CLI reference table (10 `--autotune*` flags)
+  - How-it-works workflow description (6 steps)
+  - Benchmark results table (3 GPUs with autotuned settings)
+  - Per-phase kernel profiling table
+  - Updated project structure with autotune/ module
+  - Unit test commands in Testing section
+- ✅ **New `docs/AUTOTUNE.md`** — Architecture guide:
+  - ASCII architecture diagram (7 layers)
+  - Subprocess isolation strategy with fork/exec flow
+  - CryptoNight-GPU kernel constraints (NVIDIA + AMD)
+  - Scoring model with formulas
+  - Device fingerprint caching behavior
+  - Tuning modes comparison table
+  - File inventory (~2,100 lines total)
+- ✅ **`CHANGELOG.md`** — v3.1.0 and v3.0.0 changelog
+- ✅ **Released v3.1.0** — Tagged, GitHub release created with benchmark data
+- ✅ **Deep Phase 3 kernel analysis** — Read full CUDA + OpenCL Phase 3 implementations:
+  - `fma_break()` prevents FMA fusion — intentional anti-optimization
+  - Data-dependent scratchpad addresses prevent prefetching
+  - 32 data-dependent float divisions per round — cannot use fast reciprocal
+  - Phase 3 is algorithmically resistant to optimization by design
+- ✅ **Phase 4+5 kernel analysis** — Read CUDA `cuda_phase4_5.cu` + OpenCL `cryptonight.cl`:
+  - Implode: AES pseudo-rounds + warp shuffle for mix_and_propagate
+  - Finalize: 16 rounds AES + mix + Keccak-f + target check
+  - Well-structured but bounded optimization potential (11-18% of time)
+- ✅ **Branch cleanup** — Pruned stale session9/ branches from nos2 + nosnode
+- ✅ **All 3 nodes synced to master** with v3.1.0
+
+**Key algorithmic insight:**
+The CryptoNight-GPU algorithm is *intentionally* resistant to optimization in Phase 3:
+1. `fma_break()` forces exponent into [1.0, 2.0) — prevents FMA fusion
+2. Data-dependent scratchpad addresses — prevents memory prefetching
+3. Data-dependent denominators in division — cannot use approximate reciprocal
+4. 8 sub-rounds per round with rotated inputs — prevents algebraic simplification
+
+This means Phase 3 optimization ROI is near zero without changing the algorithm itself. Future optimization efforts should focus on Phase 4+5 (11-18%), or infrastructure improvements (multi-GPU scheduling, pool efficiency).
+
+**Next session priorities (Session 44):**
+1. **Live mining validation** — Test accepted shares with autotuned configs on real pool
+2. **Container builds for v3.1.0** — Build release binaries using the build matrix
+3. **Autotune balanced mode on NVIDIA** — Test wider block count sweep for more data
+4. **Phase 4+5 optimization experiments** — Profile AES rounds, test __shfl_sync alternatives
 
 ---
 
