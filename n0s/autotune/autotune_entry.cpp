@@ -212,9 +212,9 @@ int do_autotune()
 				continue;
 			}
 
-			printer::inst()->print_msg(L0, "AUTOTUNE: NVIDIA GPU %u: %s (%s, %zu MiB VRAM)",
+			printer::inst()->print_msg(L0, "AUTOTUNE: NVIDIA GPU %u: %s (%s, %u SMs, %zu MiB VRAM)",
 				dev_idx, fp.gpu_name.c_str(), fp.gpu_architecture.c_str(),
-				fp.vram_bytes / (1024 * 1024));
+				fp.compute_units, fp.vram_bytes / (1024 * 1024));
 
 			auto evaluator = [&runner](uint32_t device_index, const CandidateRecord& candidate,
 				int benchmark_sec, BenchmarkMetrics& metrics) -> bool {
