@@ -456,13 +456,63 @@ bool SubprocessRunner::collectNvidiaFingerprint(uint32_t device_index, DeviceFin
 		pclose(cuda_pipe);
 	}
 
-	// Get SM count
+	// nvidia-smi doesn't expose SM count directly. Query via CUDA deviceQuery
+	// or estimate from compute capability + GPU name heuristic.
 	std::ostringstream sm_cmd;
 	sm_cmd << "nvidia-smi -i " << device_index
-	       << " --query-gpu=count --format=csv,noheader 2>/dev/null";
-	// nvidia-smi doesn't directly expose SM count, use cuda deviceQuery approach
-	// For now, estimate from architecture
-	// TODO: Use CUDA API directly for SM count in backend integration
+	       << " --query-gpu=gpu_sm_count --format=csv,noheader 2>/dev/null";
+	FILE* sm_pipe = popen(sm_cmd.str().c_str(), "r");
+	if(sm_pipe)
+	{
+		if(fgets(buf.data(), buf.size(), sm_pipe))
+		{
+			std::string sm_str = buf.data();
+			sm_str.erase(sm_str.find_last_not_of(" \t\n\r") + 1);
+			try { fingerprint.compute_units = std::stoul(sm_str); } catch(...) {}
+		}
+		pclose(sm_pipe);
+	}
+
+	// If nvidia-smi didn't report SM count (older drivers), estimate from compute cap
+	if(fingerprint.compute_units == 0)
+	{
+		// Well-known SM counts by compute capability + model patterns
+		// This is a fallback — accuracy matters less than having any value
+		uint32_t cap = 0;
+		if(fingerprint.gpu_architecture.find("sm_") == 0)
+		{
+			try { cap = std::stoul(fingerprint.gpu_architecture.substr(3)); } catch(...) {}
+		}
+
+		// Conservative estimates per architecture family
+		if(fingerprint.gpu_name.find("1070 Ti") != std::string::npos) fingerprint.compute_units = 19;
+		else if(fingerprint.gpu_name.find("1080 Ti") != std::string::npos) fingerprint.compute_units = 28;
+		else if(fingerprint.gpu_name.find("1080") != std::string::npos) fingerprint.compute_units = 20;
+		else if(fingerprint.gpu_name.find("1070") != std::string::npos) fingerprint.compute_units = 15;
+		else if(fingerprint.gpu_name.find("1060") != std::string::npos) fingerprint.compute_units = 10;
+		else if(fingerprint.gpu_name.find("2080 Ti") != std::string::npos) fingerprint.compute_units = 68;
+		else if(fingerprint.gpu_name.find("2080 S") != std::string::npos) fingerprint.compute_units = 48;
+		else if(fingerprint.gpu_name.find("2080") != std::string::npos) fingerprint.compute_units = 46;
+		else if(fingerprint.gpu_name.find("2070 S") != std::string::npos) fingerprint.compute_units = 40;
+		else if(fingerprint.gpu_name.find("2070") != std::string::npos) fingerprint.compute_units = 36;
+		else if(fingerprint.gpu_name.find("2060 S") != std::string::npos) fingerprint.compute_units = 34;
+		else if(fingerprint.gpu_name.find("2060") != std::string::npos) fingerprint.compute_units = 30;
+		else if(fingerprint.gpu_name.find("3090") != std::string::npos) fingerprint.compute_units = 82;
+		else if(fingerprint.gpu_name.find("3080") != std::string::npos) fingerprint.compute_units = 68;
+		else if(fingerprint.gpu_name.find("3070") != std::string::npos) fingerprint.compute_units = 46;
+		else if(fingerprint.gpu_name.find("3060") != std::string::npos) fingerprint.compute_units = 28;
+		else if(fingerprint.gpu_name.find("4090") != std::string::npos) fingerprint.compute_units = 128;
+		else if(fingerprint.gpu_name.find("4080") != std::string::npos) fingerprint.compute_units = 76;
+		else if(fingerprint.gpu_name.find("4070") != std::string::npos) fingerprint.compute_units = 46;
+		else if(cap >= 89) fingerprint.compute_units = 60; // Ada Lovelace generic
+		else if(cap >= 86) fingerprint.compute_units = 40; // Ampere generic
+		else if(cap >= 75) fingerprint.compute_units = 36; // Turing generic
+		else if(cap >= 61) fingerprint.compute_units = 15; // Pascal generic
+		else fingerprint.compute_units = 15; // Conservative fallback
+
+		printer::inst()->print_msg(L1, "AUTOTUNE: Estimated SM count=%u for %s",
+			fingerprint.compute_units, fingerprint.gpu_name.c_str());
+	}
 
 	return !fingerprint.gpu_name.empty();
 }
