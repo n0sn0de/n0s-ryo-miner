@@ -29,6 +29,7 @@
 #include "n0s/misc/console.hpp"
 #include "n0s/misc/executor.hpp"
 #include "n0s/misc/utility.hpp"
+#include "n0s/autotune/autotune_entry.hpp"
 #include "n0s/params.hpp"
 #include "n0s/version.hpp"
 
@@ -841,8 +842,29 @@ int main(int argc, char* argv[])
 	if(!hasConfigFile)
 		do_guided_config();
 
-	if(!hasPoolConfig)
+	// Skip pool config in autotune/benchmark modes — they don't need a pool
+	if(!hasPoolConfig && !params::inst().autotune && params::inst().benchmark_block_version < 0)
 		do_guided_pool_config();
+
+	// In autotune mode, create a dummy pool config if none exists
+	if(!hasPoolConfig && params::inst().autotune)
+	{
+		FILE* f = fopen(params::inst().configFilePools.c_str(), "w");
+		if(f)
+		{
+			fprintf(f, "\"pool_list\" :\n[\n");
+			fprintf(f, "  {\"pool_address\" : \"autotune.local:3333\",\n");
+			fprintf(f, "   \"wallet_address\" : \"autotune\",\n");
+			fprintf(f, "   \"rig_id\" : \"\",\n");
+			fprintf(f, "   \"pool_password\" : \"\",\n");
+			fprintf(f, "   \"use_nicehash\" : false,\n");
+			fprintf(f, "   \"use_tls\" : false,\n");
+			fprintf(f, "   \"tls_fingerprint\" : \"\",\n");
+			fprintf(f, "   \"pool_weight\" : 1\n  },\n],\n");
+			fprintf(f, "\"currency\" : \"cryptonight_gpu\",\n");
+			fclose(f);
+		}
+	}
 
 	if(!jconf::inst()->parse_config(params::inst().configFile.c_str(), params::inst().configFilePools.c_str()))
 	{
@@ -908,6 +930,12 @@ int main(int argc, char* argv[])
 	printer::inst()->print_str("More info: https://github.com/ryo-currency\n");
 	printer::inst()->print_str("-------------------------------------------------------------------\n");
 	printer::inst()->print_msg(L0, "Mining coin: %s", ::jconf::inst()->GetMiningAlgo().Name().c_str());
+
+	if(params::inst().autotune)
+	{
+		printer::inst()->print_str("!!!! Running autotune and exiting. Remove '--autotune' to mine with tuned settings. !!!!\n");
+		return n0s::autotune::do_autotune();
+	}
 
 	if(params::inst().benchmark_block_version >= 0)
 	{
