@@ -110,7 +110,7 @@ inline std::vector<AmdCandidate> generateAmdCandidates(
 inline std::vector<NvidiaCandidate> generateNvidiaCandidates(
 	uint32_t sm_count,
 	uint64_t vram_bytes,
-	uint32_t compute_cap,
+	uint32_t compute_cap [[maybe_unused]],
 	TuneMode mode)
 {
 	std::vector<NvidiaCandidate> candidates;
