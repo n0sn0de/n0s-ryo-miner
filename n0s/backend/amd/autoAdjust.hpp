@@ -114,22 +114,30 @@ class autoAdjust
 			 * sowing down the memory performance because of TLB cache misses
 			 */
 			size_t maxThreads = 1000u;
-			if(
-				ctx.name.compare("gfx901") == 0 ||
-				ctx.name.compare("gfx904") == 0 ||
-				// APU
-				ctx.name.compare("gfx902") == 0 ||
-				// UNKNOWN
+			// Detect AMD GPU generation from device name (gfx ID)
+			// gfx9xx  = Vega/GCN5 (gfx900-906)
+			// gfx10xx = RDNA 1/2 (Navi 10-24)
+			// gfx11xx = RDNA 3 (Navi 31-33)
+			// gfx12xx = RDNA 4 (Navi 48-44)
+			const bool isVegaOrNewer =
 				ctx.name.compare("gfx900") == 0 ||
+				ctx.name.compare("gfx901") == 0 ||
+				ctx.name.compare("gfx902") == 0 ||
 				ctx.name.compare("gfx903") == 0 ||
+				ctx.name.compare("gfx904") == 0 ||
 				ctx.name.compare("gfx905") == 0 ||
-				// Radeon VII
 				ctx.name.compare("gfx906") == 0 ||
-				ctx.name.compare("Fiji") == 0)
+				ctx.name.compare("Fiji") == 0;
+
+			// RDNA and newer: gfx10xx, gfx11xx, gfx12xx
+			const bool isRDNA =
+				(ctx.name.size() >= 7 && ctx.name.substr(0, 4) == "gfx1");
+
+			if(isVegaOrNewer || isRDNA)
 			{
-				/* Increase the number of threads for AMD VEGA gpus.
-				 * Limit the number of threads based on the issue: https://github.com/fireice-uk/xmr-stak/issues/5#issuecomment-339425089
-				 * to avoid out of memory errors
+				/* Modern AMD GPUs benefit from higher thread counts.
+				 * VEGA+: more CUs and larger LDS than Polaris
+				 * RDNA+: worksize 16 benchmarked 4.4% faster than 8 on RDNA4 (gfx1201)
 				 */
 				maxThreads = 2024u;
 
