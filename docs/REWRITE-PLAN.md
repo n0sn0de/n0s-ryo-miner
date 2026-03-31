@@ -180,50 +180,43 @@ tests/
 
 ---
 
-## Session 40 Notes (2026-03-30 08:13 PM) — Autotune Framework (Phase 1 of PRD) 🎵
-
-**What we accomplished:**
-- ✅ Built complete autotune orchestration framework — `n0s/autotune/` module (6 files, ~1,650 lines)
-- ✅ Types, scoring, candidate generation, JSON persistence, manager orchestrator
-- ✅ 10 `--autotune*` CLI flags, 20 unit tests, 3-GPU build validation
-
----
-
 ## Session 41 Notes (2026-03-30 09:18 PM) — Autotune End-to-End (Phase 2 of PRD) 🎵⚡
 
 **What we accomplished:**
-- ✅ **Subprocess-based candidate evaluation** — `autotune_runner.cpp/hpp` (531 lines)
-  - Fork/exec with timeout + SIGKILL crash safety
-  - Generates temp config files per candidate (amd.txt / nvidia.txt)
-  - Spawns miner in `--benchmark` mode with `--benchmark-json` output
-  - Creates isolated dummy pools.txt (no pool connection needed)
-  - Full process isolation — GPU context cleanup, no state leakage
-- ✅ **Device fingerprinting** — clinfo for AMD, nvidia-smi for NVIDIA
-  - SM count estimation fallback for NVIDIA (name-based lookup table for 20+ GPU models)
-  - Robust parsing: digit-prefix validation, 0-1024 range check for SM count
-- ✅ **Entry point** — `autotune_entry.cpp/hpp` wires manager + runner + config writing
-  - Writes winning params to amd.txt / nvidia.txt in production format
-  - Persists full results to autotune.json with fingerprint-based caching
-  - Skip guided pool config in autotune/benchmark modes
-- ✅ **3-GPU live autotune validation:**
-  - **AMD RX 9070 XT**: 9 candidates, winner intensity=1536 worksize=8 → **4,454 H/s** ✓
-  - **NVIDIA GTX 1070 Ti**: 9 candidates (3 OK, 6 OOM=handled), winner threads=8 blocks=114 → **1,642 H/s** ✓
-  - **NVIDIA RTX 2070**: 7 candidates (3 OK, 4 OOM=handled), winner threads=8 blocks=144 → **2,189 H/s** ✓
-- ✅ **All stability validations passed** on all 3 GPUs
-- ✅ **Merged to master**, branch deleted
+- ✅ Subprocess-based candidate evaluation (fork/exec + crash safety)
+- ✅ Device fingerprinting via clinfo/nvidia-smi with SM count estimation fallback
+- ✅ 3-GPU live autotune with stability validation on all 3 architectures
+- ✅ Fixed: uninitialized DeviceFingerprint fields, nvidia-smi stdout error parsing
 
-**Key bugs found & fixed during session:**
-- DeviceFingerprint `compute_units`/`vram_bytes` not zero-initialized → garbage values
-- nvidia-smi `gpu_sm_count` error printed to stdout → garbage parsed by stoul
-- clinfo output parsing needed robust trimming + key matching
-- Subprocess needed isolated pools.txt to avoid guided config wizard
+---
 
-**Next session priorities (Session 42):**
-1. **Balanced mode testing** — Quick mode is proven; test balanced mode for better candidate coverage
-2. **Multi-GPU support** — Test with `--autotune-gpu 0,1` on multi-GPU rigs
-3. **Resume support** — Interrupted autotune should resume from autotune.json
-4. **Phase 4+5 AES optimization** — Secondary kernel optimization target (11-18% of time)
-5. **CUDA launch config experiments** — Now that autotune works, systematically test block sizes
+## Session 42 Notes (2026-03-30 10:00 PM) — cn_gpu-Aware Candidates + Balanced Mode Validation 🎵🎯
+
+**What we accomplished:**
+- ✅ **Rewrote NVIDIA candidate generator** with cn_gpu kernel constraints:
+  - `threads` MUST be 8 (8 groups × 16 threads/hash = 128 matching __launch_bounds__)
+  - `blocks` sweeps around architecture-optimal: Pascal=7×SM, Turing+=6×SM
+  - Per-hash memory: 2 MiB scratchpad + 16 KiB local + 680 B metadata (from cuda_device.cu)
+  - Quick: 3 candidates (optimal ± 1), Balanced: 6, Exhaustive: 11
+- ✅ **Eliminated 100% of NVIDIA OOM crashes** — was 67% failure rate, now 0%
+- ✅ **Balanced mode tested on AMD** — 10/10 candidates successful, confirms i=1536/ws=8 optimal
+- ✅ **21 unit tests** (added `nvidia_candidates_pascal_vs_turing` architecture test)
+- ✅ **Full 3-GPU validation with v2 candidates:**
+
+| GPU | Candidates | Success | Winner | H/s | Time |
+|-----|-----------|---------|--------|-----|------|
+| AMD RX 9070 XT | 9 (quick) | 9/9 ✅ | i=1536 ws=8 | 4,531 | 372s |
+| AMD RX 9070 XT | 10 (balanced) | 10/10 ✅ | i=1536 ws=8 | 4,403 | 346s |
+| NVIDIA GTX 1070 Ti | 3 (quick) | 3/3 ✅ | t=8 b=114 (6×SM) | 1,687 | 155s |
+| NVIDIA RTX 2070 | 3 (quick) | 3/3 ✅ | t=8 b=216 (6×SM) | 2,160 | 154s |
+
+**Key insight:** Turing+ prefers 6× SM block multiplier, Pascal prefers 6-7×. The kernel's `__launch_bounds__(128, 8)` means max 8 blocks/SM with 128 threads each = 32 warps/SM — already maxing occupancy on Pascal.
+
+**Next session priorities (Session 43):**
+1. **Documentation update** — Add autotune usage to README, document architecture decisions
+2. **Live mining validation** — Test accepted shares with autotuned configs on real pool
+3. **Phase 4+5 AES optimization** — Secondary kernel target (11-18% of total time)
+4. **Balanced NVIDIA sweep** — Test balanced mode on NVIDIA for more block count data points
 
 ---
 
