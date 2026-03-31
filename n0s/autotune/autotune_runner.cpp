@@ -456,24 +456,32 @@ bool SubprocessRunner::collectNvidiaFingerprint(uint32_t device_index, DeviceFin
 		pclose(cuda_pipe);
 	}
 
-	// nvidia-smi doesn't expose SM count directly. Query via CUDA deviceQuery
-	// or estimate from compute capability + GPU name heuristic.
-	std::ostringstream sm_cmd;
-	sm_cmd << "nvidia-smi -i " << device_index
-	       << " --query-gpu=gpu_sm_count --format=csv,noheader 2>/dev/null";
-	FILE* sm_pipe = popen(sm_cmd.str().c_str(), "r");
-	if(sm_pipe)
+	// Try to get SM count via nvidia-smi (newer drivers support this)
 	{
-		if(fgets(buf.data(), buf.size(), sm_pipe))
+		std::ostringstream sm_cmd;
+		sm_cmd << "nvidia-smi -i " << device_index
+		       << " --query-gpu=gpu_sm_count --format=csv,noheader 2>/dev/null";
+		FILE* sm_pipe = popen(sm_cmd.str().c_str(), "r");
+		if(sm_pipe)
 		{
-			std::string sm_str = buf.data();
-			sm_str.erase(sm_str.find_last_not_of(" \t\n\r") + 1);
-			try { fingerprint.compute_units = std::stoul(sm_str); } catch(...) {}
+			std::array<char, 128> sm_buf{};
+			if(fgets(sm_buf.data(), sm_buf.size(), sm_pipe))
+			{
+				std::string sm_str = sm_buf.data();
+				sm_str.erase(sm_str.find_last_not_of(" \t\n\r") + 1);
+				// Only parse if the string starts with a digit (nvidia-smi error messages don't)
+				if(!sm_str.empty() && sm_str[0] >= '0' && sm_str[0] <= '9')
+				{
+					try {
+						uint32_t sm = std::stoul(sm_str);
+						if(sm > 0 && sm <= 1024) // Sanity check
+							fingerprint.compute_units = sm;
+					} catch(...) {}
+				}
+			}
+			pclose(sm_pipe);
 		}
-		pclose(sm_pipe);
 	}
-
-	printer::inst()->print_msg(L0, "AUTOTUNE: nvidia-smi SM query result: compute_units=%u", fingerprint.compute_units);
 
 	// If nvidia-smi didn't report SM count (older drivers), estimate from compute cap
 	if(fingerprint.compute_units == 0)
