@@ -39,8 +39,8 @@ struct DeviceFingerprint
 	BackendType backend;
 	std::string gpu_name;         // e.g., "AMD Radeon RX 9070 XT"
 	std::string gpu_architecture; // e.g., "gfx1201" or "sm_61"
-	uint64_t vram_bytes;
-	uint32_t compute_units;       // CUs for AMD, SMs for NVIDIA
+	uint64_t vram_bytes = 0;
+	uint32_t compute_units = 0;   // CUs for AMD, SMs for NVIDIA
 	std::string driver_version;
 	std::string runtime_version;  // OpenCL version or CUDA runtime version
 	std::string miner_version;    // git commit or version string
