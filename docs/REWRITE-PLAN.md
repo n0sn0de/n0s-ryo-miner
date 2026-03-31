@@ -143,9 +143,9 @@ tests/
 2. ✅ **Full matrix test** — DONE (S32: All 4 builds pass, 100% success rate)
 3. ✅ **Branch cleanup & merge** (~15 min) — Merge refactor/benchmark-phase1 to master, delete stale branches
 4. ✅ **Create release** (~15 min) — Tag version, package dist/ artifacts for GitHub release
-5. **Documentation update** (~30 min) — Add container build instructions to README
-6. **Live mining validation** (~1 hour when pool/wallet available) — Test accepted shares on real pool
-7. **Begin optimization phase** — Profile real mining workload, identify hotspots
+5. ✅ **Documentation update** — README overhaul + AUTOTUNE.md + CHANGELOG.md (S43)
+6. ✅ **Live mining validation** — 100% accepted shares on 3 GPUs (S44)
+7. ✅ **Begin optimization phase** — Profiled all phases, autotune implemented (S37-42)
 
 **Deferred (revisit during optimization phase):**
 - ~~Benchmark harness debugging~~ — Production miner works, harness has environmental issues
@@ -232,10 +232,36 @@ The CryptoNight-GPU algorithm is *intentionally* resistant to optimization in Ph
 This means Phase 3 optimization ROI is near zero without changing the algorithm itself. Future optimization efforts should focus on Phase 4+5 (11-18%), or infrastructure improvements (multi-GPU scheduling, pool efficiency).
 
 **Next session priorities (Session 44):**
-1. **Live mining validation** — Test accepted shares with autotuned configs on real pool
-2. **Container builds for v3.1.0** — Build release binaries using the build matrix
+1. ✅ **Live mining validation** — 100% accepted shares on real pool (all 3 GPUs)
+2. ✅ **Container builds for v3.1.0** — Full build matrix (OpenCL + CUDA 11.8/12.6/12.8)
 3. **Autotune balanced mode on NVIDIA** — Test wider block count sweep for more data
 4. **Phase 4+5 optimization experiments** — Profile AES rounds, test __shfl_sync alternatives
+
+---
+
+## Session 44 Notes (2026-03-30 11:01 PM) — Live Mining Validation + Release Binaries 🎯🚀
+
+**What we accomplished:**
+- ✅ **Container build matrix — ALL 4 backends pass:**
+  - OpenCL (Ubuntu 22.04): 1.6 MiB — verified 4,506 H/s benchmark
+  - CUDA 11.8 (Pascal→Ada): 3.6 MiB
+  - CUDA 12.6 (Pascal→Hopper): 4.0 MiB
+  - CUDA 12.8 (Pascal→Blackwell): 4.7 MiB
+- ✅ **LIVE MINING — 100% accepted shares on all 3 GPUs:**
+  - **AMD RX 9070 XT** (nitro): 120 seconds, ~200+ shares accepted, diff 1000→1500→2250, **zero rejections**
+  - **NVIDIA GTX 1070 Ti** (nos2): 60 seconds, 72 shares accepted, CUDA 11.8 container binary, **zero rejections**
+  - **NVIDIA RTX 2070** (nosnode): 60 seconds, 88 shares accepted, CUDA 12.6 binary in forward-compat mode (driver 12.2), **zero rejections**
+- ✅ **All 8 release binaries uploaded to GitHub** (v3.1.0 release)
+- ✅ **Autotuned configs validated in production** — pool difficulty ramp confirms real hashrate
+
+**This is the first time the entire pipeline has been validated end-to-end:**
+`autotune → config write → container build → deploy → live mine → 100% accepted shares`
+
+**Next session priorities (Session 45):**
+1. **Autotune balanced mode on NVIDIA** — Test wider block count sweep
+2. **Phase 4+5 optimization experiments** — Profile AES rounds on 3 GPUs
+3. **Autotune UX improvements** — Better GPU name detection, progress bars
+4. **Multi-GPU autotune** — Test `--autotune-gpu 0,1` scenarios
 
 ---
 
