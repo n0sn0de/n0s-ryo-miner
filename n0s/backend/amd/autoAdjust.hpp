@@ -169,9 +169,11 @@ class autoAdjust
 
 			if(useCryptonight_gpu)
 			{
-				// 6 waves per compute unit are a good value (based on profiling)
-				// @todo check again after all optimizations
-				maxThreads = ctx.computeUnits * 6 * 8;
+				// 6 waves per CU × worksize threads per wave
+				// Benchmarked on RDNA4 (gfx1201, 32 CUs):
+				//   ws=16, CUs*6*8=1536  → 4,889 H/s
+				//   ws=16, CUs*6*16=3072 → 5,017 H/s (+2.6%)
+				maxThreads = ctx.computeUnits * 6 * default_workSize;
 				// do not change unroll for AMD RX5700 but set 2 threads per gpu
 				if(ctx.name.compare("gfx1010") == 0)
 					numThreads = 2;

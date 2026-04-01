@@ -58,7 +58,8 @@ inline std::vector<AmdCandidate> generateAmdCandidates(
 		if(unit == 0) continue;
 
 		// Base: what autoAdjust currently picks (6 waves * 8 threads * CUs for cn_gpu)
-		size_t base_intensity = compute_units * 6 * 8;
+		// 6 waves per CU × worksize threads per wave
+		size_t base_intensity = compute_units * 6 * ws;
 		base_intensity = (base_intensity / ws) * ws; // Align to worksize
 
 		if(mode == TuneMode::Quick)
