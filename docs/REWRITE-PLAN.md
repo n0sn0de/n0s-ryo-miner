@@ -155,14 +155,18 @@ tests/
 - ⏳ Deeply review the CN-GPU-WHITEPAPER.md to understand the algo in conjunction with the codebase to assess approach to optimization opportunities
 - ✅ Profile on AMD RDNA4 (S37: --profile flag, per-phase timing, baseline established)
 - ✅ Profile on NVIDIA Pascal/Turing (S38: --profile ported to CUDA, baselines established)
-- ⏳ Optimize shared memory usage in Phase 3 kernel
+- ✅ Phase 3 constant memory → register hoisting (S49: −3.1% Phase 3 on Pascal CUDA)
 - ✅ Explore occupancy improvements (S47: intensity formula scaled by worksize, +2.6%)
+- ❌ CUDA warp shuffles for Phase 3 data exchange — shared memory wins due to load/compute overlap (S49)
+- ❌ CUDA launch_bounds tuning — (128,8) is optimal; (128,6) no gain, (128,10) spills (S49)
+- ❌ OpenCL CN_UNROLL tuning — unroll=1 optimal on RDNA4; unroll=8 is 3% worse (S49)
 - ⏳ Consider CUDA Graphs for kernel chaining
 - ✅ Algorithm/Kernel Autotuning framework — Phase 1 complete (S40: types, scoring, candidates, persistence, CLI, 20 unit tests)
 - ✅ Algorithm/Kernel Autotuning — Phase 2: End-to-end `--autotune` (S41: subprocess benchmark eval, fingerprinting, config writing, 3-GPU validated)
 - ✅ Phase 2 OpenCL workgroup optimization (S47: WG 64→512, −76% Phase 2 time, +15.7% hashrate)
 - ✅ OpenCL Keccak Rho/Pi inlined (S47: matches CUDA, eliminates constant memory lookups)
 - ✅ Fix or rebuild benchmark harness for reproducible measurements (S36: --benchmark-json + stability CV% + tests/benchmark.sh)
+- ✅ CUDA intensity tuning (S48: Pascal 7→6, Turing 6→8 block multipliers)
 
 ---
 
@@ -178,67 +182,6 @@ tests/
 - ✅ Config/algo system simplified (single-algorithm focus)
 - ✅ OpenCL dead kernel branches removed
 - ✅ Modern C++ headers everywhere (`<cstdint>` not `<stdint.h>`)
-
----
-
-## Session 44b Notes (2026-03-30 11:35 PM) — Colorized Terminal + GPU Telemetry 🎨⚡
-
-**What we accomplished:**
-- ✅ **RYO-branded ASCII banner** — Blue→cyan gradient using 256-color ANSI codes
-  - "N0S" in medium blue, "RYO" in cyan, connected with bright cyan dash
-  - Version + tagline in dim text, framed in dark blue box-drawing
-- ✅ **Colorized share notifications:**
-  - `✓` green checkmark for accepted shares
-  - `✗` red X for rejected shares
-  - Pool address in dim text
-- ✅ **GPU telemetry module** — `gpu_telemetry.cpp/hpp`:
-  - AMD: sysfs queries for temp, power (µW→W), fan RPM/%, GPU/mem clocks
-  - NVIDIA: nvidia-smi CSV query for temp, power, fan%, GPU/mem clocks
-  - Color-coded temperature: cyan (<70°C), yellow (70-85°C), red (>85°C)
-  - H/W efficiency display (hashrate / watts)
-- ✅ **Extended ANSI color palette** — K_BRIGHT_BLUE, K_BRIGHT_CYAN, K_DIM, K_BOLD
-- ✅ **Colorized hashrate report** — Gradient separators, colored totals, telemetry section
-- ✅ **Color-stripped logfile output** — `print_str_color()` method
-- ✅ **3-GPU build validated** — nitro (OpenCL), nos2 (CUDA 11.8), nosnode (CUDA 12.6)
-- ✅ **Live mining: green checkmarks flooding in** — 100% accepted shares with new visuals
-
----
-
-The code is ours now. The dead weight is gone, the names make sense, and the path forward is clear. We're not rewriting for elegance — we're rewriting for ownership, understanding, and the ability to confidently modify any part of the system.
-
----
-
-## Session 45 Notes (2026-03-31 12:00 PM) — Dead Architecture Code Purge 🧹⚡
-
-**What we accomplished:**
-- ✅ **Purged 704 lines of dead pre-sm_60 CUDA code:**
-  - Removed `cuda_cryptonight_r.curt` (618 lines, completely unreferenced dead file)
-  - Stripped all `__CUDA_ARCH__ < 300/350/500` fallback paths (min target is sm_60 Pascal)
-  - Removed pre-CUDA 9 `__shfl()` paths → always `__shfl_sync()` 
-  - Simplified `shuffle<>` template: removed unused shared memory params (was pre-sm_30 fallback)
-  - Removed `N0S_LARGEGRID` cmake conditional → always `uint64_t` IndexType
-  - Always use `__byte_perm()`, `__funnelshift_l/r()` for bit ops (native on sm_60+)
-  - Always use `__syncwarp()` (CUDA 9+ guaranteed)
-  - Removed dynamic shared memory allocation for shuffle fallback in Phase 4 dispatch
-  - **Kept** `__CUDA_ARCH__ < 700` `.cg` cache hints (real perf benefit on Pascal/Turing)
-- ✅ **Removed dead Tahiti/Pitcairn OpenCL code path** (ancient GCN 1.0, HD 7000 series from 2012)
-- ✅ **3-GPU validation — all pass with identical hashrates:**
-  - AMD RX 9070 XT (nitro): 2304.0 H/s ✅
-  - NVIDIA GTX 1070 Ti (nos2): 1489.6 H/s ✅  
-  - NVIDIA RTX 2070 (nosnode): 2073.6 H/s ✅
-- ✅ **Both branches merged to master, deleted, all 3 nodes synced**
-
-**Key insight:** The CUDA codebase carried ~700 lines of dead compatibility code for architectures (Fermi/Kepler/Maxwell) that our CMakeLists.txt already rejects at configure time (min sm_60). The `cuda_cryptonight_r.curt` file was a 618-line template for a completely different algorithm variant that was never compiled or referenced. Clean kills, zero risk.
-
-**What we deliberately kept:**
-- `__CUDA_ARCH__ < 700` cache hint paths: `.cg` (cache global L2 only) PTX for `loadGlobal64/32` and `storeGlobal64/32` — real optimization for Pascal/Turing scratchpad access
-- `HAS_AMD_BPERMUTE` OpenCL paths: AMD's equivalent of CUDA `__shfl_sync`, used on GCN 3+ and RDNA
-- `COMP_MODE` OpenCL paths: runtime-configured for non-aligned workgroup sizes
-
-**Next session priorities (Session 46):**
-1. ✅ **Phase 4+5 profiling split** — Separate Phase 4 (implode) from Phase 5 (finalize) timing
-2. ✅ **Phase 4+5 optimization experiments** — Tested AES table variants, worksize tuning
-3. ✅ **RDNA worksize fix** — Default worksize 16 for RDNA GPUs (was 8)
 
 ---
 
@@ -387,7 +330,55 @@ The code is ours now. The dead weight is gone, the names make sense, and the pat
 - RTX 2070: **+1.7%** (2226 → 2263 H/s)
 
 **Next session priorities (Session 49):**
-1. **Merge to master** — Create PR for `optimize/cuda-intensity-tuning` branch
+1. ✅ **Merge to master** — `optimize/cuda-intensity-tuning` merged (S49 recovery)
 2. **Container builds with all optimizations** — Release v3.2.0 (OpenCL + CUDA matrix)
 3. **Test on Ampere (sm_8x)** — Does 8×SMs remain optimal? Does 10× work?
-4. **Phase 3 analysis** — Roofline model, can we reduce FP dependency chain depth?
+4. ✅ **Phase 3 constant memory optimization** — Hoisted to registers (S49)
+
+---
+
+## Session 49 Notes (2026-04-01 10:22 PM) — Recovery + Phase 3 Constant Memory Optimization 🔧⚡
+
+**Recovery from Session 48 crash:**
+- ✅ Session 48 work was complete — branch had 2 clean commits, just not merged
+- ✅ Merged `optimize/cuda-intensity-tuning` to master, pushed, deleted branch
+- ✅ Synced all 3 nodes to master, verified builds + benchmarks
+- ✅ Cleaned up **37 stale local branches** across nos2 and nosnode
+- ✅ All nodes now have only `master` branch — pristine state
+
+**Phase 3 Optimization Experiments:**
+
+### 1. Constant Memory → Register Hoisting (THE WIN ✅)
+- Pre-loaded `SHUFFLE_PATTERN[tid][0..3]` and `THREAD_CONSTANTS[tid]` into registers
+- CUDA constant memory serializes when 16 threads access different addresses
+- **CUDA Pascal:** Phase 3 507K → 491K µs (**−3.1%**), 62→63 registers, zero spills
+- **OpenCL RDNA4:** No measurable change (AMD compiler already optimizes this)
+- 3-GPU live mining: 100% share acceptance ✅
+
+### 2. Experiments Tested and Rejected
+| Experiment | Result | Why |
+|-----------|--------|-----|
+| `__shfl_sync` warp shuffles for input data | −1.3% regression | Shared mem loads overlap with FP compute; sequential shuffles don't |
+| `launch_bounds(128, 6)` — more registers | No change | Compiler already uses 62/64 regs optimally |
+| `launch_bounds(128, 10)` — higher occupancy | −3.7% regression | Register spilling (48 regs + 36B spill stores) |
+| OpenCL CN_UNROLL=8 | −3.0% regression | RDNA4 compiler handles unroll=1 better |
+| OpenCL CN_UNROLL=2 | No change | Within noise |
+
+### 3. Updated 3-GPU Baselines (Session 49)
+
+| Phase | RX 9070 XT (ws=16, i=3072) | GTX 1070 Ti (6×SM) | RTX 2070 (8×SM) |
+|-------|---:|---:|---:|
+| Phase 1 | 128 µs (0.0%) | ~0 µs (0.0%) | ~0 µs (0.0%) |
+| Phase 2 | 30K µs (5.0%) | 15K µs (2.6%) | 37K µs (3.2%) |
+| Phase 3 | 461K µs (76.4%) | 491K µs (87.8%) | 981K µs (84.6%) |
+| Phase 4+5 | 112K µs (18.5%) | 53K µs (9.5%) | 141K µs (12.2%) |
+| **Total** | **603K µs** | **559K µs** | **1159K µs** |
+| **H/s** | **5,069** | **1,631** | **2,236** |
+
+**Key insight:** Phase 3 is algorithmically bound by the serial FP dependency chain (32 sub-rounds × 4 rounds × 49K iterations ≈ 14.2M dependent FLOPs per hash). The constant memory optimization was the last low-hanging fruit for the inner loop. Future Phase 3 gains require algorithm-level changes (reducing dependency depth) or higher-clock hardware.
+
+**Next session priorities (Session 50):**
+1. **Container builds with all optimizations** — Release v3.2.0 (OpenCL + CUDA matrix)
+2. **Phase 4 deep dive** — 18.5% on AMD, 9.5% on Pascal. AES implode has room for RDNA-specific tuning
+3. **CUDA Graphs** — Chain Phases 2→3→4 to eliminate kernel launch overhead
+4. **Scratchpad memory layout** — Profile cache behavior, consider padding for bank conflicts
