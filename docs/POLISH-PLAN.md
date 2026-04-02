@@ -2,7 +2,7 @@
 
 **From Optimized Engine to Shipped Product**
 
-*Status: Active. Pillar 1 complete (Session 50). Pillar 2 dashboard MVP complete (Session 51). Asset embedding + --gui flag next.*
+*Status: Active. Pillar 1 complete (Session 50). Pillar 2 dashboard phase 2 complete (Session 53). Container builds validated.*
 
 ---
 
@@ -635,9 +635,46 @@ Implementation notes:
 - microhttpd's `MHD_RESPMEM_PERSISTENT` + constexpr arrays = no allocation per request for static assets
 - The `--gui-dev` mode is essential for iterating on the frontend without rebuilding the C++ binary
 
-**Next session priorities (Session 52):**
-1. **Autotune controls in GUI** — Start/stop autotune from dashboard, show progress
-2. **Pool config editor** — PUT `/api/v1/config/pool` endpoint + form in dashboard
-3. **WebSocket or SSE** — Replace polling with push for lower latency chart updates
-4. **Responsive polish** — Test on mobile browsers, refine spacing/typography
-5. **Container build validation** — Ensure embedded assets work in container builds
+### Session 53 (2026-04-02) — GUI Phase 2: Config/Autotune API + Container Build Fix 🔧⚡
+
+**Extended dashboard API to 9 endpoints, fixed container build pipeline.**
+
+| Component | Detail |
+|-----------|--------|
+| **`GET /api/v1/config`** | Pool config (address, masked wallet, rig_id, TLS, nicehash, weight) |
+| **`GET /api/v1/autotune`** | Cached autotune results with per-GPU best scores + settings |
+| **Frontend: Pool config section** | Wallet, Rig ID, TLS status in the pool info panel |
+| **Frontend: Autotune display** | Shows autotune results when `autotune.json` exists |
+| **Frontend: Accent card** | Hashrate card gets subtle cyan glow border |
+| **Container build: dependency fix** | `add_dependencies(n0s-backend gui_assets)` — critical fix |
+| **Container build: namespace fix** | `findAsset()` moved outside `n0s::gui` namespace — GCC 11 compat |
+| **Container build: deps** | Added `gzip` + `xxd` packages to container build script |
+
+**Container build bug discovered and fixed:**
+The `gui_assets` custom command was depended on by `n0s-ryo-miner` (executable) but `httpd.cpp` compiles inside `n0s-backend` (static library). This race condition meant the embedded header could be stale when `httpd.cpp` compiled in the container. Additionally, GCC 11.4 (Ubuntu 22.04) resolved `std::align_val_t` inside `namespace n0s::gui` as `n0s::gui::std::align_val_t`, causing a template substitution failure. Both fixed.
+
+**Validated:**
+- Container build CUDA 11.8: ✅ (2.3 MB single binary with GUI embedded)
+- Golden hash tests: 3/3 pass ✅
+- All 9 REST API endpoints: valid JSON ✅
+- 3-GPU live mining: 100% share acceptance ✅
+
+**API endpoint inventory (9 total):**
+| # | Endpoint | Method | Purpose |
+|---|----------|--------|---------|
+| 1 | `/api/v1/status` | GET | Mining state, uptime, connection |
+| 2 | `/api/v1/hashrate` | GET | Per-GPU + total hashrate (10s/60s/15m) |
+| 3 | `/api/v1/hashrate/history` | GET | Time-series ring buffer (3600 samples) |
+| 4 | `/api/v1/gpus` | GET | GPU telemetry (temp/power/fan/clocks) |
+| 5 | `/api/v1/pool` | GET | Shares, difficulty, ping, top diffs |
+| 6 | `/api/v1/config` | GET | Pool config (wallet masked) |
+| 7 | `/api/v1/autotune` | GET | Cached autotune results |
+| 8 | `/api/v1/version` | GET | Version, backends, algorithm |
+| 9 | `/gui/*` | GET | Embedded dashboard SPA (6.8 KB gzipped) |
+
+**Next session priorities (Session 54):**
+1. **Pool config write API** — `PUT /api/v1/config/pool` with reconnect
+2. **Responsive polish** — Test on mobile browsers, refine spacing/typography
+3. **Error state handling** — Dashboard behavior when pool disconnects
+4. **Container build matrix** — Full CUDA 11.8/12.6/12.8 validation
+5. **Version bump** — v3.2.0 release prep (Pillar 1 + Pillar 2 phase 1)
