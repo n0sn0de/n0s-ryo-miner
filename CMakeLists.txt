@@ -288,6 +288,7 @@ file(GLOB BACKEND_CPP
     "n0s/misc/*.cpp"
     "n0s/net/*.cpp")
 add_library(n0s-backend STATIC ${BACKEND_CPP})
+add_dependencies(n0s-backend gui_assets)
 if(MICROHTTPD_ENABLE)
     target_link_libraries(n0s-backend ${MHTD})
 endif()
@@ -342,7 +343,6 @@ add_custom_target(gui_assets DEPENDS ${EMBEDDED_ASSETS_HPP})
 file(GLOB SRCFILES_CPP "n0s/cli/*.cpp")
 set_source_files_properties(${SRCFILES_CPP} PROPERTIES LANGUAGE CXX)
 add_executable(n0s-ryo-miner ${SRCFILES_CPP})
-add_dependencies(n0s-ryo-miner gui_assets)
 
 set(EXECUTABLE_OUTPUT_PATH "bin" CACHE STRING "Path to executables relative to ${CMAKE_INSTALL_PREFIX}")
 set(LIBRARY_OUTPUT_PATH "bin" CACHE STRING "Path to libraries relative to ${CMAKE_INSTALL_PREFIX}")

@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>N0S-RYO GPU Miner</title>
+<link rel="icon" href="data:,">
 <link rel="stylesheet" href="/gui/style.css">
 </head>
 <body>
@@ -19,14 +20,14 @@
     <span id="pool-addr" class="pool-addr">—</span>
     <span id="conn-dot" class="conn-dot disconnected"></span>
     <div class="version-line">
-      <span id="version-str">—</span> &bull; <span id="uptime-str">0s</span>
+      <span id="version-str">—</span> &bull; uptime <span id="uptime-str">0s</span>
     </div>
   </div>
 </header>
 
 <!-- Stats Row -->
 <div class="stats-row">
-  <div class="stat-card">
+  <div class="stat-card accent">
     <div class="stat-label">Total Hashrate</div>
     <div class="stat-value" id="total-hs">—</div>
     <div class="stat-sub" id="total-hs-sub">&nbsp;</div>
@@ -77,12 +78,15 @@
   </table>
 </div>
 
-<!-- Pool Info + Top Diffs -->
+<!-- Bottom Row: Pool + Config + Top Diffs -->
 <div class="bottom-row">
   <div class="pool-section">
     <div class="section-title">Pool</div>
     <div class="info-grid" id="pool-info">
       <span class="info-label">Address</span><span class="info-value" id="pi-addr">—</span>
+      <span class="info-label">Wallet</span><span class="info-value" id="pi-wallet">—</span>
+      <span class="info-label">Rig ID</span><span class="info-value" id="pi-rigid">—</span>
+      <span class="info-label">TLS</span><span class="info-value" id="pi-tls">—</span>
       <span class="info-label">Hashes</span><span class="info-value" id="pi-hashes">—</span>
       <span class="info-label">Avg Share</span><span class="info-value" id="pi-avg-share">—</span>
       <span class="info-label">Uptime</span><span class="info-value" id="pi-uptime">—</span>
@@ -91,6 +95,10 @@
   <div class="top-diff-section">
     <div class="section-title">Top Difficulties</div>
     <div id="top-diffs" class="top-diffs"></div>
+    <div class="autotune-section" id="autotune-box" style="display:none">
+      <div class="section-title" style="margin-top:16px">Autotune Results</div>
+      <div id="autotune-info"></div>
+    </div>
   </div>
 </div>
 

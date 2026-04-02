@@ -114,6 +114,10 @@ MHD_Result httpd::req_handler([[maybe_unused]] void* cls,
 			return serve_api_json(EV_API_GPUS);
 		else if(strcasecmp(endpoint, "pool") == 0)
 			return serve_api_json(EV_API_POOL);
+		else if(strcasecmp(endpoint, "config") == 0)
+			return serve_api_json(EV_API_CONFIG);
+		else if(strcasecmp(endpoint, "autotune") == 0)
+			return serve_api_json(EV_API_AUTOTUNE);
 		else if(strcasecmp(endpoint, "version") == 0)
 			return serve_api_json(EV_API_VERSION);
 		else
@@ -165,7 +169,7 @@ MHD_Result httpd::req_handler([[maybe_unused]] void* cls,
 		}
 
 		// Embedded mode: serve pre-gzipped assets
-		const auto* asset = n0s::gui::findAsset(url);
+		const auto* asset = n0s_gui_findAsset(url);
 		if(asset != nullptr)
 		{
 			rsp = MHD_create_response_from_buffer(asset->size,

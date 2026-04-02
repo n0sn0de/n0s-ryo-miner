@@ -104,6 +104,8 @@ class executor
 	void api_hashrate_history_report(std::string& out);
 	void api_gpus_report(std::string& out);
 	void api_pool_report(std::string& out);
+	void api_config_report(std::string& out);
+	void api_autotune_report(std::string& out);
 	void api_version_report(std::string& out);
 
 	void http_report(ex_event_name ev);

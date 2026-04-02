@@ -80,31 +80,23 @@ done
 
 # Also serve root "/" -> index.html
 first_var=$(echo "${ASSETS[0]}" | cut -d'|' -f1)
-cat >> "$OUTPUT" <<TABLE_END
+cat >> "$OUTPUT" <<'TABLE_END'
 };
 static constexpr size_t ASSET_COUNT = sizeof(ASSETS) / sizeof(ASSETS[0]);
 
-// Lookup by URL path. Returns nullptr if not found.
-inline const EmbeddedAsset* findAsset(const char* path) {
-    // Root redirect
-    if (path[0] == '/' && path[1] == '\\0') path = "/gui/index.html";
-    for (size_t i = 0; i < ASSET_COUNT; i++) {
-        // Compare case-insensitive
-        const char* a = ASSETS[i].path;
-        const char* b = path;
-        while (*a && *b) {
-            char ca = *a >= 'A' && *a <= 'Z' ? *a + 32 : *a;
-            char cb = *b >= 'A' && *b <= 'Z' ? *b + 32 : *b;
-            if (ca != cb) break;
-            a++; b++;
-        }
-        if (*a == '\\0' && *b == '\\0') return &ASSETS[i];
+} // namespace gui
+} // namespace n0s
+
+// Lookup outside the namespace to avoid std:: resolution issues
+#include <cstring>
+inline const n0s::gui::EmbeddedAsset* n0s_gui_findAsset(const char* path) {
+    if (path[0] == '/' && path[1] == '\0') path = "/gui/index.html";
+    for (size_t i = 0; i < n0s::gui::ASSET_COUNT; i++) {
+        if (strcasecmp(n0s::gui::ASSETS[i].path, path) == 0)
+            return &n0s::gui::ASSETS[i];
     }
     return nullptr;
 }
-
-} // namespace gui
-} // namespace n0s
 TABLE_END
 
 echo "Generated $OUTPUT with ${#ASSETS[@]} assets"

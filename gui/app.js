@@ -65,11 +65,16 @@ const el = {
   pingSub:    $('ping-sub'),
   gpuTbody:   $('gpu-tbody'),
   piAddr:     $('pi-addr'),
+  piWallet:   $('pi-wallet'),
+  piRigid:    $('pi-rigid'),
+  piTls:      $('pi-tls'),
   piHashes:   $('pi-hashes'),
   piAvgShare: $('pi-avg-share'),
   piUptime:   $('pi-uptime'),
   topDiffs:   $('top-diffs'),
   chartLegend:$('chart-legend'),
+  autotuneBox:$('autotune-box'),
+  autotuneInfo:$('autotune-info'),
 };
 
 // ─── Update Functions ───
@@ -177,6 +182,48 @@ async function updateGpus() {
     </tr>`;
   }
   el.gpuTbody.innerHTML = html;
+}
+
+async function updateConfig() {
+  const d = await api('/config');
+  if (!d) return;
+
+  const pools = d.pools || [];
+  if (pools.length > 0) {
+    const p = pools[0];
+    el.piWallet.textContent = p.wallet || '—';
+    el.piRigid.textContent = p.rig_id || '(none)';
+    el.piTls.textContent = p.tls ? '✓ enabled' : '✗ disabled';
+    el.piTls.style.color = p.tls ? 'var(--green)' : 'var(--text-dim)';
+  }
+}
+
+async function updateAutotune() {
+  const d = await api('/autotune');
+  if (!d || !d.available) {
+    el.autotuneBox.style.display = 'none';
+    return;
+  }
+
+  el.autotuneBox.style.display = '';
+  const devs = d.devices || [];
+  let html = '';
+  for (const dev of devs) {
+    html += `<div class="info-grid" style="margin-bottom:8px">`;
+    html += `<span class="info-label">GPU</span><span class="info-value">${dev.gpu_name}</span>`;
+    html += `<span class="info-label">Status</span><span class="info-value" style="color:${dev.completed ? 'var(--green)' : 'var(--yellow)'}">${dev.completed ? '✓ complete' : '⟳ in progress'}</span>`;
+    if (dev.best) {
+      html += `<span class="info-label">Best H/s</span><span class="info-value">${fmt(dev.best.hashrate)}</span>`;
+      html += `<span class="info-label">Stability</span><span class="info-value">${dev.best.stability_cv.toFixed(1)}% CV</span>`;
+      if (dev.best.intensity != null) {
+        html += `<span class="info-label">Settings</span><span class="info-value">intensity=${dev.best.intensity}, worksize=${dev.best.worksize}</span>`;
+      } else if (dev.best.threads != null) {
+        html += `<span class="info-label">Settings</span><span class="info-value">threads=${dev.best.threads}, blocks=${dev.best.blocks}</span>`;
+      }
+    }
+    html += `</div>`;
+  }
+  el.autotuneInfo.innerHTML = html;
 }
 
 async function loadHistory() {
@@ -328,7 +375,7 @@ async function init() {
   window.addEventListener('resize', () => { initChart(); drawChart(); });
 
   // Initial data load
-  await Promise.all([updateVersion(), loadHistory()]);
+  await Promise.all([updateVersion(), updateConfig(), updateAutotune(), loadHistory()]);
 
   // Main poll loop
   async function tick() {
@@ -337,8 +384,10 @@ async function init() {
   }
   tick();
 
-  // History refresh (less frequent)
+  // Less frequent refreshes
   setInterval(loadHistory, HISTORY_POLL_MS);
+  setInterval(updateConfig, 30000);  // Config rarely changes
+  setInterval(updateAutotune, 30000);
 }
 
 init();
