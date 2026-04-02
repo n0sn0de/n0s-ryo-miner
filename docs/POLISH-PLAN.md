@@ -2,7 +2,7 @@
 
 **From Optimized Engine to Shipped Product**
 
-*Status: Active. Pillar 1 complete (Session 50). Pillar 2 REST API foundation laid (Session 50). GUI frontend next.*
+*Status: Active. Pillar 1 complete (Session 50). Pillar 2 dashboard MVP complete (Session 51). Asset embedding + --gui flag next.*
 
 ---
 
@@ -294,15 +294,15 @@ struct HashrateHistory {
 
 ### 2.6 — Validation
 
-- [ ] Dashboard loads in Chrome, Firefox, Safari
-- [ ] Hashrate chart renders real-time data correctly
+- [x] Dashboard loads in Chrome, Firefox, Safari
+- [x] Hashrate chart renders real-time data correctly
 - [ ] Pool config changes apply on next pool reconnect
 - [ ] Autotune can be started/stopped from GUI
-- [ ] GPU telemetry updates every 2 seconds
-- [ ] All API endpoints return valid JSON
-- [ ] Frontend total size < 50 KB gzipped
-- [ ] `--gui` opens browser and mines simultaneously
-- [ ] CLI-only mode unaffected (no GUI overhead when not using `--gui`)
+- [x] GPU telemetry updates every 2 seconds
+- [x] All API endpoints return valid JSON (7 endpoints)
+- [x] Frontend total size < 50 KB gzipped (6.1 KB — 12% of target)
+- [x] `--gui` opens browser and mines simultaneously
+- [x] CLI-only mode unaffected (no GUI overhead when not using `--gui`)
 - [ ] Authentication works (digest auth on API endpoints)
 
 ### Estimated Scope
@@ -597,8 +597,47 @@ Implementation notes:
 - rapidjson `Writer` silently truncates output on NaN doubles — always sanitize
 - The `extern "C"` / `dlopen` pattern was pure legacy from xmr-stak's multi-algorithm days — clean removal
 
-**Next session priorities (Session 51):**
-1. **Hashrate history ring buffer** — Circular buffer for time-series data, `/api/v1/hashrate/history` endpoint
-2. **Frontend SPA** — `gui/index.html` + `gui/style.css` + `gui/app.js` — dashboard with hashrate chart
-3. **Asset embedding** — CMake pipeline: minify → gzip → xxd → embedded C++ header
-4. **`--gui` flag** — Launch browser to `localhost:{port}` with `xdg-open`
+### Session 51 (2026-04-02) — GUI Dashboard MVP: Frontend SPA + Asset Embedding 🖥️⚡
+
+**Complete GUI dashboard shipped — embedded in the miner binary.**
+
+| Component | Detail |
+|-----------|--------|
+| **Hashrate history ring buffer** | `HashrateHistory` class: 3600 samples, 1s resolution, ~115 KB memory, thread-safe |
+| **`/api/v1/hashrate/history`** | New time-series endpoint — serves chronological samples with per-GPU + total H/s |
+| **Frontend SPA** | `gui/index.html` + `gui/style.css` + `gui/app.js` — pure vanilla HTML/CSS/JS, zero dependencies |
+| **Hashrate chart** | Pure `<canvas>` drawing — scrolling time-series with per-GPU lines, total line, gradient fill |
+| **GPU telemetry table** | Real-time temp/power/fan/clocks for each GPU |
+| **Pool stats** | Shares (accepted/rejected), difficulty, ping, top difficulties |
+| **Dark theme** | `#0d1117` background, RYO blue→cyan gradient accents, monospace numerics |
+| **Asset embedding** | `scripts/embed_assets.sh` → gzip → xxd → C++ constexpr arrays |
+| **CMake integration** | `add_custom_command` auto-regenerates `embedded_assets.hpp` when gui/ files change |
+| **Embedded serving** | Pre-gzipped with `Content-Encoding: gzip` — zero runtime compression |
+| **`--gui` flag** | Start mining + open `xdg-open http://localhost:{port}/gui/index.html` |
+| **`--gui-dev DIR`** | Serve from filesystem for hot-reload development |
+| **Root redirect** | `/` → `/gui/index.html` (307 redirect) |
+| **Legacy preserved** | `/h`, `/c`, `/r`, `/api.json`, `/style.css` all still work |
+
+**Frontend sizes:**
+- `index.html`: 3,012 bytes → 904 bytes gzipped
+- `style.css`: 4,940 bytes → 1,470 bytes gzipped
+- `app.js`: 10,731 bytes → 3,767 bytes gzipped
+- **Total embedded: 6,141 bytes (12% of 50 KB target)**
+
+**3-GPU validation:**
+- nitro (RX 9070 XT, OpenCL): 200+ shares, 0 rejected ✅, API + GUI working ✅
+- nos2 (GTX 1070 Ti, CUDA 11.8): 25+ shares, 0 rejected ✅, API + GUI working ✅
+- nosnode (RTX 2070, CUDA 12.6): 50+ shares, 0 rejected ✅, API + GUI working ✅
+
+**Key learnings:**
+- Pure Canvas chart rendering is ~200 lines of JS and renders buttery smooth — no charting library needed
+- Pre-gzipped embedded assets with `Content-Encoding: gzip` = zero overhead at serving time
+- microhttpd's `MHD_RESPMEM_PERSISTENT` + constexpr arrays = no allocation per request for static assets
+- The `--gui-dev` mode is essential for iterating on the frontend without rebuilding the C++ binary
+
+**Next session priorities (Session 52):**
+1. **Autotune controls in GUI** — Start/stop autotune from dashboard, show progress
+2. **Pool config editor** — PUT `/api/v1/config/pool` endpoint + form in dashboard
+3. **WebSocket or SSE** — Replace polling with push for lower latency chart updates
+4. **Responsive polish** — Test on mobile browsers, refine spacing/typography
+5. **Container build validation** — Ensure embedded assets work in container builds
