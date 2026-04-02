@@ -650,6 +650,8 @@ void executor::ex_main()
 		case EV_API_HASHRATE_HISTORY:
 		case EV_API_GPUS:
 		case EV_API_POOL:
+		case EV_API_CONFIG:
+		case EV_API_AUTOTUNE:
 		case EV_API_VERSION:
 			http_report(ev.iName);
 			break;
@@ -1357,6 +1359,14 @@ void executor::http_report(ex_event_name ev)
 		api_pool_report(*pHttpString);
 		break;
 
+	case EV_API_CONFIG:
+		api_config_report(*pHttpString);
+		break;
+
+	case EV_API_AUTOTUNE:
+		api_autotune_report(*pHttpString);
+		break;
+
 	case EV_API_VERSION:
 		api_version_report(*pHttpString);
 		break;
@@ -1376,7 +1386,7 @@ void executor::get_http_report(ex_event_name ev_id, std::string& data)
 	assert(pHttpString == nullptr);
 	assert(ev_id == EV_HTML_HASHRATE || ev_id == EV_HTML_RESULTS || ev_id == EV_HTML_CONNSTAT || ev_id == EV_HTML_JSON ||
 		ev_id == EV_API_STATUS || ev_id == EV_API_HASHRATE || ev_id == EV_API_HASHRATE_HISTORY ||
-		ev_id == EV_API_GPUS || ev_id == EV_API_POOL || ev_id == EV_API_VERSION);
+		ev_id == EV_API_GPUS || ev_id == EV_API_POOL || ev_id == EV_API_CONFIG || ev_id == EV_API_AUTOTUNE || ev_id == EV_API_VERSION);
 
 	pHttpString = &data;
 	httpReady = std::promise<void>();

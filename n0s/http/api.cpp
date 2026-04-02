@@ -7,11 +7,14 @@
  * in executor.hpp — the functions are executor member functions.
  *
  * Endpoints:
- *   GET /api/v1/status    — Mining state, uptime, connection
- *   GET /api/v1/hashrate  — Per-GPU and total hashrate
- *   GET /api/v1/gpus      — GPU list with telemetry
- *   GET /api/v1/pool      — Pool info, shares, difficulty
- *   GET /api/v1/version   — Version and build info
+ *   GET /api/v1/status           — Mining state, uptime, connection
+ *   GET /api/v1/hashrate         — Per-GPU and total hashrate
+ *   GET /api/v1/hashrate/history — Time-series hashrate data
+ *   GET /api/v1/gpus             — GPU list with telemetry
+ *   GET /api/v1/pool             — Pool info, shares, difficulty
+ *   GET /api/v1/config           — Current miner configuration (sanitized)
+ *   GET /api/v1/autotune         — Autotune results (if available)
+ *   GET /api/v1/version          — Version and build info
  */
 
 #include "n0s/misc/executor.hpp"
@@ -20,6 +23,9 @@
 #include "n0s/net/jpsock.hpp"
 #include "n0s/version.hpp"
 #include "n0s/backend/iBackend.hpp"
+#include "n0s/autotune/autotune_persist.hpp"
+#include "n0s/autotune/autotune_types.hpp"
+#include "n0s/params.hpp"
 
 #include "n0s/vendor/rapidjson/document.h"
 #include "n0s/vendor/rapidjson/stringbuffer.h"
@@ -334,6 +340,134 @@ void executor::api_hashrate_history_report(std::string& out)
 		arr.PushBack(entry, alloc);
 	}
 	doc.AddMember("samples", arr, alloc);
+
+	out = json_to_string(doc);
+}
+
+void executor::api_config_report(std::string& out)
+{
+	Document doc(kObjectType);
+	auto& alloc = doc.GetAllocator();
+
+	// Pool configuration (sanitized — no passwords)
+	Value poolsArr(kArrayType);
+	uint64_t poolCount = jconf::inst()->GetPoolCount();
+	for(uint64_t i = 0; i < poolCount; i++)
+	{
+		jconf::pool_cfg cfg;
+		if(!jconf::inst()->GetPoolConfig(i, cfg))
+			continue;
+
+		Value pool(kObjectType);
+		Value addr(cfg.sPoolAddr, alloc);
+		pool.AddMember("address", addr, alloc);
+
+		// Wallet: show first 8 + last 4 chars, mask the rest
+		std::string wallet(cfg.sWalletAddr);
+		if(wallet.length() > 16)
+		{
+			std::string masked = wallet.substr(0, 8) + "..." + wallet.substr(wallet.length() - 4);
+			Value wv(masked.c_str(), alloc);
+			pool.AddMember("wallet", wv, alloc);
+		}
+		else
+		{
+			Value wv(cfg.sWalletAddr, alloc);
+			pool.AddMember("wallet", wv, alloc);
+		}
+
+		Value rigid(cfg.sRigId, alloc);
+		pool.AddMember("rig_id", rigid, alloc);
+		pool.AddMember("tls", cfg.tls, alloc);
+		pool.AddMember("nicehash", cfg.nicehash, alloc);
+		pool.AddMember("weight", cfg.raw_weight, alloc);
+		// Password deliberately omitted for security
+
+		poolsArr.PushBack(pool, alloc);
+	}
+	doc.AddMember("pools", poolsArr, alloc);
+
+	// HTTP config
+	doc.AddMember("httpd_port", jconf::inst()->GetHttpdPort(), alloc);
+
+	// Mining info
+	doc.AddMember("algorithm", "cryptonight_gpu", alloc);
+
+	// Backend flags
+	Value backends(kObjectType);
+	backends.AddMember("amd", n0s::params::inst().useAMD, alloc);
+	backends.AddMember("nvidia", n0s::params::inst().useNVIDIA, alloc);
+	doc.AddMember("backends", backends, alloc);
+
+	out = json_to_string(doc);
+}
+
+void executor::api_autotune_report(std::string& out)
+{
+	Document doc(kObjectType);
+	auto& alloc = doc.GetAllocator();
+
+	// Try to load cached autotune results
+	std::string atFile = n0s::params::inst().autotune_file;
+	n0s::autotune::AutotuneResult result;
+	bool loaded = n0s::autotune::loadAutotuneResult(result, atFile);
+
+	doc.AddMember("available", loaded, alloc);
+
+	if(loaded)
+	{
+		Value mv(result.miner_version.c_str(), alloc);
+		doc.AddMember("miner_version", mv, alloc);
+		Value ts(result.timestamp.c_str(), alloc);
+		doc.AddMember("timestamp", ts, alloc);
+
+		Value devices(kArrayType);
+		for(const auto& state : result.devices)
+		{
+			Value dev(kObjectType);
+
+			// Fingerprint
+			Value gpuName(state.fingerprint.gpu_name.c_str(), alloc);
+			dev.AddMember("gpu_name", gpuName, alloc);
+			Value gpuArch(state.fingerprint.gpu_architecture.c_str(), alloc);
+			dev.AddMember("gpu_architecture", gpuArch, alloc);
+			dev.AddMember("compute_units", state.fingerprint.compute_units, alloc);
+			dev.AddMember("device_index", state.device_index, alloc);
+			Value backend(state.fingerprint.backend == n0s::autotune::BackendType::OpenCL ? "opencl" : "cuda", alloc);
+			dev.AddMember("backend", backend, alloc);
+
+			// Status
+			dev.AddMember("completed", state.completed, alloc);
+			dev.AddMember("candidates_tested", static_cast<uint64_t>(state.candidates.size()), alloc);
+			dev.AddMember("elapsed_seconds", state.total_elapsed_seconds, alloc);
+
+			// Best result
+			if(state.best_candidate_id >= 0 && static_cast<size_t>(state.best_candidate_id) < state.candidates.size())
+			{
+				const auto& best = state.candidates[state.best_candidate_id];
+				Value winner(kObjectType);
+				winner.AddMember("hashrate", best.metrics.avg_hashrate, alloc);
+				winner.AddMember("stability_cv", best.metrics.cv_percent, alloc);
+				winner.AddMember("score", best.score.final_score, alloc);
+
+				if(state.fingerprint.backend == n0s::autotune::BackendType::OpenCL)
+				{
+					winner.AddMember("intensity", static_cast<uint64_t>(best.amd.intensity), alloc);
+					winner.AddMember("worksize", static_cast<uint64_t>(best.amd.worksize), alloc);
+				}
+				else
+				{
+					winner.AddMember("threads", best.nvidia.threads, alloc);
+					winner.AddMember("blocks", best.nvidia.blocks, alloc);
+					winner.AddMember("bfactor", best.nvidia.bfactor, alloc);
+				}
+				dev.AddMember("best", winner, alloc);
+			}
+
+			devices.PushBack(dev, alloc);
+		}
+		doc.AddMember("devices", devices, alloc);
+	}
 
 	out = json_to_string(doc);
 }

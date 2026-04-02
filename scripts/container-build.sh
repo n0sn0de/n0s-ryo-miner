@@ -57,7 +57,8 @@ podman run --rm \
         set -e
         # Install build deps
         apt-get update -qq && apt-get install -y -qq \
-            cmake g++ libmicrohttpd-dev libssl-dev libhwloc-dev >/dev/null 2>&1
+            cmake g++ libmicrohttpd-dev libssl-dev libhwloc-dev \
+            gzip xxd >/dev/null 2>&1
 
         # Copy source (read-only mount, build in /tmp)
         cp -r /src /tmp/build

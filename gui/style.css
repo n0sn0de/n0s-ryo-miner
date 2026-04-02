@@ -90,6 +90,10 @@ header {
   padding: 16px;
   text-align: center;
 }
+.stat-card.accent {
+  border-color: var(--accent2);
+  box-shadow: 0 0 12px rgba(0, 215, 255, 0.08);
+}
 .stat-label {
   font-size: 0.75rem;
   color: var(--text-dim);
