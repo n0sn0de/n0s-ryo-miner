@@ -29,6 +29,12 @@
  *       "use_nicehash": true/false         (optional, defaults to false)
  *     }
  *     Response: {"success": true, "pool_address": "...", "message": "..."}
+ *
+ * Authentication:
+ *   When http_login/http_pass is set: HTTP Digest auth (RFC 7616)
+ *   When http_api_token is set: Bearer token via Authorization header
+ *     Example: curl -H "Authorization: Bearer <token>" http://localhost:9090/api/v1/status
+ *   Both methods can be configured simultaneously — either is accepted.
  */
 
 #endif // CONF_NO_HTTPD

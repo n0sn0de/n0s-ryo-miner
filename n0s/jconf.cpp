@@ -59,6 +59,7 @@ enum configEnum
 	iHttpdPort,
 	sHttpLogin,
 	sHttpPass,
+	sHttpApiToken,
 	bPreferIpv4,
 	bAesOverride,
 	sUseSlowMem
@@ -88,6 +89,7 @@ configVal oConfigValues[] = {
 	{iHttpdPort, "httpd_port", kNumberType},
 	{sHttpLogin, "http_login", kStringType},
 	{sHttpPass, "http_pass", kStringType},
+	{sHttpApiToken, "http_api_token", kStringType},
 	{bPreferIpv4, "prefer_ipv4", kTrueType},
 	{bAesOverride, "aes_override", kNullType},
 	{sUseSlowMem, "use_slow_memory", kStringType}};
@@ -238,6 +240,11 @@ const char* jconf::GetHttpUsername()
 const char* jconf::GetHttpPassword()
 {
 	return prv->configValues[sHttpPass]->GetString();
+}
+
+const char* jconf::GetHttpApiToken()
+{
+	return prv->configValues[sHttpApiToken]->GetString();
 }
 
 bool jconf::DaemonMode()
@@ -391,6 +398,9 @@ bool jconf::parse_file(const char* sFilename, bool main_conf)
 
 	if(main_conf)
 	{
+		// Default values for optional config keys
+		static const Value emptyStrDefault("");
+
 		for(size_t i = 2; i < iConfigCnt; i++)
 		{
 			if(oConfigValues[i].iName != i)
@@ -403,6 +413,12 @@ bool jconf::parse_file(const char* sFilename, bool main_conf)
 
 			if(prv->configValues[i] == nullptr)
 			{
+				// Optional keys: use defaults instead of failing
+				if(oConfigValues[i].iName == sHttpApiToken)
+				{
+					prv->configValues[i] = &emptyStrDefault;
+					continue;
+				}
 				printer::inst()->print_msg(L0, "Invalid config file '%s'. Missing value \"%s\".", sFilename, oConfigValues[i].sName);
 				return false;
 			}
