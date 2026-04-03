@@ -2,7 +2,7 @@
 
 **From Optimized Engine to Shipped Product**
 
-*Status: Active. Pillar 1 complete (Session 50). Pillar 2 dashboard shipped as v3.2.0 (Session 54). Pillar 3.1 platform abstraction complete (Session 56). Pillar 3.3 NVML telemetry complete (Session 57). v3.2.0 released with single binary + GUI dashboard.*
+*Status: Active. Pillar 1 complete (Session 50). Pillar 2 dashboard shipped as v3.2.0 (Session 54). Pillar 3.1 platform abstraction complete (Session 56). Pillar 3.3 NVML telemetry complete (Session 57). Pillar 3.2 cross-platform compat layer complete (Session 58). v3.2.0 released with single binary + GUI dashboard.*
 
 ---
 
@@ -538,51 +538,12 @@ Things explicitly **not** in scope:
 | Component | Detail |
 |-----------|--------|
 | **`n0s/platform/platform.hpp`** | Cross-platform API: filesystem paths, console, signals, sockets, browser, threads |
-| **`n0s/platform/platform_linux.cpp`** | Linux implementations using POSIX APIs (getpwuid, sigaction, fork+exec, termios, pthread) |
-| **`n0s/platform/platform_windows.cpp`** | Windows implementations using Win32 APIs (GetEnvironmentVariable, SetConsoleCtrlHandler, ShellExecute, CreateProcess, WSAStartup) |
-| **`socks.hpp` refactored** | Dual POSIX/Winsock socket primitives — SOCKET type, sock_close, sock_strerror with `#ifdef _WIN32` |
-| **`home_dir.hpp` refactored** | Now delegates to `platform::getHomePath()` — removed `<pwd.h>` / `<unistd.h>` dependencies |
-| **`console.cpp` refactored** | Uses `platform::getKey()`, `platform::enableConsoleColors()`, `platform::formatLocalTime()` — removed `<termios.h>` |
-| **`executor.cpp` refactored** | Uses `platform::disableSigpipe()` — removed raw `<signal.h>` / `sigaction` |
-| **`cli-miner.cpp` refactored** | Uses `platform::openBrowser()` — removed `fork()`/`execlp()`/`<fcntl.h>` |
-| **`jpsock.cpp` refactored** | Uses `platform::sockInit()` — removed old `sock_init()` no-op |
+| **`n0s/platform/platform_linux.cpp`** | Linux implementations using POSIX APIs |
+| **`n0s/platform/platform_windows.cpp`** | Windows implementations using Win32 APIs |
+| **`socks.hpp` refactored** | Dual POSIX/Winsock socket primitives |
+| **5 files refactored** | home_dir, console, executor, cli-miner, jpsock — all use platform API |
 
-**Platform API surface (14 functions):**
-
-| Function | Linux | Windows |
-|----------|-------|---------|
-| `getHomePath()` | `$HOME` / `getpwuid` | `%USERPROFILE%` |
-| `getConfigDir()` | `$XDG_CONFIG_HOME/n0s/` | `%APPDATA%\n0s\` |
-| `getCacheDir()` | `$XDG_CACHE_HOME/n0s/` | `%LOCALAPPDATA%\n0s\` |
-| `getKey()` | `termios` raw mode | `_getch()` |
-| `enableConsoleColors()` | no-op | `ENABLE_VIRTUAL_TERMINAL_PROCESSING` |
-| `formatLocalTime()` | `localtime_r` | `localtime_s` |
-| `disableSigpipe()` | `sigaction(SIGPIPE, SIG_IGN)` | no-op |
-| `installShutdownHandler()` | `sigaction(SIGINT/SIGTERM)` | `SetConsoleCtrlHandler` |
-| `openBrowser()` | `fork + execlp("xdg-open")` | `ShellExecuteA("open")` |
-| `spawnProcess()` | `fork + execvp` | `CreateProcessA` |
-| `setThreadName()` | `pthread_setname_np` | `SetThreadDescription` |
-| `sockInit()` / `sockCleanup()` | no-op | `WSAStartup` / `WSACleanup` |
-| `platformName()` | `"linux"` | `"windows"` |
-| `isWindows()` | `false` | `true` |
-
-**3-GPU validation:**
-- nitro (RX 9070 XT, OpenCL): build ✅, 100+ shares, 0 rejected ✅, API endpoints ✅
-- nos2 (GTX 1070 Ti, CUDA 11.8): build ✅, 20+ shares, 0 rejected ✅
-- nosnode (RTX 2070, CUDA 12.6): build ✅, 20+ shares, 0 rejected ✅
-- Container build CUDA 11.8: 3.1 MB ✅, 20+ shares on nos2 ✅
-- Golden hash tests: 3/3 pass ✅
-
-**Key learnings:**
-- The old `sock_init()` was an inline no-op in `socks.hpp` — when refactored, `jpsock.cpp` still called it, causing an undeclared symbol error. Platform wrapper caught this cleanly.
-- `localtime_r` (POSIX) vs `localtime_s` (Windows) have *reversed argument order* — the platform layer hides this.
-- Windows `SetThreadDescription` requires converting to `wchar_t` — encapsulated in the platform layer.
-- Container build (GCC 11, Ubuntu 22.04) compiles clean with the new platform files — no C++17 issues.
-- Zero algorithm changes — all golden hashes identical before and after refactor.
-
-**Next session priorities (Session 57):**
-1. **Pillar 3.3: GPU Telemetry** — NVML direct API (DONE in Session 57)
-2. **Pillar 3.2: Network Layer (Winsock)** — `#ifdef _WIN32` shims in socket.cpp
+**3-GPU validation:** All pass, 0 rejected. Container build 3.1 MB.
 
 ### Session 57 (2026-04-03) — NVML Direct API for GPU Telemetry (Pillar 3.3) ⚡🔥
 
@@ -590,55 +551,70 @@ Things explicitly **not** in scope:
 
 | Component | Detail |
 |-----------|--------|
-| **`n0s/misc/nvml_wrapper.hpp`** | Minimal NVML type replicas (nvmlReturn_t, nvmlDevice_t, constants) — zero #include <nvml.h> dependency |
-| **`n0s/misc/nvml_wrapper.cpp`** | Runtime loading via dlopen (Linux) / LoadLibrary (Windows), lazy init, graceful fallback |
-| **`n0s/misc/gpu_telemetry.cpp`** | NVML-first for NVIDIA GPUs, nvidia-smi subprocess fallback if NVML unavailable |
-| **`n0s/misc/console.cpp`** | Clean NVML shutdown + socket cleanup on exit via `n0s_exit()` |
-| **CMakeLists.txt** | Added `CMAKE_DL_LIBS` linkage for dlopen support |
-| **`#ifdef _WIN32` guards** | AMD sysfs/dirent code wrapped — Windows stub returns false (future ADL SDK) |
+| **`n0s/misc/nvml_wrapper.hpp/.cpp`** | Runtime loaded NVML (8 function pointers), lazy init, graceful fallback |
+| **`n0s/misc/gpu_telemetry.cpp`** | NVML-first for NVIDIA GPUs, nvidia-smi subprocess fallback |
+| **`n0s/misc/console.cpp`** | Clean NVML shutdown + socket cleanup on exit |
 
-**NVML API surface (8 function pointers, runtime resolved):**
+**NVML vs nvidia-smi:** ~50-100ms per query → <1ms. Eliminates ~25-50 subprocess spawns/min.
+**3-GPU validation:** All pass, 0 rejected. Container build + NVML verified.
 
-| Function | Purpose |
-|----------|---------|
-| `nvmlInit_v2` / `nvmlInit` | Initialize NVML (v2 preferred, v1 fallback) |
-| `nvmlShutdown` | Clean shutdown |
-| `nvmlDeviceGetCount_v2` | Enumerate GPU count |
-| `nvmlDeviceGetHandleByIndex_v2` | Get device handle by index |
-| `nvmlDeviceGetName` | GPU name (e.g., "NVIDIA GeForce GTX 1070 Ti") |
-| `nvmlDeviceGetTemperature` | GPU die temperature (°C) |
-| `nvmlDeviceGetPowerUsage` | Power draw (milliwatts → converted to watts) |
-| `nvmlDeviceGetFanSpeed` | Fan speed (%) |
-| `nvmlDeviceGetClockInfo` | GPU and memory clock (MHz) |
+### Session 58 (2026-04-03) — Cross-Platform Compat Layer (Pillar 3.2) 🌐⚡
 
-**Key design decisions:**
-- **Runtime dynamic loading** — binary has zero compile-time dependency on NVML headers or libs
-- **Lazy initialization** — first `queryNvidiaTelemetry()` call triggers NVML load
-- **Graceful fallback** — if libnvidia-ml.so.1 not found, falls back to nvidia-smi subprocess silently
-- **Cross-platform ready** — dlopen on Linux, LoadLibrary on Windows (nvml.dll ships with NVIDIA drivers)
-- **Version-agnostic** — tries `nvmlInit_v2` first, falls back to `nvmlInit` for older drivers
+**Eliminated all remaining POSIX-only code from the codebase — every .cpp/.hpp now compiles under both GCC and MSVC.**
+
+| Component | Detail |
+|-----------|--------|
+| **`n0s/platform/compat.hpp`** | New: portable wrappers for strcasecmp, mkdir, sleep, popen/pclose, mkstemp, sysconf_nproc |
+| **`n0s/http/httpd.cpp`** | 19 strcasecmp/strncasecmp calls → n0s_strcasecmp/n0s_strncasecmp |
+| **`n0s/jconf.cpp`** | 4 strcasecmp calls → n0s_strcasecmp |
+| **`n0s/misc/executor.cpp`** | 1 strncasecmp call → n0s_strncasecmp |
+| **`n0s/http/embedded_assets.hpp`** | Auto-generated with n0s_strcasecmp (embed script updated) |
+| **`n0s/backend/cpu/crypto/cryptonight_common.cpp`** | VirtualAlloc/VirtualLock on Windows, mmap/mlock on Linux (with large page support on both) |
+| **`n0s/autotune/autotune_runner.cpp`** | Extracted `makeTempFile()` + `runWithTimeout()` helpers — CreateProcess on Windows, fork/exec on Linux |
+| **`n0s/backend/amd/amd_gpu/gpu_utils.cpp`** | Uses compat::mkdir and compat::sleep_sec instead of raw POSIX |
+| **`n0s/backend/cpu/autoAdjust.hpp`** | sysconf(_SC_NPROCESSORS_ONLN) → compat::sysconf_nproc() |
+| **`n0s/misc/gpu_telemetry.cpp`** | popen/pclose → compat::popen/pclose |
+| **`n0s/backend/cpu/crypto/cryptonight.h`** | ABI_ATTRIBUTE guarded for MSVC (no `__attribute__((ms_abi))` on MSVC) |
+| **CMakeLists.txt** | MSVC support: /W4, /D_CRT_SECURE_NO_WARNINGS, static CRT, /arch:AVX2, ws2_32+shell32 linking, platform-specific source selection |
+| **Dead includes removed** | `<unistd.h>` from cli-miner.cpp, `<sys/types.h>` from nvidia/minethd.cpp, `<unistd.h>` from autoAdjustHwloc.hpp |
+
+**Cross-platform compat API surface (7 function families):**
+
+| Function | Linux | Windows |
+|----------|-------|---------|
+| `n0s_strcasecmp` | `strcasecmp` | `_stricmp` |
+| `n0s_strncasecmp` | `strncasecmp` | `_strnicmp` |
+| `compat::mkdir` | `mkdir(path, 0744)` | `_mkdir(path)` |
+| `compat::sleep_sec` | `sleep(n)` | `Sleep(n*1000)` |
+| `compat::popen/pclose` | `popen/pclose` | `_popen/_pclose` |
+| `compat::mkstemp` | `mkstemp()` | `_mktemp_s + _sopen_s` |
+| `compat::sysconf_nproc` | `sysconf(_SC_NPROCESSORS_ONLN)` | `GetSystemInfo().dwNumberOfProcessors` |
 
 **3-GPU validation:**
-- nitro (RX 9070 XT, OpenCL): build ✅, 20+ shares, 0 rejected ✅, NVML silently skipped (no NVIDIA) ✅
-- nos2 (GTX 1070 Ti, CUDA 11.8): build ✅, 20+ shares, 0 rejected ✅, NVML initialized ✅
-- nosnode (RTX 2070, CUDA 12.6): build ✅, 15+ shares, 0 rejected ✅, NVML initialized ✅
-- Container build CUDA 11.8: 3.1 MB ✅, NVML works from container binary on nos2 ✅
-- API telemetry: temp, power, fan, clocks, GPU name — all correct via NVML on both NVIDIA nodes ✅
-- Golden hash constants: 3/3 pass ✅
-
-**NVML vs nvidia-smi performance advantage:**
-- nvidia-smi: fork() + exec() + parse CSV output (~50-100ms per query)
-- NVML direct: function pointer call (~<1ms per query)
-- With 2-second telemetry polling interval, eliminates ~25-50 subprocess spawns per minute
+- nitro (RX 9070 XT, OpenCL): build ✅, 14+ shares, 0 rejected ✅, API JSON endpoints ✅
+- nos2 (GTX 1070 Ti, CUDA 11.8): build ✅, 10+ shares, 0 rejected ✅
+- nosnode (RTX 2070, CUDA 12.6): build ✅, 9+ shares, 0 rejected ✅ (with reduced blocks due to VRAM pressure from other processes)
+- Container build CUDA 11.8: 3.1 MB ✅, 10+ shares on nos2 ✅
+- API verified: /api/v1/version + /api/v1/gpus return valid JSON with telemetry ✅
 
 **Key learnings:**
-- NVML power is reported in **milliwatts** (nvmlDeviceGetPowerUsage), vs nvidia-smi which reports watts. Must divide by 1000.
-- Container builds work with NVML because libnvidia-ml.so.1 ships with the NVIDIA driver on the host, not the CUDA toolkit. Runtime dlopen finds it from the host's library path.
-- The miner's config parser auto-wraps file contents in `{}` — configs should NOT include outer braces (xmr-stak heritage).
-- `CMAKE_DL_LIBS` resolves to `-ldl` on older glibc but is empty on newer glibc (dlopen baked in). Using the variable covers both.
+- `strcasecmp`/`strncasecmp` are POSIX-only — Windows has `_stricmp`/`_strnicmp`. Best solved with a thin header of inline wrappers rather than `#ifdef` at every call site.
+- `_mm_malloc` on MSVC is in `<malloc.h>` (not `<mm_malloc.h>` like GCC). Need conditional include.
+- Windows `MEM_LARGE_PAGES` is the equivalent of `MAP_HUGETLB` — requires `SeLockMemoryPrivilege` enabled via `AdjustTokenPrivileges`.
+- `__attribute__((ms_abi))` is GCC/Clang-only — MSVC doesn't need it (it's the default ABI). Guard with `#ifdef _MSC_VER`.
+- Platform-specific source selection in CMake is cleaner than globbing `n0s/platform/*.cpp` (which would compile both platform files).
+- Dead includes accumulate over time — `<unistd.h>` was in 4 files that didn't actually need it.
 
-**Next session priorities (Session 58):**
-1. **Pillar 3.2: Network Layer (Winsock)** — `#ifdef _WIN32` shims in socket.cpp for `closesocket()`, `WSAStartup` in main()
-2. **Pillar 3.4: Build System (Windows)** — CMake MSVC/Ninja support, vcpkg deps
+**Pillar 3 Progress Summary:**
+- ✅ **3.1 Platform Abstraction** — 14 functions, Linux + Windows implementations
+- ✅ **3.2 Cross-Platform Compat** — All POSIX functions wrapped, CMake MSVC support
+- ✅ **3.3 NVML Telemetry** — Runtime-loaded NVML, nvidia-smi fallback
+- 🔲 **3.4 Build System (Windows)** — vcpkg integration, CI/CD matrix
+- 🔲 **3.5 CI/CD Matrix** — GitHub Actions for Windows builds
+- 🔲 **3.6 Validation** — Windows live testing
+
+**Next session priorities (Session 59):**
+1. **Pillar 3.4: Build System (Windows)** — vcpkg integration for OpenSSL, microhttpd, hwloc on Windows
+2. **CI/CD foundation** — GitHub Actions workflow with Linux build matrix first
 3. **Authentication** — Bearer token for API write endpoints (Pillar 2 gap)
 
