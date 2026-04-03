@@ -2,7 +2,7 @@
 
 **From Optimized Engine to Shipped Product**
 
-*Status: Active. Pillar 1 complete (Session 50). Pillar 2 dashboard shipped as v3.2.0 (Session 54). Pillar 3.1 platform abstraction complete (Session 56). v3.2.0 released with single binary + GUI dashboard.*
+*Status: Active. Pillar 1 complete (Session 50). Pillar 2 dashboard shipped as v3.2.0 (Session 54). Pillar 3.1 platform abstraction complete (Session 56). Pillar 3.3 NVML telemetry complete (Session 57). v3.2.0 released with single binary + GUI dashboard.*
 
 ---
 
@@ -581,6 +581,64 @@ Things explicitly **not** in scope:
 - Zero algorithm changes — all golden hashes identical before and after refactor.
 
 **Next session priorities (Session 57):**
+1. **Pillar 3.3: GPU Telemetry** — NVML direct API (DONE in Session 57)
+2. **Pillar 3.2: Network Layer (Winsock)** — `#ifdef _WIN32` shims in socket.cpp
+
+### Session 57 (2026-04-03) — NVML Direct API for GPU Telemetry (Pillar 3.3) ⚡🔥
+
+**Eliminated nvidia-smi subprocess overhead — direct NVML API calls via runtime dynamic loading.**
+
+| Component | Detail |
+|-----------|--------|
+| **`n0s/misc/nvml_wrapper.hpp`** | Minimal NVML type replicas (nvmlReturn_t, nvmlDevice_t, constants) — zero #include <nvml.h> dependency |
+| **`n0s/misc/nvml_wrapper.cpp`** | Runtime loading via dlopen (Linux) / LoadLibrary (Windows), lazy init, graceful fallback |
+| **`n0s/misc/gpu_telemetry.cpp`** | NVML-first for NVIDIA GPUs, nvidia-smi subprocess fallback if NVML unavailable |
+| **`n0s/misc/console.cpp`** | Clean NVML shutdown + socket cleanup on exit via `n0s_exit()` |
+| **CMakeLists.txt** | Added `CMAKE_DL_LIBS` linkage for dlopen support |
+| **`#ifdef _WIN32` guards** | AMD sysfs/dirent code wrapped — Windows stub returns false (future ADL SDK) |
+
+**NVML API surface (8 function pointers, runtime resolved):**
+
+| Function | Purpose |
+|----------|---------|
+| `nvmlInit_v2` / `nvmlInit` | Initialize NVML (v2 preferred, v1 fallback) |
+| `nvmlShutdown` | Clean shutdown |
+| `nvmlDeviceGetCount_v2` | Enumerate GPU count |
+| `nvmlDeviceGetHandleByIndex_v2` | Get device handle by index |
+| `nvmlDeviceGetName` | GPU name (e.g., "NVIDIA GeForce GTX 1070 Ti") |
+| `nvmlDeviceGetTemperature` | GPU die temperature (°C) |
+| `nvmlDeviceGetPowerUsage` | Power draw (milliwatts → converted to watts) |
+| `nvmlDeviceGetFanSpeed` | Fan speed (%) |
+| `nvmlDeviceGetClockInfo` | GPU and memory clock (MHz) |
+
+**Key design decisions:**
+- **Runtime dynamic loading** — binary has zero compile-time dependency on NVML headers or libs
+- **Lazy initialization** — first `queryNvidiaTelemetry()` call triggers NVML load
+- **Graceful fallback** — if libnvidia-ml.so.1 not found, falls back to nvidia-smi subprocess silently
+- **Cross-platform ready** — dlopen on Linux, LoadLibrary on Windows (nvml.dll ships with NVIDIA drivers)
+- **Version-agnostic** — tries `nvmlInit_v2` first, falls back to `nvmlInit` for older drivers
+
+**3-GPU validation:**
+- nitro (RX 9070 XT, OpenCL): build ✅, 20+ shares, 0 rejected ✅, NVML silently skipped (no NVIDIA) ✅
+- nos2 (GTX 1070 Ti, CUDA 11.8): build ✅, 20+ shares, 0 rejected ✅, NVML initialized ✅
+- nosnode (RTX 2070, CUDA 12.6): build ✅, 15+ shares, 0 rejected ✅, NVML initialized ✅
+- Container build CUDA 11.8: 3.1 MB ✅, NVML works from container binary on nos2 ✅
+- API telemetry: temp, power, fan, clocks, GPU name — all correct via NVML on both NVIDIA nodes ✅
+- Golden hash constants: 3/3 pass ✅
+
+**NVML vs nvidia-smi performance advantage:**
+- nvidia-smi: fork() + exec() + parse CSV output (~50-100ms per query)
+- NVML direct: function pointer call (~<1ms per query)
+- With 2-second telemetry polling interval, eliminates ~25-50 subprocess spawns per minute
+
+**Key learnings:**
+- NVML power is reported in **milliwatts** (nvmlDeviceGetPowerUsage), vs nvidia-smi which reports watts. Must divide by 1000.
+- Container builds work with NVML because libnvidia-ml.so.1 ships with the NVIDIA driver on the host, not the CUDA toolkit. Runtime dlopen finds it from the host's library path.
+- The miner's config parser auto-wraps file contents in `{}` — configs should NOT include outer braces (xmr-stak heritage).
+- `CMAKE_DL_LIBS` resolves to `-ldl` on older glibc but is empty on newer glibc (dlopen baked in). Using the variable covers both.
+
+**Next session priorities (Session 58):**
 1. **Pillar 3.2: Network Layer (Winsock)** — `#ifdef _WIN32` shims in socket.cpp for `closesocket()`, `WSAStartup` in main()
-2. **Pillar 3.3: GPU Telemetry (Windows)** — NVML direct API instead of nvidia-smi subprocess (benefits Linux too)
+2. **Pillar 3.4: Build System (Windows)** — CMake MSVC/Ninja support, vcpkg deps
+3. **Authentication** — Bearer token for API write endpoints (Pillar 2 gap)
 
