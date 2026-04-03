@@ -739,3 +739,29 @@ The `gui_assets` custom command was depended on by `n0s-ryo-miner` (executable) 
 1. **Autotune start/stop from GUI** — `POST /api/v1/autotune/start` + `/stop` (requires refactoring `do_autotune()` from standalone mode to async)
 2. **Authentication** — Bearer token for API write endpoints
 3. **Begin Pillar 3 assessment** — Windows support scoping, platform abstraction layer
+
+### Session 55b (2026-04-02 late) — Autotune Multi-GPU Config Fix 🔧⚡
+
+**Fixed two bugs in autotune multi-GPU support.**
+
+| Bug | Root Cause | Fix |
+|-----|-----------|-----|
+| **Config overwrite** (critical) | `writeNvidiaConfig`/`writeAmdConfig` opened config files with `"w"` (truncate) for each GPU, destroying previous GPU entries. Tuning GPUs 0,3 left only GPU 3 in `nvidia.txt`. | Collect all winners during tuning loop, write all entries at once via `writeNvidiaConfigMulti`/`writeAmdConfigMulti` |
+| **Single GPU default** | When `--autotune-gpu` was not specified, only GPU 0 was scanned (hardcoded `amd_devices.push_back(0)`). Multi-GPU systems required explicit `--autotune-gpu 0,1,2,...` | Added `discoverNvidiaGpus()` (nvidia-smi query) and `discoverAmdGpus()` (clinfo query) for auto-detection |
+
+**Investigation findings:**
+- GPU *selection* during benchmark was actually correct — `"index" : N` in the temp config correctly targets GPU N via `cudaSetDevice()`
+- Verified by monitoring `nvidia-smi` GPU utilization during benchmark: only the targeted GPU showed 100% util + memory allocation
+- The bug was purely in the config file *output*, not in GPU selection during tuning
+
+**Config output improvements:**
+- Multi-GPU configs now include comment headers per GPU: `// GPU 0: NVIDIA GeForce GTX 1660 — threads=8 blocks=324 bfactor=0`
+- Config file header: `// 6 GPU(s) tuned`
+- Log message: `AUTOTUNE: NVIDIA config written to nvidia.txt (6 GPUs)`
+
+**Validation (4 nodes):**
+- amd (6 NVIDIA GPUs): `--autotune` (no gpu flag) auto-discovered all 6, tuned 2 unique configs + cached 4 identical, nvidia.txt contains all 6 entries ✅
+- amd: `--autotune-gpu 0,3` produces config with both GPUs ✅
+- nos2 (GTX 1070 Ti, single GPU): auto-discovered 1 device, single-entry config ✅
+- nosnode (RTX 2070, single GPU): auto-discovered 1 device, single-entry config ✅
+- nitro (RX 9070 XT, OpenCL): golden hash tests 3/3 pass, build clean ✅
