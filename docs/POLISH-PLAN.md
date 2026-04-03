@@ -2,7 +2,7 @@
 
 **From Optimized Engine to Shipped Product**
 
-*Status: Active. Pillar 1 complete (Session 50). Pillar 2 complete including auth (Session 59). Pillar 3.1–3.3 complete (Sessions 56–58). CI/CD live (Session 59). v3.2.0 released with single binary + GUI dashboard.*
+*Status: Active. Pillar 1 complete (Session 50). Pillar 2 complete including auth (Session 59). Pillar 3.1–3.5 complete (Sessions 56–61). CI/CD live. v3.3.0 released. Windows cross-build with TLS+HTTP (Session 61). Remaining: Windows live GPU testing.*
 
 ---
 
@@ -531,19 +531,6 @@ Things explicitly **not** in scope:
 
 ## Session Notes
 
-### Session 57 (2026-04-03) — NVML Direct API for GPU Telemetry (Pillar 3.3) ⚡🔥
-
-**Eliminated nvidia-smi subprocess overhead — direct NVML API calls via runtime dynamic loading.**
-
-| Component | Detail |
-|-----------|--------|
-| **`n0s/misc/nvml_wrapper.hpp/.cpp`** | Runtime loaded NVML (8 function pointers), lazy init, graceful fallback |
-| **`n0s/misc/gpu_telemetry.cpp`** | NVML-first for NVIDIA GPUs, nvidia-smi subprocess fallback |
-| **`n0s/misc/console.cpp`** | Clean NVML shutdown + socket cleanup on exit |
-
-**NVML vs nvidia-smi:** ~50-100ms per query → <1ms. Eliminates ~25-50 subprocess spawns/min.
-**3-GPU validation:** All pass, 0 rejected. Container build + NVML verified.
-
 ### Session 58 (2026-04-03) — Cross-Platform Compat Layer (Pillar 3.2) 🌐⚡
 
 **Eliminated all remaining POSIX-only code from the codebase — every .cpp/.hpp now compiles under both GCC and MSVC.**
@@ -716,9 +703,57 @@ Things explicitly **not** in scope:
 - No OpenCL backend — needs OpenCL headers + ICD loader for Windows
 - No CUDA — requires native NVCC (CUDA doesn't support MinGW cross-compile)
 
-**Next session priorities (Session 61):**
-1. **Cross-compile OpenSSL for MinGW** — enable TLS pool connections
-2. **Cross-compile libmicrohttpd for MinGW** — enable HTTP dashboard
-3. **Add OpenCL headers for Windows** — enable OpenCL backend compilation
-4. **Or:** merge current work to master, tag v3.3.0, use GHA for full Windows builds with vcpkg
+### Session 61 (2026-04-03) — Full-Featured Windows Cross-Build (Pillar 3.4b) 🔧🪟
+
+**Upgraded the MinGW cross-build from bare-bones (no TLS, no HTTP) to fully featured — cross-compiled dependencies, TLS pool connections, and embedded GUI dashboard.**
+
+| Component | Detail |
+|-----------|--------|
+| **`scripts/cross-build-windows.sh`** | Rewritten: auto-downloads and cross-compiles OpenSSL 3.0.16 + libmicrohttpd 1.0.1 for MinGW |
+| **`cmake/mingw-w64-x86_64.cmake`** | Added MINGW_DEPS_PREFIX for cross-compiled dependency search paths |
+| **`CMakeLists.txt`** | Fixed: microhttpd vcpkg path now MSVC-only (was `WIN32`, caught MinGW); OpenSSL static on all platforms |
+| **`n0s/net/socket.cpp`** | Fixed: OPENSSL_THREADS check skipped on Windows (OpenSSL 3.0 mingw64 doesn't define it) |
+
+**Windows binary comparison:**
+
+| Feature | Session 60 | Session 61 |
+|---------|------------|------------|
+| Binary size | 3.6 MB | 8.5 MB |
+| TLS (pool) | ❌ OFF | ✅ ON |
+| HTTP dashboard | ❌ OFF | ✅ ON |
+| System DLLs only | ✅ | ✅ |
+
+**Cross-build script features:**
+- `--skip-deps`: Skip dependency compilation (use cached)
+- `--no-tls`: Minimal build without OpenSSL/microhttpd
+- `--clean`: Full clean rebuild
+- `--test`: Wine validation after build
+- Deps auto-cached in `deps-mingw/prefix/`
+
+**Full validation matrix:**
+- Linux OpenCL (nitro, RX 9070 XT): 11+ shares, 0 rejected ✅
+- Linux CUDA 11.8 (container): clean build ✅
+- Linux CUDA 12.8 (container): clean build ✅
+- Windows PE32+ (MinGW): 8.5 MB, TLS ON, HTTP ON, system DLLs only ✅
+- Golden hash constants: all verified ✅
+
+**Key learnings:**
+- OpenSSL 3.0 `Configure mingw64` with `threads` enabled still doesn't define `OPENSSL_THREADS` in headers — the check is implicit via `thread_scheme => "winthreads"`. Code that checks `#ifndef OPENSSL_THREADS` must skip on `_WIN32`.
+- CMake `CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY` blocks `find_package(OpenSSL)` from finding cross-compiled deps — solution is adding deps prefix to `CMAKE_FIND_ROOT_PATH`.
+- `if(WIN32)` in CMake catches both MSVC and MinGW. Use `if(MSVC)` for vcpkg-specific paths, since MinGW uses standard `find_library`.
+- libmicrohttpd's `--disable-https` is key for cross-build — avoids circular dependency on OpenSSL within MHD itself.
+
+**Pillar 3 Progress:**
+- ✅ **3.1 Platform Abstraction** — 14 functions, Linux + Windows
+- ✅ **3.2 Cross-Platform Compat** — All POSIX wrapped, CMake MSVC+MinGW
+- ✅ **3.3 NVML Telemetry** — Runtime-loaded NVML, fallback
+- ✅ **3.4 Build System** — MinGW cross-build with full deps + MSVC CI + vcpkg
+- ✅ **3.5 CI/CD Matrix** — GitHub Actions (3 Linux + 1 Windows)
+- 🔲 **3.6 Validation** — Windows live GPU mining test
+
+**Next session priorities (Session 62):**
+1. **Merge to master and tag v3.4.0** — Windows release
+2. **Windows live testing** — Get the .exe on a real Windows machine with GPU
+3. **OpenCL headers for Windows cross-build** — enable OpenCL backend
+4. **Update release.yml** — add Windows cross-build artifact to release workflow
 
