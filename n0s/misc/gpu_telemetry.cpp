@@ -13,6 +13,8 @@
 #include "gpu_telemetry.hpp"
 #include "nvml_wrapper.hpp"
 
+#include "n0s/platform/compat.hpp"
+
 #include <array>
 #include <cstdio>
 #include <cstring>
@@ -53,7 +55,7 @@ std::string getAmdGpuName(uint32_t device_index)
 	snprintf(cmd, sizeof(cmd),
 		"amd-smi static --gpu %u 2>/dev/null | grep MARKET_NAME | head -1",
 		device_index);
-	FILE* pipe = popen(cmd, "r");
+	FILE* pipe = n0s::compat::popen(cmd, "r");
 	if(pipe)
 	{
 		char buf[256];
@@ -70,18 +72,18 @@ std::string getAmdGpuName(uint32_t device_index)
 				if(!name.empty() && name != "N/A")
 				{
 					amdNameCache[device_index] = name;
-					pclose(pipe);
+					n0s::compat::pclose(pipe);
 					return name;
 				}
 			}
 		}
-		pclose(pipe);
+		n0s::compat::pclose(pipe);
 	}
 
 	// Fallback: try PATH lookup for amd-smi in /opt/rocm*/bin
 	snprintf(cmd, sizeof(cmd),
 		"ls /opt/rocm*/bin/amd-smi 2>/dev/null | head -1");
-	pipe = popen(cmd, "r");
+	pipe = n0s::compat::popen(cmd, "r");
 	if(pipe)
 	{
 		char path[256] = {};
@@ -94,9 +96,9 @@ std::string getAmdGpuName(uint32_t device_index)
 			snprintf(cmd2, sizeof(cmd2),
 				"%s static --gpu %u 2>/dev/null | grep MARKET_NAME | head -1",
 				path, device_index);
-			pclose(pipe);
+			n0s::compat::pclose(pipe);
 
-			pipe = popen(cmd2, "r");
+			pipe = n0s::compat::popen(cmd2, "r");
 			if(pipe)
 			{
 				char buf2[256];
@@ -112,17 +114,17 @@ std::string getAmdGpuName(uint32_t device_index)
 						if(!name.empty() && name != "N/A")
 						{
 							amdNameCache[device_index] = name;
-							pclose(pipe);
+							n0s::compat::pclose(pipe);
 							return name;
 						}
 					}
 				}
-				pclose(pipe);
+				n0s::compat::pclose(pipe);
 			}
 		}
 		else
 		{
-			pclose(pipe);
+			n0s::compat::pclose(pipe);
 		}
 	}
 
@@ -299,14 +301,14 @@ bool queryNvidiaTelemetrySmi(uint32_t device_index, GpuTelemetry& telem)
 		"--format=csv,noheader,nounits 2>/dev/null",
 		device_index);
 
-	FILE* pipe = popen(cmd, "r");
+	FILE* pipe = n0s::compat::popen(cmd, "r");
 	if(!pipe) return false;
 
 	std::array<char, 256> buf;
 	std::string output;
 	while(fgets(buf.data(), buf.size(), pipe))
 		output += buf.data();
-	pclose(pipe);
+	n0s::compat::pclose(pipe);
 
 	// Parse CSV: "name, temp, power, fan%, gpu_clock, mem_clock"
 	auto firstComma = output.find(',');

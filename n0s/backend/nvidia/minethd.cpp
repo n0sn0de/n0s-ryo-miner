@@ -44,7 +44,7 @@
 #include <vector>
 
 #include <iostream>
-#include <sys/types.h>
+// sys/types.h removed — was unused (no pid_t/uid_t needed)
 
 namespace n0s
 {

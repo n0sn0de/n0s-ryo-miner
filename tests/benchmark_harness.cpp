@@ -32,8 +32,13 @@
 #include <cstring>
 #include <chrono>
 #include <atomic>
+
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <signal.h>
 #include <unistd.h>
+#endif
 
 // Signal handler for clean shutdown
 static std::atomic<bool> g_stop_requested{false};

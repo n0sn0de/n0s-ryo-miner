@@ -5,6 +5,8 @@
 
 #include "n0s/vendor/rapidjson/document.h"
 
+#include "n0s/platform/compat.hpp"
+
 #include <array>
 #include <chrono>
 #include <cstdio>
@@ -13,8 +15,14 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <vector>
+
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <sys/wait.h>
 #include <unistd.h>
+#endif
 
 namespace n0s
 {
@@ -26,13 +34,114 @@ SubprocessRunner::SubprocessRunner(const std::string& miner_path)
 {
 }
 
-std::string SubprocessRunner::generateAmdConfig(uint32_t device_index, const AmdCandidate& candidate)
+namespace
 {
-	// Create temp file
-	char tmppath[] = "/tmp/n0s_autotune_amd_XXXXXX";
-	int fd = mkstemp(tmppath);
+
+/// Create a temporary file, return its path. Empty string on failure.
+std::string makeTempFile(const char* prefix)
+{
+#ifdef _WIN32
+	char tmpDir[MAX_PATH];
+	char tmpFile[MAX_PATH];
+	GetTempPathA(MAX_PATH, tmpDir);
+	if(GetTempFileNameA(tmpDir, prefix, 0, tmpFile) == 0)
+		return "";
+	return std::string(tmpFile);
+#else
+	std::string tmpl = "/tmp/" + std::string(prefix) + "_XXXXXX";
+	std::vector<char> buf(tmpl.begin(), tmpl.end());
+	buf.push_back('\0');
+	int fd = mkstemp(buf.data());
 	if(fd < 0) return "";
 	close(fd);
+	return std::string(buf.data());
+#endif
+}
+
+/// Run a command with timeout, return exit code (-1 on error/timeout)
+int runWithTimeout(const std::string& cmd, int timeout_sec)
+{
+#ifdef _WIN32
+	STARTUPINFOA si = {};
+	PROCESS_INFORMATION pi = {};
+	si.cb = sizeof(si);
+	si.dwFlags = STARTF_USESTDHANDLES;
+
+	// Redirect to NUL
+	HANDLE hNull = CreateFileA("NUL", GENERIC_WRITE, FILE_SHARE_WRITE,
+		nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+	si.hStdOutput = hNull;
+	si.hStdError = hNull;
+	si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+
+	std::string cmdCopy = "cmd /c " + cmd;
+	if(!CreateProcessA(nullptr, cmdCopy.data(), nullptr, nullptr, TRUE,
+		CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi))
+	{
+		if(hNull != INVALID_HANDLE_VALUE) CloseHandle(hNull);
+		return -1;
+	}
+
+	if(hNull != INVALID_HANDLE_VALUE) CloseHandle(hNull);
+
+	DWORD waitResult = WaitForSingleObject(pi.hProcess,
+		static_cast<DWORD>(timeout_sec) * 1000);
+
+	if(waitResult == WAIT_TIMEOUT)
+	{
+		TerminateProcess(pi.hProcess, 1);
+		CloseHandle(pi.hProcess);
+		CloseHandle(pi.hThread);
+		return -1;
+	}
+
+	DWORD exitCode = 1;
+	GetExitCodeProcess(pi.hProcess, &exitCode);
+	CloseHandle(pi.hProcess);
+	CloseHandle(pi.hThread);
+	return static_cast<int>(exitCode);
+#else
+	pid_t pid = fork();
+	if(pid < 0) return -1;
+
+	if(pid == 0)
+	{
+		freopen("/dev/null", "w", stdout);
+		freopen("/dev/null", "w", stderr);
+		execl("/bin/sh", "sh", "-c", cmd.c_str(), nullptr);
+		_exit(127);
+	}
+
+	int status = 0;
+	auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(timeout_sec);
+	bool finished = false;
+
+	while(std::chrono::steady_clock::now() < deadline)
+	{
+		pid_t result = waitpid(pid, &status, WNOHANG);
+		if(result == pid) { finished = true; break; }
+		if(result < 0) break;
+		std::this_thread::sleep_for(std::chrono::milliseconds(500));
+	}
+
+	if(!finished)
+	{
+		kill(pid, SIGKILL);
+		waitpid(pid, &status, 0);
+		return -1;
+	}
+
+	if(!WIFEXITED(status)) return -1;
+	return WEXITSTATUS(status);
+#endif
+}
+
+} // anonymous namespace
+
+std::string SubprocessRunner::generateAmdConfig(uint32_t device_index, const AmdCandidate& candidate)
+{
+	std::string tmppath = makeTempFile("n0s_amd");
+	if(tmppath.empty()) return "";
 
 	std::ofstream f(tmppath);
 	if(!f.is_open()) return "";
@@ -49,15 +158,13 @@ std::string SubprocessRunner::generateAmdConfig(uint32_t device_index, const Amd
 	f << "\"platform_index\" : 0,\n";
 	f.close();
 
-	return std::string(tmppath);
+	return tmppath;
 }
 
 std::string SubprocessRunner::generateNvidiaConfig(uint32_t device_index, const NvidiaCandidate& candidate)
 {
-	char tmppath[] = "/tmp/n0s_autotune_nv_XXXXXX";
-	int fd = mkstemp(tmppath);
-	if(fd < 0) return "";
-	close(fd);
+	std::string tmppath = makeTempFile("n0s_nv");
+	if(tmppath.empty()) return "";
 
 	std::ofstream f(tmppath);
 	if(!f.is_open()) return "";
@@ -73,7 +180,7 @@ std::string SubprocessRunner::generateNvidiaConfig(uint32_t device_index, const 
 	f << "],\n";
 	f.close();
 
-	return std::string(tmppath);
+	return tmppath;
 }
 
 bool SubprocessRunner::runBenchmark(
@@ -84,29 +191,28 @@ bool SubprocessRunner::runBenchmark(
 	BenchmarkMetrics& metrics)
 {
 	// Create temp file for JSON output
-	char json_path[] = "/tmp/n0s_autotune_result_XXXXXX";
-	int fd = mkstemp(json_path);
-	if(fd < 0) return false;
-	close(fd);
+	std::string json_path = makeTempFile("n0s_result");
+	if(json_path.empty()) return false;
 
 	// Build command — use warmup of 15 seconds, benchmark for requested duration
 	int warmup_sec = 15;
 
-	// Build a minimal pools.txt for the subprocess if needed
-	char pools_path[] = "/tmp/n0s_autotune_pools_XXXXXX";
-	int pools_fd = mkstemp(pools_path);
-	if(pools_fd >= 0)
+	// Build a minimal pools.txt for the subprocess
+	std::string pools_path = makeTempFile("n0s_pools");
+	if(!pools_path.empty())
 	{
-		const char* pools_content =
-			"\"pool_list\" :\n[\n"
-			"  {\"pool_address\" : \"autotune.local:3333\",\n"
-			"   \"wallet_address\" : \"autotune\",\n"
-			"   \"rig_id\" : \"\", \"pool_password\" : \"\",\n"
-			"   \"use_nicehash\" : false, \"use_tls\" : false,\n"
-			"   \"tls_fingerprint\" : \"\", \"pool_weight\" : 1\n  },\n],\n"
-			"\"currency\" : \"cryptonight_gpu\",\n";
-		write(pools_fd, pools_content, strlen(pools_content));
-		close(pools_fd);
+		std::ofstream pf(pools_path);
+		if(pf.is_open())
+		{
+			pf << "\"pool_list\" :\n[\n"
+			      "  {\"pool_address\" : \"autotune.local:3333\",\n"
+			      "   \"wallet_address\" : \"autotune\",\n"
+			      "   \"rig_id\" : \"\", \"pool_password\" : \"\",\n"
+			      "   \"use_nicehash\" : false, \"use_tls\" : false,\n"
+			      "   \"tls_fingerprint\" : \"\", \"pool_weight\" : 1\n  },\n],\n"
+			      "\"currency\" : \"cryptonight_gpu\",\n";
+			pf.close();
+		}
 	}
 
 	std::ostringstream cmd;
@@ -125,61 +231,27 @@ bool SubprocessRunner::runBenchmark(
 	// Run subprocess with timeout
 	int timeout_sec = warmup_sec + benchmark_sec + 30; // Extra buffer for startup
 
-	// Use fork+exec for timeout control
-	pid_t pid = fork();
-	if(pid < 0) return false;
+	int exitCode = runWithTimeout(cmd.str(), timeout_sec);
 
-	if(pid == 0)
+	std::remove(pools_path.c_str());
+
+	if(exitCode < 0)
 	{
-		// Child: redirect stdout/stderr to /dev/null to keep output clean
-		freopen("/dev/null", "w", stdout);
-		freopen("/dev/null", "w", stderr);
-
-		execl("/bin/sh", "sh", "-c", cmd.str().c_str(), nullptr);
-		_exit(127);
-	}
-
-	// Parent: wait with timeout
-	int status = 0;
-	auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(timeout_sec);
-	bool finished = false;
-
-	while(std::chrono::steady_clock::now() < deadline)
-	{
-		pid_t result = waitpid(pid, &status, WNOHANG);
-		if(result == pid)
-		{
-			finished = true;
-			break;
-		}
-		if(result < 0) break;
-		std::this_thread::sleep_for(std::chrono::milliseconds(500));
-	}
-
-	if(!finished)
-	{
-		// Timeout — kill the child
-		kill(pid, SIGKILL);
-		waitpid(pid, &status, 0);
 		printer::inst()->print_msg(L1, "AUTOTUNE: Benchmark subprocess timed out after %d seconds", timeout_sec);
-		std::remove(json_path);
-		std::remove(pools_path);
+		std::remove(json_path.c_str());
 		return false;
 	}
 
-	std::remove(pools_path);
-
-	if(!WIFEXITED(status) || WEXITSTATUS(status) != 0)
+	if(exitCode != 0)
 	{
-		printer::inst()->print_msg(L1, "AUTOTUNE: Benchmark subprocess failed (exit code %d)",
-			WIFEXITED(status) ? WEXITSTATUS(status) : -1);
-		std::remove(json_path);
+		printer::inst()->print_msg(L1, "AUTOTUNE: Benchmark subprocess failed (exit code %d)", exitCode);
+		std::remove(json_path.c_str());
 		return false;
 	}
 
 	// Parse results
 	bool ok = parseBenchmarkJson(json_path, metrics);
-	std::remove(json_path);
+	std::remove(json_path.c_str());
 	return ok;
 }
 
@@ -282,14 +354,14 @@ bool SubprocessRunner::collectAmdFingerprint(uint32_t device_index, DeviceFinger
 	fingerprint.vram_bytes = 0;
 
 	// Query clinfo for device properties
-	FILE* pipe = popen("clinfo 2>/dev/null", "r");
+	FILE* pipe = n0s::compat::popen("clinfo 2>/dev/null", "r");
 	if(pipe)
 	{
 		std::array<char, 512> buf;
 		std::string output;
 		while(fgets(buf.data(), buf.size(), pipe))
 			output += buf.data();
-		pclose(pipe);
+		n0s::compat::pclose(pipe);
 
 		// Helper: extract value after a key (handles tab/space padding in clinfo output)
 		auto extractLine = [&](const std::string& key) -> std::string {
@@ -334,8 +406,8 @@ bool SubprocessRunner::collectAmdFingerprint(uint32_t device_index, DeviceFinger
 	{
 		// Fallback: try to get from AMD GPU info via sysfs
 		std::string sysfs_cmd = "cat /sys/class/drm/card*/device/pp_dpm_sclk 2>/dev/null | wc -l";
-		FILE* sp = popen(sysfs_cmd.c_str(), "r");
-		if(sp) { pclose(sp); }
+		FILE* sp = n0s::compat::popen(sysfs_cmd.c_str(), "r");
+		if(sp) { n0s::compat::pclose(sp); }
 
 		if(fingerprint.compute_units == 0 || fingerprint.compute_units > 1024)
 			fingerprint.compute_units = 32; // Safe default for modern AMD GPUs
@@ -369,7 +441,7 @@ bool SubprocessRunner::collectNvidiaFingerprint(uint32_t device_index, DeviceFin
 	    << " --query-gpu=name,compute_cap,memory.total,driver_version"
 	    << " --format=csv,noheader,nounits 2>/dev/null";
 
-	FILE* pipe = popen(cmd.str().c_str(), "r");
+	FILE* pipe = n0s::compat::popen(cmd.str().c_str(), "r");
 	if(!pipe)
 	{
 		fingerprint.gpu_name = "NVIDIA CUDA GPU #" + std::to_string(device_index);
@@ -380,7 +452,7 @@ bool SubprocessRunner::collectNvidiaFingerprint(uint32_t device_index, DeviceFin
 	std::string output;
 	while(fgets(buf.data(), buf.size(), pipe))
 		output += buf.data();
-	pclose(pipe);
+	n0s::compat::pclose(pipe);
 
 	// Parse CSV: "name, compute_cap, memory_total_MiB, driver_version"
 	// e.g. "NVIDIA GeForce GTX 1070 Ti, 6.1, 8119, 535.183.01"
@@ -445,7 +517,7 @@ bool SubprocessRunner::collectNvidiaFingerprint(uint32_t device_index, DeviceFin
 	}
 
 	// Get CUDA runtime version
-	FILE* cuda_pipe = popen("nvcc --version 2>/dev/null | grep 'release' | sed 's/.*release \\([0-9.]*\\).*/\\1/'", "r");
+	FILE* cuda_pipe = n0s::compat::popen("nvcc --version 2>/dev/null | grep 'release' | sed 's/.*release \\([0-9.]*\\).*/\\1/'", "r");
 	if(cuda_pipe)
 	{
 		if(fgets(buf.data(), buf.size(), cuda_pipe))
@@ -453,7 +525,7 @@ bool SubprocessRunner::collectNvidiaFingerprint(uint32_t device_index, DeviceFin
 			fingerprint.runtime_version = buf.data();
 			fingerprint.runtime_version.erase(fingerprint.runtime_version.find_last_not_of(" \t\n\r") + 1);
 		}
-		pclose(cuda_pipe);
+		n0s::compat::pclose(cuda_pipe);
 	}
 
 	// Try to get SM count via nvidia-smi (newer drivers support this)
@@ -461,7 +533,7 @@ bool SubprocessRunner::collectNvidiaFingerprint(uint32_t device_index, DeviceFin
 		std::ostringstream sm_cmd;
 		sm_cmd << "nvidia-smi -i " << device_index
 		       << " --query-gpu=gpu_sm_count --format=csv,noheader 2>/dev/null";
-		FILE* sm_pipe = popen(sm_cmd.str().c_str(), "r");
+		FILE* sm_pipe = n0s::compat::popen(sm_cmd.str().c_str(), "r");
 		if(sm_pipe)
 		{
 			std::array<char, 128> sm_buf{};
@@ -479,7 +551,7 @@ bool SubprocessRunner::collectNvidiaFingerprint(uint32_t device_index, DeviceFin
 					} catch(...) {}
 				}
 			}
-			pclose(sm_pipe);
+			n0s::compat::pclose(sm_pipe);
 		}
 	}
 

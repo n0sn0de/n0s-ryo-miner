@@ -32,6 +32,8 @@
 #include "n0s/net/msgstruct.hpp"
 #include "n0s/params.hpp"
 
+#include "n0s/platform/compat.hpp"
+
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -173,7 +175,7 @@ MHD_Result httpd::req_handler([[maybe_unused]] void* cls,
 	};
 
 	// REST API v1 endpoints
-	if(strncasecmp(url, "/api/v1/", 8) == 0)
+	if(n0s_strncasecmp(url, "/api/v1/", 8) == 0)
 	{
 		const char* endpoint = url + 8;
 
@@ -181,7 +183,7 @@ MHD_Result httpd::req_handler([[maybe_unused]] void* cls,
 		if(is_put)
 		{
 			auto* ctx = static_cast<request_context*>(*ptr);
-			if(strcasecmp(endpoint, "config/pool") == 0)
+			if(n0s_strcasecmp(endpoint, "config/pool") == 0)
 				return serve_put_response(ctx->body);
 			else
 			{
@@ -196,23 +198,23 @@ MHD_Result httpd::req_handler([[maybe_unused]] void* cls,
 		}
 
 		// GET endpoints
-		if(strcasecmp(endpoint, "status") == 0)
+		if(n0s_strcasecmp(endpoint, "status") == 0)
 			return serve_api_json(EV_API_STATUS);
-		else if(strcasecmp(endpoint, "hashrate/history") == 0)
+		else if(n0s_strcasecmp(endpoint, "hashrate/history") == 0)
 			return serve_api_json(EV_API_HASHRATE_HISTORY);
-		else if(strcasecmp(endpoint, "hashrate") == 0)
+		else if(n0s_strcasecmp(endpoint, "hashrate") == 0)
 			return serve_api_json(EV_API_HASHRATE);
-		else if(strcasecmp(endpoint, "gpus") == 0)
+		else if(n0s_strcasecmp(endpoint, "gpus") == 0)
 			return serve_api_json(EV_API_GPUS);
-		else if(strcasecmp(endpoint, "pool") == 0)
+		else if(n0s_strcasecmp(endpoint, "pool") == 0)
 			return serve_api_json(EV_API_POOL);
-		else if(strcasecmp(endpoint, "config") == 0)
+		else if(n0s_strcasecmp(endpoint, "config") == 0)
 			return serve_api_json(EV_API_CONFIG);
-		else if(strcasecmp(endpoint, "config/pool") == 0)
+		else if(n0s_strcasecmp(endpoint, "config/pool") == 0)
 			return serve_api_json(EV_API_CONFIG); // GET config/pool returns same as config
-		else if(strcasecmp(endpoint, "autotune") == 0)
+		else if(n0s_strcasecmp(endpoint, "autotune") == 0)
 			return serve_api_json(EV_API_AUTOTUNE);
-		else if(strcasecmp(endpoint, "version") == 0)
+		else if(n0s_strcasecmp(endpoint, "version") == 0)
 			return serve_api_json(EV_API_VERSION);
 		else
 		{
@@ -226,7 +228,7 @@ MHD_Result httpd::req_handler([[maybe_unused]] void* cls,
 		}
 	}
 	// GUI dashboard assets: /gui/* and root /
-	else if(strcasecmp(url, "/") == 0 || strcasecmp(url, "/gui") == 0 || strcasecmp(url, "/gui/") == 0)
+	else if(n0s_strcasecmp(url, "/") == 0 || n0s_strcasecmp(url, "/gui") == 0 || n0s_strcasecmp(url, "/gui/") == 0)
 	{
 		// Redirect to /gui/index.html
 		rsp = MHD_create_response_from_buffer(0, nullptr, MHD_RESPMEM_PERSISTENT);
@@ -235,7 +237,7 @@ MHD_Result httpd::req_handler([[maybe_unused]] void* cls,
 		MHD_destroy_response(rsp);
 		return ret;
 	}
-	else if(strncasecmp(url, "/gui/", 5) == 0)
+	else if(n0s_strncasecmp(url, "/gui/", 5) == 0)
 	{
 		// Dev mode: serve from filesystem
 		if(n0s::params::inst().guiDev)
@@ -284,7 +286,7 @@ MHD_Result httpd::req_handler([[maybe_unused]] void* cls,
 		return ret;
 	}
 	// Legacy endpoints preserved
-	else if(strcasecmp(url, "/style.css") == 0)
+	else if(n0s_strcasecmp(url, "/style.css") == 0)
 	{
 		const char* req_etag = MHD_lookup_connection_value(connection, MHD_HEADER_KIND, "If-None-Match");
 
@@ -300,28 +302,28 @@ MHD_Result httpd::req_handler([[maybe_unused]] void* cls,
 		MHD_add_response_header(rsp, "ETag", sHtmlCssEtag);
 		MHD_add_response_header(rsp, "Content-Type", "text/css; charset=utf-8");
 	}
-	else if(strcasecmp(url, "/api.json") == 0)
+	else if(n0s_strcasecmp(url, "/api.json") == 0)
 	{
 		executor::inst()->get_http_report(EV_HTML_JSON, str);
 
 		rsp = MHD_create_response_from_buffer(str.size(), const_cast<char*>(str.c_str()), MHD_RESPMEM_MUST_COPY);
 		MHD_add_response_header(rsp, "Content-Type", "application/json; charset=utf-8");
 	}
-	else if(strcasecmp(url, "/h") == 0 || strcasecmp(url, "/hashrate") == 0)
+	else if(n0s_strcasecmp(url, "/h") == 0 || n0s_strcasecmp(url, "/hashrate") == 0)
 	{
 		executor::inst()->get_http_report(EV_HTML_HASHRATE, str);
 
 		rsp = MHD_create_response_from_buffer(str.size(), const_cast<char*>(str.c_str()), MHD_RESPMEM_MUST_COPY);
 		MHD_add_response_header(rsp, "Content-Type", "text/html; charset=utf-8");
 	}
-	else if(strcasecmp(url, "/c") == 0 || strcasecmp(url, "/connection") == 0)
+	else if(n0s_strcasecmp(url, "/c") == 0 || n0s_strcasecmp(url, "/connection") == 0)
 	{
 		executor::inst()->get_http_report(EV_HTML_CONNSTAT, str);
 
 		rsp = MHD_create_response_from_buffer(str.size(), const_cast<char*>(str.c_str()), MHD_RESPMEM_MUST_COPY);
 		MHD_add_response_header(rsp, "Content-Type", "text/html; charset=utf-8");
 	}
-	else if(strcasecmp(url, "/r") == 0 || strcasecmp(url, "/results") == 0)
+	else if(n0s_strcasecmp(url, "/r") == 0 || n0s_strcasecmp(url, "/results") == 0)
 	{
 		executor::inst()->get_http_report(EV_HTML_RESULTS, str);
 
