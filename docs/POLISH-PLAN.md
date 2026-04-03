@@ -296,10 +296,10 @@ struct HashrateHistory {
 
 - [x] Dashboard loads in Chrome, Firefox, Safari
 - [x] Hashrate chart renders real-time data correctly
-- [ ] Pool config changes apply on next pool reconnect
+- [x] Pool config changes apply on next pool reconnect (PUT /api/v1/config/pool)
 - [ ] Autotune can be started/stopped from GUI
 - [x] GPU telemetry updates every 2 seconds
-- [x] All API endpoints return valid JSON (7 endpoints)
+- [x] All API endpoints return valid JSON (10 endpoints: 9 GET + 1 PUT)
 - [x] Frontend total size < 50 KB gzipped (6.1 KB — 12% of target)
 - [x] `--gui` opens browser and mines simultaneously
 - [x] CLI-only mode unaffected (no GUI overhead when not using `--gui`)
@@ -544,59 +544,6 @@ Things explicitly **not** in scope:
 
 ## Session Notes
 
-### Session 50 (2026-04-02) — Pillar 1 Complete + REST API Foundation 🏗️⚡
-
-**Pillar 1: Single Executable — COMPLETE ✅**
-
-Eliminated the entire `dlopen`/`dlsym` plugin system. Both CUDA and OpenCL backends now compile as static libraries and link directly into the main executable. One file, zero companion `.so` files.
-
-| Change | Detail |
-|--------|--------|
-| CUDA backend | `SHARED` → `STATIC` library |
-| OpenCL backend | `SHARED` → `STATIC` library |
-| `backendConnector.cpp` | Direct calls to `cuda::minethd::thread_starter()` / `opencl::minethd::thread_starter()` |
-| `plugin.hpp` | **Deleted** — 81 lines of dlopen/dlsym/dlclose abstraction removed |
-| `extern "C"` wrappers | Removed from both backend entry points |
-| `CMAKE_DL_LIBS` | Removed — no more libdl dependency |
-| Install rules | Simplified to single binary |
-| Container build | Updated for single-binary output |
-
-**Binary sizes:**
-- OpenCL-only (nitro): **1.0 MB**
-- CUDA 11.8 (nos2): **3.0 MB**
-- CUDA 12.6 (nosnode): **3.5 MB**
-- Container build (CUDA 11.8): **2.2 MB**
-
-**3-GPU validation:**
-- nitro (RX 9070 XT, OpenCL): 40+ shares, 0 rejected ✅
-- nos2 (GTX 1070 Ti, CUDA 11.8): 24+ shares, 0 rejected ✅
-- nosnode (RTX 2070, CUDA 12.6): 18+ shares, 0 rejected ✅
-
-**Pillar 2: REST API v1 — Foundation Laid ✅**
-
-Built 5 clean JSON API endpoints as the backbone for the GUI dashboard:
-
-| Endpoint | Data |
-|----------|------|
-| `GET /api/v1/status` | Mining state, uptime, pool connection, active backends |
-| `GET /api/v1/hashrate` | Per-GPU + total hashrate (10s/60s/15m windows), backend type |
-| `GET /api/v1/gpus` | GPU list with live telemetry (temp/power/fan/clocks) |
-| `GET /api/v1/pool` | Shares accepted/rejected, difficulty, ping, top difficulties |
-| `GET /api/v1/version` | Version string, build info, enabled backends |
-
-Implementation notes:
-- Uses rapidjson for clean JSON serialization
-- Thread-safe: all endpoints dispatch through executor event loop
-- NaN/Infinity sanitization for telemetry values
-- CORS headers for local GUI development
-- Legacy `/api.json` endpoint preserved for backward compatibility
-
-**Key learnings:**
-- OpenCL `.cl` kernel sources were already embedded as C++ raw string literals — no embedding work needed
-- `calc_telemetry_data()` returns `nan("")` when insufficient data — must sanitize before JSON serialization
-- rapidjson `Writer` silently truncates output on NaN doubles — always sanitize
-- The `extern "C"` / `dlopen` pattern was pure legacy from xmr-stak's multi-algorithm days — clean removal
-
 ### Session 51 (2026-04-02) — GUI Dashboard MVP: Frontend SPA + Asset Embedding 🖥️⚡
 
 **Complete GUI dashboard shipped — embedded in the miner binary.**
@@ -728,8 +675,67 @@ The `gui_assets` custom command was depended on by `n0s-ryo-miner` (executable) 
 | Container CUDA 11.8 | 3.1 MB |
 | Container CUDA 12.8 | 4.2 MB |
 
-**Next session priorities (Session 55):**
-1. **GitHub Release** — Tag v3.2.0, attach container build artifacts
-2. **Pool config write API** — `PUT /api/v1/config/pool` (deferred to v3.3.0)
-3. **Autotune start/stop from GUI** — `POST /api/v1/autotune/start` + `/stop`
-4. **Begin Pillar 3 assessment** — Windows support scoping
+### Session 55 (2026-04-02 late) — Pool Config Write API + GUI Editing + Telemetry Bugfix 🔧⚡
+
+**First write API endpoint — live pool config changes from the dashboard.**
+
+| Component | Detail |
+|-----------|--------|
+| **`PUT /api/v1/config/pool`** | Live pool configuration update via REST API |
+| **JSON body** | `pool_address` (required), `wallet_address`, `rig_id`, `pool_password`, `use_tls`, `use_nicehash` |
+| **Thread-safe dispatch** | Request body passes through executor event loop (same pattern as GET reports) |
+| **Pool reconnect** | Disconnects current pool, updates jpsock config, triggers `eval_pool_choice()` |
+| **TLS hot-switch** | Recreates socket object (plain↔tls) when `use_tls` changes |
+| **CORS preflight** | `OPTIONS` method returns 204 with proper CORS headers |
+| **PUT body accumulation** | Per-request context (`request_context` struct) across microhttpd callbacks |
+| **MHD_OPTION_NOTIFY_COMPLETED** | Connection cleanup callback for PUT context memory |
+| **Request body limit** | 64 KB maximum for safety |
+| **Pool address validation** | Must contain `:` (host:port format) |
+| **GUI edit form** | Inline form in Configuration tab with all pool fields |
+| **Form UX** | Pre-fills from current config, success/error status feedback, Cancel button |
+| **Dark theme styling** | Input fields, checkboxes, buttons matching dashboard aesthetic |
+
+**Bugfix: use-after-free in GPU telemetry (findHwmonPath)**
+- `closedir()` freed dirent memory before `entry->d_name` was read
+- Caused heap-use-after-free detectable by AddressSanitizer
+- Fix: copy `d_name` to `std::string` before `closedir()` call
+- Pre-existing bug — not introduced by this session's changes
+
+**jpsock additions:**
+- `update_config()` — update all pool fields + disconnect + reset tracking
+- `is_tls()` — check current TLS state via `dynamic_cast`
+- `get_wallet()` — accessor for current wallet address
+
+**API endpoint inventory (10 total):**
+| # | Endpoint | Method | Purpose |
+|---|----------|--------|---------|
+| 1 | `/api/v1/status` | GET | Mining state, uptime, connection |
+| 2 | `/api/v1/hashrate` | GET | Per-GPU + total hashrate (10s/60s/15m) |
+| 3 | `/api/v1/hashrate/history` | GET | Time-series ring buffer (3600 samples) |
+| 4 | `/api/v1/gpus` | GET | GPU telemetry (temp/power/fan/clocks) |
+| 5 | `/api/v1/pool` | GET | Shares, difficulty, ping, top diffs |
+| 6 | `/api/v1/config` | GET | Pool config (wallet masked) |
+| 7 | `/api/v1/config/pool` | PUT | **NEW** — Update pool and reconnect |
+| 8 | `/api/v1/autotune` | GET | Cached autotune results |
+| 9 | `/api/v1/version` | GET | Version, backends, algorithm |
+| 10 | `/gui/*` | GET | Embedded dashboard SPA |
+
+**3-GPU validation:**
+- nitro (RX 9070 XT, OpenCL): API test + live mining ✅
+- nos2 (GTX 1070 Ti, CUDA 11.8): 42 shares, 0 rejected ✅
+- nosnode (RTX 2070, CUDA 12.6): 45 shares, 0 rejected ✅
+- Container build CUDA 11.8: 3.1 MB ✅
+
+**GitHub Release v3.2.0:** Created with 3 container build artifacts (CUDA 11.8, 12.6, 12.8)
+
+**Key learnings:**
+- microhttpd PUT handling requires per-request context — `*ptr` must be managed carefully across callbacks
+- The original `*ptr = nullptr` for GET initialization conflicts with PUT's accumulated context — must guard with `if(!is_put)`
+- `closedir()` invalidates ALL `readdir()` returned entries — always copy what you need first
+- Pool switch causes "Invalid job id" rejections for in-flight shares — normal race condition, not a bug
+- `dynamic_cast` for `is_tls()` requires RTTI (not disabled in this project) — clean approach
+
+**Next session priorities (Session 56):**
+1. **Autotune start/stop from GUI** — `POST /api/v1/autotune/start` + `/stop` (requires refactoring `do_autotune()` from standalone mode to async)
+2. **Authentication** — Bearer token for API write endpoints
+3. **Begin Pillar 3 assessment** — Windows support scoping, platform abstraction layer
