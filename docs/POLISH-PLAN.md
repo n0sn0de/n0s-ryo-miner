@@ -13,7 +13,7 @@ The engine is fast. The algorithm is bit-exact. The autotune finds optimal setti
 Three pillars, in dependency order:
 
 1. **Single Executable** — Eliminate the 3-file deployment (main + 2 .so plugins). One binary, zero `dlopen`.
-2. **GUI Dashboard** — Embedded web UI for real-time hashrate visualization, pool configuration, autotune control, and GPU telemetry. Ships inside the same executable. CLI stays first-class.
+2. **GUI Dashboard** — Embedded web UI for real-time hashrate visualization, pool configuration, and GPU telemetry. Ships inside the same executable. CLI stays first-class.
 3. **Windows Support** — Cross-platform abstraction layer, MSVC builds, Windows GPU telemetry, CI/CD matrix producing Linux + Windows releases.
 
 Each pillar is self-contained. Each ships independently. Each is validated before the next begins.
@@ -162,9 +162,6 @@ Replace the current monolithic HTML-rendering `get_http_report()` with clean JSO
 | `GET /api/v1/pool` | — | Current pool, accepted/rejected shares, difficulty |
 | `GET /api/v1/config` | — | Current miner configuration (sanitized — no passwords) |
 | `PUT /api/v1/config/pool` | JSON | Update pool settings (apply on next reconnect) |
-| `GET /api/v1/autotune` | — | Autotune state, progress, results |
-| `POST /api/v1/autotune/start` | JSON | Trigger autotune (mode, backend, GPUs) |
-| `POST /api/v1/autotune/stop` | — | Cancel running autotune |
 | `GET /api/v1/version` | — | Version, build info, backends enabled |
 
 **Implementation notes:**
@@ -213,15 +210,7 @@ A single-page application built with vanilla HTML/CSS/JS (no framework). Keeps t
 │  └───┴──────────────────┴────────┴───────┴───────┴────────┘ │
 │                                                              │
 ├─────────────────────────────────────────────┬────────────────┤
-│  Pool Configuration                         │  Autotune      │
-│  ┌─────────────────────────────────────┐   │  ┌──────────┐  │
-│  │ Pool:  pool.ryo.org:3333        [✎] │   │  │  Start   │  │
-│  │ Wallet: 5Bk2...                 [✎] │   │  │  Mode:   │  │
-│  │ TLS:   ✓ enabled                    │   │  │  ○ Quick  │  │
-│  │ Rigid: n0s-rig-01               [✎] │   │  │  ● Bal.  │  │
-│  └─────────────────────────────────────┘   │  │  ○ Full  │  │
-│                                             │  └──────────┘  │
-└─────────────────────────────────────────────┴────────────────┘
+
 ```
 
 **Visual Identity:**
@@ -238,7 +227,6 @@ A single-page application built with vanilla HTML/CSS/JS (no framework). Keeps t
 | Hashrate chart | `<canvas>` + lightweight charting (~5 KB) | No Chart.js (200 KB). Use [uPlot](https://github.com/leeoniya/uPlot) (~35 KB) or hand-rolled canvas |
 | GPU telemetry table | Vanilla DOM | Updated via polling `/api/v1/gpus` every 2s |
 | Pool config editor | HTML `<form>` | PUT to `/api/v1/config/pool`, validated client-side |
-| Autotune controls | Buttons + progress bar | POST/GET `/api/v1/autotune/*` |
 | Share counter | Animated number | CSS transition on update |
 | Connection indicator | SVG dot | Green/yellow/red based on pool state |
 
@@ -297,7 +285,6 @@ struct HashrateHistory {
 - [x] Dashboard loads in Chrome, Firefox, Safari
 - [x] Hashrate chart renders real-time data correctly
 - [x] Pool config changes apply on next pool reconnect (PUT /api/v1/config/pool)
-- [ ] Autotune can be started/stopped from GUI
 - [x] GPU telemetry updates every 2 seconds
 - [x] All API endpoints return valid JSON (10 endpoints: 9 GET + 1 PUT)
 - [x] Frontend total size < 50 KB gzipped (6.1 KB — 12% of target)
@@ -532,7 +519,7 @@ Things explicitly **not** in scope:
 | Criteria | Measurement |
 |----------|-------------|
 | Single file deployment | One executable, zero companion files (Linux + Windows) |
-| GUI usability | Pool config + autotune + hashrate chart functional from browser |
+| GUI usability | Pool config + hashrate chart functional from browser |
 | Frontend weight | < 50 KB gzipped (embedded in binary) |
 | Binary size | < 25 MB (CUDA+OpenCL variant, static linked) |
 | Startup time | < 3 seconds to first hash (same as current) |
@@ -627,7 +614,7 @@ The `gui_assets` custom command was depended on by `n0s-ryo-miner` (executable) 
 |--------|--------|
 | **Tab navigation** | Monitor + Configuration pages via tab buttons |
 | **Monitor page** | Hashrate chart, GPU table, top difficulties |
-| **Configuration page** | Pool config (address, wallet, rig ID, TLS, nicehash), autotune results, miner info |
+| **Configuration page** | Pool config (address, wallet, rig ID, TLS, nicehash), miner info |
 | **GPU table reorder** | #, Card, H/s, Power, H/W, Temp, Fan, GPU Clk, Mem Clk |
 | **Card name column** | Replaces "Backend" — shows "AMD Radeon RX 9070 XT", "NVIDIA GeForce GTX 1070 Ti" etc |
 | **H/W efficiency** | Hash per watt ratio in GPU table and API |
@@ -736,32 +723,6 @@ The `gui_assets` custom command was depended on by `n0s-ryo-miner` (executable) 
 - `dynamic_cast` for `is_tls()` requires RTTI (not disabled in this project) — clean approach
 
 **Next session priorities (Session 56):**
-1. **Autotune start/stop from GUI** — `POST /api/v1/autotune/start` + `/stop` (requires refactoring `do_autotune()` from standalone mode to async)
-2. **Authentication** — Bearer token for API write endpoints
-3. **Begin Pillar 3 assessment** — Windows support scoping, platform abstraction layer
+1. **Authentication** — Bearer token for API write endpoints
+2. **Begin Pillar 3 assessment** — Windows support scoping, platform abstraction layer
 
-### Session 55b (2026-04-02 late) — Autotune Multi-GPU Config Fix 🔧⚡
-
-**Fixed two bugs in autotune multi-GPU support.**
-
-| Bug | Root Cause | Fix |
-|-----|-----------|-----|
-| **Config overwrite** (critical) | `writeNvidiaConfig`/`writeAmdConfig` opened config files with `"w"` (truncate) for each GPU, destroying previous GPU entries. Tuning GPUs 0,3 left only GPU 3 in `nvidia.txt`. | Collect all winners during tuning loop, write all entries at once via `writeNvidiaConfigMulti`/`writeAmdConfigMulti` |
-| **Single GPU default** | When `--autotune-gpu` was not specified, only GPU 0 was scanned (hardcoded `amd_devices.push_back(0)`). Multi-GPU systems required explicit `--autotune-gpu 0,1,2,...` | Added `discoverNvidiaGpus()` (nvidia-smi query) and `discoverAmdGpus()` (clinfo query) for auto-detection |
-
-**Investigation findings:**
-- GPU *selection* during benchmark was actually correct — `"index" : N` in the temp config correctly targets GPU N via `cudaSetDevice()`
-- Verified by monitoring `nvidia-smi` GPU utilization during benchmark: only the targeted GPU showed 100% util + memory allocation
-- The bug was purely in the config file *output*, not in GPU selection during tuning
-
-**Config output improvements:**
-- Multi-GPU configs now include comment headers per GPU: `// GPU 0: NVIDIA GeForce GTX 1660 — threads=8 blocks=324 bfactor=0`
-- Config file header: `// 6 GPU(s) tuned`
-- Log message: `AUTOTUNE: NVIDIA config written to nvidia.txt (6 GPUs)`
-
-**Validation (4 nodes):**
-- amd (6 NVIDIA GPUs): `--autotune` (no gpu flag) auto-discovered all 6, tuned 2 unique configs + cached 4 identical, nvidia.txt contains all 6 entries ✅
-- amd: `--autotune-gpu 0,3` produces config with both GPUs ✅
-- nos2 (GTX 1070 Ti, single GPU): auto-discovered 1 device, single-entry config ✅
-- nosnode (RTX 2070, single GPU): auto-discovered 1 device, single-entry config ✅
-- nitro (RX 9070 XT, OpenCL): golden hash tests 3/3 pass, build clean ✅
