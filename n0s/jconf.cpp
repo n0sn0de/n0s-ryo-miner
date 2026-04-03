@@ -25,6 +25,7 @@
 #include "params.hpp"
 
 #include "n0s/misc/console.hpp"
+#include "n0s/platform/compat.hpp"
 #include "n0s/misc/jext.hpp"
 #include "n0s/misc/utility.hpp"
 
@@ -278,13 +279,13 @@ jconf::slow_mem_cfg jconf::GetSlowMemSetting()
 {
 	const char* opt = prv->configValues[sUseSlowMem]->GetString();
 
-	if(strcasecmp(opt, "always") == 0)
+	if(n0s_strcasecmp(opt, "always") == 0)
 		return always_use;
-	else if(strcasecmp(opt, "no_mlck") == 0)
+	else if(n0s_strcasecmp(opt, "no_mlck") == 0)
 		return no_mlck;
-	else if(strcasecmp(opt, "warn") == 0)
+	else if(n0s_strcasecmp(opt, "warn") == 0)
 		return print_warning;
-	else if(strcasecmp(opt, "never") == 0)
+	else if(n0s_strcasecmp(opt, "never") == 0)
 		return never_use;
 	else
 		return unknown_value;

@@ -88,11 +88,11 @@ static constexpr size_t ASSET_COUNT = sizeof(ASSETS) / sizeof(ASSETS[0]);
 } // namespace n0s
 
 // Lookup outside the namespace to avoid std:: resolution issues
-#include <cstring>
+#include "n0s/platform/compat.hpp"
 inline const n0s::gui::EmbeddedAsset* n0s_gui_findAsset(const char* path) {
     if (path[0] == '/' && path[1] == '\0') path = "/gui/index.html";
     for (size_t i = 0; i < n0s::gui::ASSET_COUNT; i++) {
-        if (strcasecmp(n0s::gui::ASSETS[i].path, path) == 0)
+        if (n0s_strcasecmp(n0s::gui::ASSETS[i].path, path) == 0)
             return &n0s::gui::ASSETS[i];
     }
     return nullptr;

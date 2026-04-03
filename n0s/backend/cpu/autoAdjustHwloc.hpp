@@ -5,8 +5,6 @@
 #include "n0s/misc/console.hpp"
 #include "n0s/params.hpp"
 
-#include <unistd.h>
-
 #include <string>
 
 #include <hwloc.h>

@@ -48,6 +48,7 @@
 #include "executor.hpp"
 #include "n0s/jconf.hpp"
 #include "n0s/net/jpsock.hpp"
+#include "n0s/platform/compat.hpp"
 
 #include "telemetry.hpp"
 #include "n0s/backend/backendConnector.hpp"
@@ -448,7 +449,7 @@ void executor::on_miner_result(size_t pool_id, job_result& oResult)
 
 			std::string error = pool->get_call_error();
 
-			if(strncasecmp(error.c_str(), "Unauthenticated", 15) == 0)
+			if(n0s_strncasecmp(error.c_str(), "Unauthenticated", 15) == 0)
 			{
 				printer::inst()->print_msg(L2, "Your miner was unable to find a share in time. Either the pool difficulty is too high, or the pool timeout is too low.");
 				pool->disconnect();

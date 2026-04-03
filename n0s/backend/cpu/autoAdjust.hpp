@@ -17,7 +17,7 @@ constexpr int32_t get_masked(int32_t val, int32_t h, int32_t l)
 #include "n0s/params.hpp"
 #include <string>
 
-#include <unistd.h>
+#include "n0s/platform/compat.hpp"
 
 namespace n0s
 {
@@ -165,7 +165,7 @@ class autoAdjust
 
 	void detectCPUConf()
 	{
-		corecnt = sysconf(_SC_NPROCESSORS_ONLN);
+		corecnt = n0s::compat::sysconf_nproc();
 		linux_layout = true;
 	}
 

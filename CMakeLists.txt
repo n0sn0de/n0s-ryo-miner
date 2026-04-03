@@ -36,8 +36,10 @@ set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "${BUILD_TYPE}")
 set(N0S_COMPILE "native" CACHE STRING "Select CPU compile mode (native or generic)")
 set_property(CACHE N0S_COMPILE PROPERTY STRINGS "native;generic")
 if(N0S_COMPILE STREQUAL "native")
-    set(CMAKE_CXX_FLAGS "-march=native -mtune=native ${CMAKE_CXX_FLAGS}")
-    set(CMAKE_C_FLAGS "-march=native -mtune=native ${CMAKE_C_FLAGS}")
+    if(NOT MSVC)
+        set(CMAKE_CXX_FLAGS "-march=native -mtune=native ${CMAKE_CXX_FLAGS}")
+        set(CMAKE_C_FLAGS "-march=native -mtune=native ${CMAKE_C_FLAGS}")
+    endif()
 elseif(N0S_COMPILE STREQUAL "generic")
     add_definitions("-DCONF_ENFORCE_OpenCL_1_2=1")
 else()
@@ -169,9 +171,11 @@ endif()
 # CPU mining removed — shared crypto still compiled for GPU hash verification
 add_definitions("-DCONF_NO_CPU")
 
-# AVX2 for Clang
-if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+# AVX2 for Clang/GCC
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     set_source_files_properties(n0s/backend/cpu/crypto/cn_gpu_avx.cpp PROPERTIES COMPILE_FLAGS "-mavx2")
+elseif(MSVC)
+    set_source_files_properties(n0s/backend/cpu/crypto/cn_gpu_avx.cpp PROPERTIES COMPILE_FLAGS "/arch:AVX2")
 endif()
 
 ################################################################################
@@ -254,24 +258,43 @@ add_definitions("-DBACKEND_TYPE=${STR_BACKEND_TYPES}")
 include_directories(BEFORE .)
 set(CMAKE_POSITION_INDEPENDENT_CODE TRUE)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse2 -maes")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -msse2 -maes")
-
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+if(MSVC)
+    # MSVC: intrinsics enabled by default, use /arch:AVX2 for broader coverage
+    # SSE2/AES are always available on x86-64 MSVC targets
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /D_CRT_SECURE_NO_WARNINGS /D_WINSOCK_DEPRECATED_NO_WARNINGS")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /D_CRT_SECURE_NO_WARNINGS /D_WINSOCK_DEPRECATED_NO_WARNINGS")
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /W4")
     endif()
-    set(CMAKE_CXX_FLAGS "-Wl,-z,noexecstack ${CMAKE_CXX_FLAGS}")
-    set(CMAKE_C_FLAGS "-Wl,-z,noexecstack ${CMAKE_C_FLAGS}")
+    # Static CRT for self-contained executable
+    if(CMAKE_LINK_STATIC)
+        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+else()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse2 -maes")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -msse2 -maes")
+
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
+            set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall")
+        endif()
+        set(CMAKE_CXX_FLAGS "-Wl,-z,noexecstack ${CMAKE_CXX_FLAGS}")
+        set(CMAKE_C_FLAGS "-Wl,-z,noexecstack ${CMAKE_C_FLAGS}")
+    endif()
 endif()
 
 # Static linking option
 if(CMAKE_LINK_STATIC)
     set(BUILD_SHARED_LIBRARIES OFF)
-    set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
-    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-        set(LIBS "-static-libgcc -static-libstdc++ ${LIBS}")
+    if(MSVC)
+        set(CMAKE_FIND_LIBRARY_SUFFIXES ".lib")
+    else()
+        set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+        if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+            set(LIBS "-static-libgcc -static-libstdc++ ${LIBS}")
+        endif()
     endif()
 endif()
 
@@ -286,8 +309,15 @@ file(GLOB BACKEND_CPP
     "n0s/backend/cpu/crypto/*.cpp"
     "n0s/http/*.cpp"
     "n0s/misc/*.cpp"
-    "n0s/net/*.cpp"
-    "n0s/platform/*.cpp")
+    "n0s/net/*.cpp")
+
+# Platform-specific sources (only compile the correct platform file)
+if(WIN32)
+    list(APPEND BACKEND_CPP "n0s/platform/platform_windows.cpp")
+else()
+    list(APPEND BACKEND_CPP "n0s/platform/platform_linux.cpp")
+endif()
+
 add_library(n0s-backend STATIC ${BACKEND_CPP})
 add_dependencies(n0s-backend gui_assets)
 if(MICROHTTPD_ENABLE)
@@ -295,6 +325,10 @@ if(MICROHTTPD_ENABLE)
 endif()
 # dlopen/dlsym for runtime NVML loading (gpu telemetry)
 target_link_libraries(n0s-backend ${CMAKE_DL_LIBS})
+# Windows: link Winsock2 + shell32
+if(WIN32)
+    target_link_libraries(n0s-backend ws2_32 shell32)
+endif()
 target_link_libraries(n0s-backend ${LIBS})
 
 # CUDA backend (static library, linked directly into executable)

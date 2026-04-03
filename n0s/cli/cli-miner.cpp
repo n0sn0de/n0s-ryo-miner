@@ -47,10 +47,8 @@
 #include <cmath>
 #include <ctime>
 
-// Platform-specific includes for non-mining operations
-#ifndef _WIN32
-#include <unistd.h>  // getuid() for config wizard
-#endif
+// Cross-platform compatibility
+#include "n0s/platform/compat.hpp"
 
 #ifndef CONF_NO_TLS
 #include <openssl/err.h>

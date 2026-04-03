@@ -15,12 +15,12 @@
 
 #include "gpu_utils.hpp"
 
+#include "n0s/platform/compat.hpp"
+
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <string>
-#include <unistd.h>
-#include <sys/stat.h>
 
 namespace n0s
 {
@@ -39,12 +39,12 @@ void string_replace_all(std::string& str, const std::string& from, const std::st
 
 void create_directory(const std::string& dirname)
 {
-	mkdir(dirname.data(), 0744);
+	n0s::compat::mkdir(dirname.data());
 }
 
 void port_sleep(size_t sec)
 {
-	sleep(sec);
+	n0s::compat::sleep_sec(static_cast<unsigned int>(sec));
 }
 
 char* LoadTextFile(const char* filename)
