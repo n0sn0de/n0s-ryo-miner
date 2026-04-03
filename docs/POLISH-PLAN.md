@@ -2,7 +2,7 @@
 
 **From Optimized Engine to Shipped Product**
 
-*Status: Active. Pillar 1 complete (Session 50). Pillar 2 dashboard shipped as v3.2.0 (Session 54). v3.2.0 released with single binary + GUI dashboard.*
+*Status: Active. Pillar 1 complete (Session 50). Pillar 2 dashboard shipped as v3.2.0 (Session 54). Pillar 3.1 platform abstraction complete (Session 56). v3.2.0 released with single binary + GUI dashboard.*
 
 ---
 
@@ -319,7 +319,7 @@ struct HashrateHistory {
 | Thread naming | `pthread_setname_np` | `SetThreadDescription` (Win10 1607+) |
 | CMake | GCC/Clang assumed | MSVC + Clang-CL + Ninja |
 
-### 3.1 — Platform Abstraction Layer
+### 3.1 — Platform Abstraction Layer ✅ (Session 56)
 
 Introduce a thin `n0s/platform/` module — not an abstraction framework, just the handful of functions that differ:
 
@@ -531,81 +531,6 @@ Things explicitly **not** in scope:
 
 ## Session Notes
 
-### Session 51 (2026-04-02) — GUI Dashboard MVP: Frontend SPA + Asset Embedding 🖥️⚡
-
-**Complete GUI dashboard shipped — embedded in the miner binary.**
-
-| Component | Detail |
-|-----------|--------|
-| **Hashrate history ring buffer** | `HashrateHistory` class: 3600 samples, 1s resolution, ~115 KB memory, thread-safe |
-| **`/api/v1/hashrate/history`** | New time-series endpoint — serves chronological samples with per-GPU + total H/s |
-| **Frontend SPA** | `gui/index.html` + `gui/style.css` + `gui/app.js` — pure vanilla HTML/CSS/JS, zero dependencies |
-| **Hashrate chart** | Pure `<canvas>` drawing — scrolling time-series with per-GPU lines, total line, gradient fill |
-| **GPU telemetry table** | Real-time temp/power/fan/clocks for each GPU |
-| **Pool stats** | Shares (accepted/rejected), difficulty, ping, top difficulties |
-| **Dark theme** | `#0d1117` background, RYO blue→cyan gradient accents, monospace numerics |
-| **Asset embedding** | `scripts/embed_assets.sh` → gzip → xxd → C++ constexpr arrays |
-| **CMake integration** | `add_custom_command` auto-regenerates `embedded_assets.hpp` when gui/ files change |
-| **Embedded serving** | Pre-gzipped with `Content-Encoding: gzip` — zero runtime compression |
-| **`--gui` flag** | Start mining + open `xdg-open http://localhost:{port}/gui/index.html` |
-| **`--gui-dev DIR`** | Serve from filesystem for hot-reload development |
-| **Root redirect** | `/` → `/gui/index.html` (307 redirect) |
-| **Legacy preserved** | `/h`, `/c`, `/r`, `/api.json`, `/style.css` all still work |
-
-**Frontend sizes:**
-- `index.html`: 3,012 bytes → 904 bytes gzipped
-- `style.css`: 4,940 bytes → 1,470 bytes gzipped
-- `app.js`: 10,731 bytes → 3,767 bytes gzipped
-- **Total embedded: 6,141 bytes (12% of 50 KB target)**
-
-**3-GPU validation:**
-- nitro (RX 9070 XT, OpenCL): 200+ shares, 0 rejected ✅, API + GUI working ✅
-- nos2 (GTX 1070 Ti, CUDA 11.8): 25+ shares, 0 rejected ✅, API + GUI working ✅
-- nosnode (RTX 2070, CUDA 12.6): 50+ shares, 0 rejected ✅, API + GUI working ✅
-
-**Key learnings:**
-- Pure Canvas chart rendering is ~200 lines of JS and renders buttery smooth — no charting library needed
-- Pre-gzipped embedded assets with `Content-Encoding: gzip` = zero overhead at serving time
-- microhttpd's `MHD_RESPMEM_PERSISTENT` + constexpr arrays = no allocation per request for static assets
-- The `--gui-dev` mode is essential for iterating on the frontend without rebuilding the C++ binary
-
-### Session 53 (2026-04-02) — GUI Phase 2: Config/Autotune API + Container Build Fix 🔧⚡
-
-**Extended dashboard API to 9 endpoints, fixed container build pipeline.**
-
-| Component | Detail |
-|-----------|--------|
-| **`GET /api/v1/config`** | Pool config (address, masked wallet, rig_id, TLS, nicehash, weight) |
-| **`GET /api/v1/autotune`** | Cached autotune results with per-GPU best scores + settings |
-| **Frontend: Pool config section** | Wallet, Rig ID, TLS status in the pool info panel |
-| **Frontend: Autotune display** | Shows autotune results when `autotune.json` exists |
-| **Frontend: Accent card** | Hashrate card gets subtle cyan glow border |
-| **Container build: dependency fix** | `add_dependencies(n0s-backend gui_assets)` — critical fix |
-| **Container build: namespace fix** | `findAsset()` moved outside `n0s::gui` namespace — GCC 11 compat |
-| **Container build: deps** | Added `gzip` + `xxd` packages to container build script |
-
-**Container build bug discovered and fixed:**
-The `gui_assets` custom command was depended on by `n0s-ryo-miner` (executable) but `httpd.cpp` compiles inside `n0s-backend` (static library). This race condition meant the embedded header could be stale when `httpd.cpp` compiled in the container. Additionally, GCC 11.4 (Ubuntu 22.04) resolved `std::align_val_t` inside `namespace n0s::gui` as `n0s::gui::std::align_val_t`, causing a template substitution failure. Both fixed.
-
-**Validated:**
-- Container build CUDA 11.8: ✅ (2.3 MB single binary with GUI embedded)
-- Golden hash tests: 3/3 pass ✅
-- All 9 REST API endpoints: valid JSON ✅
-- 3-GPU live mining: 100% share acceptance ✅
-
-**API endpoint inventory (9 total):**
-| # | Endpoint | Method | Purpose |
-|---|----------|--------|---------|
-| 1 | `/api/v1/status` | GET | Mining state, uptime, connection |
-| 2 | `/api/v1/hashrate` | GET | Per-GPU + total hashrate (10s/60s/15m) |
-| 3 | `/api/v1/hashrate/history` | GET | Time-series ring buffer (3600 samples) |
-| 4 | `/api/v1/gpus` | GET | GPU telemetry (temp/power/fan/clocks) |
-| 5 | `/api/v1/pool` | GET | Shares, difficulty, ping, top diffs |
-| 6 | `/api/v1/config` | GET | Pool config (wallet masked) |
-| 7 | `/api/v1/autotune` | GET | Cached autotune results |
-| 8 | `/api/v1/version` | GET | Version, backends, algorithm |
-| 9 | `/gui/*` | GET | Embedded dashboard SPA (6.8 KB gzipped) |
-
 ### Session 53b (2026-04-02 evening) — GUI Phase 3: Tab Nav, GPU Names, H/W, Config Page 🖥️⚡
 
 **Dashboard UI overhaul per Jason's feedback.**
@@ -723,6 +648,75 @@ The `gui_assets` custom command was depended on by `n0s-ryo-miner` (executable) 
 - `dynamic_cast` for `is_tls()` requires RTTI (not disabled in this project) — clean approach
 
 **Next session priorities (Session 56):**
-1. **Authentication** — Bearer token for API write endpoints
-2. **Begin Pillar 3 assessment** — Windows support scoping, platform abstraction layer
+1. **Platform abstraction layer** — Pillar 3.1 (DONE in Session 56)
+2. **Authentication** — Bearer token for API write endpoints
+
+### Session 55b (2026-04-02 late) — Autotune Multi-GPU Config Fix 🔧⚡
+
+**Fixed two bugs in autotune multi-GPU support.**
+
+| Bug | Root Cause | Fix |
+|-----|-----------|-----|
+| **Config overwrite** (critical) | `writeNvidiaConfig`/`writeAmdConfig` opened config files with `"w"` (truncate) for each GPU, destroying previous GPU entries. Tuning GPUs 0,3 left only GPU 3 in `nvidia.txt`. | Collect all winners during tuning loop, write all entries at once via `writeNvidiaConfigMulti`/`writeAmdConfigMulti` |
+| **Single GPU default** | When `--autotune-gpu` was not specified, only GPU 0 was scanned (hardcoded `amd_devices.push_back(0)`). Multi-GPU systems required explicit `--autotune-gpu 0,1,2,...` | Added `discoverNvidiaGpus()` (nvidia-smi query) and `discoverAmdGpus()` (clinfo query) for auto-detection |
+
+**Validation (4 nodes):**
+- amd (6 NVIDIA GPUs): `--autotune` (no gpu flag) auto-discovered all 6, tuned 2 unique configs + cached 4 identical, nvidia.txt contains all 6 entries ✅
+- nos2 (GTX 1070 Ti, single GPU): auto-discovered 1 device, single-entry config ✅
+- nosnode (RTX 2070, single GPU): auto-discovered 1 device, single-entry config ✅
+- nitro (RX 9070 XT, OpenCL): golden hash tests 3/3 pass, build clean ✅
+
+### Session 56 (2026-04-03) — Platform Abstraction Layer (Pillar 3.1) 🏗️⚡
+
+**Foundation for Windows support — cross-platform abstraction layer shipped.**
+
+| Component | Detail |
+|-----------|--------|
+| **`n0s/platform/platform.hpp`** | Cross-platform API: filesystem paths, console, signals, sockets, browser, threads |
+| **`n0s/platform/platform_linux.cpp`** | Linux implementations using POSIX APIs (getpwuid, sigaction, fork+exec, termios, pthread) |
+| **`n0s/platform/platform_windows.cpp`** | Windows implementations using Win32 APIs (GetEnvironmentVariable, SetConsoleCtrlHandler, ShellExecute, CreateProcess, WSAStartup) |
+| **`socks.hpp` refactored** | Dual POSIX/Winsock socket primitives — SOCKET type, sock_close, sock_strerror with `#ifdef _WIN32` |
+| **`home_dir.hpp` refactored** | Now delegates to `platform::getHomePath()` — removed `<pwd.h>` / `<unistd.h>` dependencies |
+| **`console.cpp` refactored** | Uses `platform::getKey()`, `platform::enableConsoleColors()`, `platform::formatLocalTime()` — removed `<termios.h>` |
+| **`executor.cpp` refactored** | Uses `platform::disableSigpipe()` — removed raw `<signal.h>` / `sigaction` |
+| **`cli-miner.cpp` refactored** | Uses `platform::openBrowser()` — removed `fork()`/`execlp()`/`<fcntl.h>` |
+| **`jpsock.cpp` refactored** | Uses `platform::sockInit()` — removed old `sock_init()` no-op |
+
+**Platform API surface (14 functions):**
+
+| Function | Linux | Windows |
+|----------|-------|---------|
+| `getHomePath()` | `$HOME` / `getpwuid` | `%USERPROFILE%` |
+| `getConfigDir()` | `$XDG_CONFIG_HOME/n0s/` | `%APPDATA%\n0s\` |
+| `getCacheDir()` | `$XDG_CACHE_HOME/n0s/` | `%LOCALAPPDATA%\n0s\` |
+| `getKey()` | `termios` raw mode | `_getch()` |
+| `enableConsoleColors()` | no-op | `ENABLE_VIRTUAL_TERMINAL_PROCESSING` |
+| `formatLocalTime()` | `localtime_r` | `localtime_s` |
+| `disableSigpipe()` | `sigaction(SIGPIPE, SIG_IGN)` | no-op |
+| `installShutdownHandler()` | `sigaction(SIGINT/SIGTERM)` | `SetConsoleCtrlHandler` |
+| `openBrowser()` | `fork + execlp("xdg-open")` | `ShellExecuteA("open")` |
+| `spawnProcess()` | `fork + execvp` | `CreateProcessA` |
+| `setThreadName()` | `pthread_setname_np` | `SetThreadDescription` |
+| `sockInit()` / `sockCleanup()` | no-op | `WSAStartup` / `WSACleanup` |
+| `platformName()` | `"linux"` | `"windows"` |
+| `isWindows()` | `false` | `true` |
+
+**3-GPU validation:**
+- nitro (RX 9070 XT, OpenCL): build ✅, 100+ shares, 0 rejected ✅, API endpoints ✅
+- nos2 (GTX 1070 Ti, CUDA 11.8): build ✅, 20+ shares, 0 rejected ✅
+- nosnode (RTX 2070, CUDA 12.6): build ✅, 20+ shares, 0 rejected ✅
+- Container build CUDA 11.8: 3.1 MB ✅, 20+ shares on nos2 ✅
+- Golden hash tests: 3/3 pass ✅
+
+**Key learnings:**
+- The old `sock_init()` was an inline no-op in `socks.hpp` — when refactored, `jpsock.cpp` still called it, causing an undeclared symbol error. Platform wrapper caught this cleanly.
+- `localtime_r` (POSIX) vs `localtime_s` (Windows) have *reversed argument order* — the platform layer hides this.
+- Windows `SetThreadDescription` requires converting to `wchar_t` — encapsulated in the platform layer.
+- Container build (GCC 11, Ubuntu 22.04) compiles clean with the new platform files — no C++17 issues.
+- Zero algorithm changes — all golden hashes identical before and after refactor.
+
+**Next session priorities (Session 57):**
+1. **Pillar 3.2: Network Layer (Winsock)** — `#ifdef _WIN32` shims in socket.cpp for `closesocket()`, `WSAStartup` in main()
+2. **Pillar 3.3: GPU Telemetry (Windows)** — NVML direct API instead of nvidia-smi subprocess (benefits Linux too)
+3. **Authentication** — Bearer token for API write endpoints
 
