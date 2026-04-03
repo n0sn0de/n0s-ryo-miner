@@ -2,7 +2,7 @@
 
 **From Optimized Engine to Shipped Product**
 
-*Status: Active. Pillar 1 complete (Session 50). Pillar 2 dashboard shipped as v3.2.0 (Session 54). Pillar 3.1 platform abstraction complete (Session 56). Pillar 3.3 NVML telemetry complete (Session 57). Pillar 3.2 cross-platform compat layer complete (Session 58). v3.2.0 released with single binary + GUI dashboard.*
+*Status: Active. Pillar 1 complete (Session 50). Pillar 2 complete including auth (Session 59). Pillar 3.1–3.3 complete (Sessions 56–58). CI/CD live (Session 59). v3.2.0 released with single binary + GUI dashboard.*
 
 ---
 
@@ -290,7 +290,7 @@ struct HashrateHistory {
 - [x] Frontend total size < 50 KB gzipped (6.1 KB — 12% of target)
 - [x] `--gui` opens browser and mines simultaneously
 - [x] CLI-only mode unaffected (no GUI overhead when not using `--gui`)
-- [ ] Authentication works (digest auth on API endpoints)
+- [x] Authentication works (digest auth + Bearer token on API endpoints)
 
 ### Estimated Scope
 
@@ -531,20 +531,6 @@ Things explicitly **not** in scope:
 
 ## Session Notes
 
-### Session 56 (2026-04-03) — Platform Abstraction Layer (Pillar 3.1) 🏗️⚡
-
-**Foundation for Windows support — cross-platform abstraction layer shipped.**
-
-| Component | Detail |
-|-----------|--------|
-| **`n0s/platform/platform.hpp`** | Cross-platform API: filesystem paths, console, signals, sockets, browser, threads |
-| **`n0s/platform/platform_linux.cpp`** | Linux implementations using POSIX APIs |
-| **`n0s/platform/platform_windows.cpp`** | Windows implementations using Win32 APIs |
-| **`socks.hpp` refactored** | Dual POSIX/Winsock socket primitives |
-| **5 files refactored** | home_dir, console, executor, cli-miner, jpsock — all use platform API |
-
-**3-GPU validation:** All pass, 0 rejected. Container build 3.1 MB.
-
 ### Session 57 (2026-04-03) — NVML Direct API for GPU Telemetry (Pillar 3.3) ⚡🔥
 
 **Eliminated nvidia-smi subprocess overhead — direct NVML API calls via runtime dynamic loading.**
@@ -613,8 +599,65 @@ Things explicitly **not** in scope:
 - 🔲 **3.5 CI/CD Matrix** — GitHub Actions for Windows builds
 - 🔲 **3.6 Validation** — Windows live testing
 
-**Next session priorities (Session 59):**
-1. **Pillar 3.4: Build System (Windows)** — vcpkg integration for OpenSSL, microhttpd, hwloc on Windows
-2. **CI/CD foundation** — GitHub Actions workflow with Linux build matrix first
-3. **Authentication** — Bearer token for API write endpoints (Pillar 2 gap)
+### Session 59 (2026-04-03) — CI/CD Workflows + API Bearer Auth 🚀🔐
+
+**Two major deliverables: automated build pipeline and API authentication.**
+
+**CI/CD (`.github/workflows/`):**
+
+| Workflow | Trigger | Jobs |
+|----------|---------|------|
+| **build.yml** | push to master, PRs | 3 parallel builds: OpenCL (Ubuntu 24.04), CUDA 11.8 (container), CUDA 12.8+OpenCL (container) |
+| **release.yml** | tag push `v*` | Build all variants → create GitHub Release with SHA256 checksums |
+
+| CI Job | Status | Details |
+|--------|--------|---------|
+| Linux OpenCL (Ubuntu 24.04) | ✅ PASS | Native build + golden hash constants test |
+| Linux CUDA 11.8 (Container) | ✅ PASS | nvidia/cuda:11.8.0-devel, archs 61-89 |
+| Linux CUDA 12.8 (Container) | ✅ PASS | nvidia/cuda:12.8.0-devel, archs 61-120 |
+
+**CI features:**
+- Concurrency groups (cancel in-progress on same branch)
+- Golden hash constant verification on every build
+- Single-binary artifact verification (no .so files produced)
+- 14-day artifact retention
+- Release workflow: auto-generates release notes + SHA256SUMS
+
+**API Bearer Token Authentication:**
+
+| Component | Detail |
+|-----------|--------|
+| **`n0s/jconf.cpp`** | New `http_api_token` config key (optional, defaults to empty) |
+| **`n0s/http/httpd.cpp`** | Bearer token auth via `Authorization: Bearer <token>` header |
+| **Dual auth** | Bearer token OR digest auth (http_login/http_pass) — either accepted |
+| **Backward compat** | Old configs without `http_api_token` parse fine (default: empty = disabled) |
+
+**Auth test results:**
+- ❌ No auth header → `401 {"error":"unauthorized"}` ✅
+- ❌ Wrong token → `401 {"error":"unauthorized"}` ✅
+- ✅ Correct token → `200` with valid JSON ✅
+- ✅ No auth configured → open access (backward compatible) ✅
+
+**3-GPU validation:**
+- nitro (RX 9070 XT, OpenCL): build ✅, 20+ shares, 0 rejected ✅, auth tested ✅
+- nos2 (GTX 1070 Ti, CUDA 11.8): build ✅, 5+ shares, 0 rejected ✅
+- GitHub Actions CI: all 3 jobs PASS ✅
+
+**Key learnings:**
+- MHD (microhttpd) callback model for PUT: body is accumulated across multiple callbacks before auth is checked. Auth runs on the final callback (`upload_data_size == 0`). Body is never processed without auth — no security gap.
+- Making config keys optional requires a static default Value — can't return nullptr from `GetString()`.
+- GitHub Actions container jobs (`container:` key) need packages installed fresh since there's no apt cache.
+- The `concurrency` group with `cancel-in-progress: true` prevents stacking builds on rapid pushes.
+
+**Pillar 2 now COMPLETE:**
+- [x] All 9 GET + 1 PUT API endpoints
+- [x] Dashboard SPA (6.1 KB gzipped)
+- [x] Hashrate chart + GPU telemetry
+- [x] Pool config via API
+- [x] Authentication (digest + Bearer token)
+
+**Next session priorities (Session 60):**
+1. **Pillar 3.4: Build System (Windows)** — vcpkg integration for OpenSSL, microhttpd on Windows
+2. **Windows cross-compilation** — or native build on Windows runner
+3. **Release v3.3.0** — tag and ship with CI/CD
 
