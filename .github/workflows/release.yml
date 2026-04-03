@@ -124,7 +124,7 @@ jobs:
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
         with:
-          vcpkgGitCommitId: '01f602195983451bc83e72f4214af2c7571881eb'
+          vcpkgGitCommitId: '52f5569a8e867859fac967c1e3f10ca0a8a3cc39'  # 2026.03.18
           runVcpkgInstall: true
 
       - name: Generate embedded GUI assets
