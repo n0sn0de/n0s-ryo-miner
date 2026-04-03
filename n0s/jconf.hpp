@@ -82,6 +82,7 @@ class jconf
 	uint16_t GetHttpdPort();
 	const char* GetHttpUsername();
 	const char* GetHttpPassword();
+	const char* GetHttpApiToken();
 
 	bool DaemonMode();
 

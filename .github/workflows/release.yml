@@ -1,0 +1,152 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  # ─── Build all variants ────────────────────────────────────────────────────
+  build-linux-opencl:
+    name: Linux OpenCL
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            cmake g++ \
+            libmicrohttpd-dev libssl-dev libhwloc-dev \
+            ocl-icd-opencl-dev opencl-headers \
+            gzip xxd
+
+      - name: Generate embedded GUI assets
+        run: bash scripts/embed_assets.sh gui n0s/http/embedded_assets.hpp
+
+      - name: Build
+        run: |
+          mkdir -p build && cd build
+          cmake .. \
+            -DCUDA_ENABLE=OFF \
+            -DOpenCL_ENABLE=ON \
+            -DMICROHTTPD_ENABLE=ON \
+            -DHWLOC_ENABLE=ON \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DN0S_COMPILE=generic \
+            -DCMAKE_LINK_STATIC=ON
+          cmake --build . -j$(nproc)
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: n0s-ryo-miner-linux-opencl
+          path: build/bin/n0s-ryo-miner
+
+  build-linux-cuda11:
+    name: Linux CUDA 11.8
+    runs-on: ubuntu-24.04
+    container:
+      image: docker.io/nvidia/cuda:11.8.0-devel-ubuntu22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq cmake g++ libmicrohttpd-dev libssl-dev gzip xxd
+
+      - name: Generate embedded GUI assets
+        run: bash scripts/embed_assets.sh gui n0s/http/embedded_assets.hpp
+
+      - name: Build
+        run: |
+          mkdir -p build && cd build
+          cmake .. \
+            -DCUDA_ENABLE=ON -DOpenCL_ENABLE=OFF \
+            -DMICROHTTPD_ENABLE=ON -DHWLOC_ENABLE=OFF \
+            -DCUDA_ARCH="61;75;80;86;89" \
+            -DCMAKE_BUILD_TYPE=Release -DN0S_COMPILE=generic
+          cmake --build . -j$(nproc)
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: n0s-ryo-miner-linux-cuda11
+          path: build/bin/n0s-ryo-miner
+
+  build-linux-cuda12:
+    name: Linux CUDA 12.8 + OpenCL
+    runs-on: ubuntu-24.04
+    container:
+      image: docker.io/nvidia/cuda:12.8.0-devel-ubuntu24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq cmake g++ libmicrohttpd-dev libssl-dev \
+            ocl-icd-opencl-dev opencl-headers gzip xxd
+
+      - name: Generate embedded GUI assets
+        run: bash scripts/embed_assets.sh gui n0s/http/embedded_assets.hpp
+
+      - name: Build
+        run: |
+          mkdir -p build && cd build
+          cmake .. \
+            -DCUDA_ENABLE=ON -DOpenCL_ENABLE=ON \
+            -DMICROHTTPD_ENABLE=ON -DHWLOC_ENABLE=OFF \
+            -DCUDA_ARCH="61;75;80;86;89;90;100;120" \
+            -DCMAKE_BUILD_TYPE=Release -DN0S_COMPILE=generic
+          cmake --build . -j$(nproc)
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: n0s-ryo-miner-linux-cuda12-opencl
+          path: build/bin/n0s-ryo-miner
+
+  # ─── Create GitHub Release ─────────────────────────────────────────────────
+  release:
+    name: Create Release
+    needs: [build-linux-opencl, build-linux-cuda11, build-linux-cuda12]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release
+          # Rename binaries to include variant
+          cp artifacts/n0s-ryo-miner-linux-opencl/n0s-ryo-miner \
+             release/n0s-ryo-miner-linux-opencl
+          cp artifacts/n0s-ryo-miner-linux-cuda11/n0s-ryo-miner \
+             release/n0s-ryo-miner-linux-cuda11
+          cp artifacts/n0s-ryo-miner-linux-cuda12-opencl/n0s-ryo-miner \
+             release/n0s-ryo-miner-linux-cuda12-opencl
+          chmod +x release/*
+          # Generate checksums
+          cd release && sha256sum * > SHA256SUMS
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            release/n0s-ryo-miner-linux-opencl
+            release/n0s-ryo-miner-linux-cuda11
+            release/n0s-ryo-miner-linux-cuda12-opencl
+            release/SHA256SUMS

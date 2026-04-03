@@ -111,26 +111,61 @@ MHD_Result httpd::req_handler([[maybe_unused]] void* cls,
 		// upload_data_size == 0 means all data received — fall through to routing
 	}
 
-	if(strlen(jconf::inst()->GetHttpUsername()) != 0)
+	// Authentication: Bearer token OR digest auth (when configured)
+	bool auth_required = (strlen(jconf::inst()->GetHttpUsername()) != 0) ||
+	                     (strlen(jconf::inst()->GetHttpApiToken()) != 0);
+	bool auth_passed = false;
+
+	if(auth_required)
 	{
-		char* username;
-		MHD_Result ret;
-
-		username = MHD_digest_auth_get_username(connection);
-		if(username == nullptr)
+		// Check Bearer token first (simpler, preferred for API clients)
+		const char* api_token = jconf::inst()->GetHttpApiToken();
+		if(strlen(api_token) != 0)
 		{
-			rsp = MHD_create_response_from_buffer(sHtmlAccessDeniedSize, const_cast<char*>(sHtmlAccessDenied), MHD_RESPMEM_PERSISTENT);
-			ret = MHD_queue_auth_fail_response(connection, sHttpAuthRealm, sHttpAuthOpaque, rsp, MHD_NO);
-			MHD_destroy_response(rsp);
-			return ret;
+			const char* auth_header = MHD_lookup_connection_value(connection, MHD_HEADER_KIND, "Authorization");
+			if(auth_header != nullptr && strncmp(auth_header, "Bearer ", 7) == 0)
+			{
+				const char* provided_token = auth_header + 7;
+				if(strcmp(provided_token, api_token) == 0)
+					auth_passed = true;
+			}
 		}
-		free(username);
 
-		ret = (MHD_Result)MHD_digest_auth_check(connection, sHttpAuthRealm, jconf::inst()->GetHttpUsername(), jconf::inst()->GetHttpPassword(), 300);
-		if(ret == MHD_INVALID_NONCE || ret == MHD_NO)
+		// Fall back to digest auth if Bearer didn't pass
+		if(!auth_passed && strlen(jconf::inst()->GetHttpUsername()) != 0)
 		{
-			rsp = MHD_create_response_from_buffer(sHtmlAccessDeniedSize, const_cast<char*>(sHtmlAccessDenied), MHD_RESPMEM_PERSISTENT);
-			ret = MHD_queue_auth_fail_response(connection, sHttpAuthRealm, sHttpAuthOpaque, rsp, (ret == MHD_INVALID_NONCE) ? MHD_YES : MHD_NO);
+			char* username;
+			MHD_Result ret;
+
+			username = MHD_digest_auth_get_username(connection);
+			if(username == nullptr)
+			{
+				rsp = MHD_create_response_from_buffer(sHtmlAccessDeniedSize, const_cast<char*>(sHtmlAccessDenied), MHD_RESPMEM_PERSISTENT);
+				ret = MHD_queue_auth_fail_response(connection, sHttpAuthRealm, sHttpAuthOpaque, rsp, MHD_NO);
+				MHD_destroy_response(rsp);
+				return ret;
+			}
+			free(username);
+
+			ret = (MHD_Result)MHD_digest_auth_check(connection, sHttpAuthRealm, jconf::inst()->GetHttpUsername(), jconf::inst()->GetHttpPassword(), 300);
+			if(ret == MHD_INVALID_NONCE || ret == MHD_NO)
+			{
+				rsp = MHD_create_response_from_buffer(sHtmlAccessDeniedSize, const_cast<char*>(sHtmlAccessDenied), MHD_RESPMEM_PERSISTENT);
+				ret = MHD_queue_auth_fail_response(connection, sHttpAuthRealm, sHttpAuthOpaque, rsp, (ret == MHD_INVALID_NONCE) ? MHD_YES : MHD_NO);
+				MHD_destroy_response(rsp);
+				return ret;
+			}
+			auth_passed = true;
+		}
+
+		// If Bearer token is the only auth method and it failed
+		if(!auth_passed)
+		{
+			const char* unauthorized = "{\"error\":\"unauthorized\",\"message\":\"Valid Bearer token or digest auth required\"}";
+			rsp = MHD_create_response_from_buffer(strlen(unauthorized), const_cast<char*>(unauthorized), MHD_RESPMEM_PERSISTENT);
+			MHD_add_response_header(rsp, "Content-Type", "application/json; charset=utf-8");
+			MHD_add_response_header(rsp, "WWW-Authenticate", "Bearer realm=\"n0s-ryo-miner\"");
+			MHD_Result ret = MHD_queue_response(connection, MHD_HTTP_UNAUTHORIZED, rsp);
 			MHD_destroy_response(rsp);
 			return ret;
 		}

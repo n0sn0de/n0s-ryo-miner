@@ -1,0 +1,178 @@
+name: Build & Test
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+# Cancel in-progress runs on the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─── Linux OpenCL-only Build ───────────────────────────────────────────────
+  linux-opencl:
+    name: Linux OpenCL (Ubuntu 24.04)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            cmake g++ \
+            libmicrohttpd-dev libssl-dev libhwloc-dev \
+            ocl-icd-opencl-dev opencl-headers \
+            gzip xxd
+
+      - name: Generate embedded GUI assets
+        run: bash scripts/embed_assets.sh gui n0s/http/embedded_assets.hpp
+
+      - name: Configure (OpenCL only)
+        run: |
+          mkdir -p build && cd build
+          cmake .. \
+            -DCUDA_ENABLE=OFF \
+            -DOpenCL_ENABLE=ON \
+            -DMICROHTTPD_ENABLE=ON \
+            -DHWLOC_ENABLE=ON \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DN0S_COMPILE=generic
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
+
+      - name: Verify single binary
+        run: |
+          test -f build/bin/n0s-ryo-miner
+          echo "Binary size: $(du -h build/bin/n0s-ryo-miner | cut -f1)"
+          # Verify no shared backend libs were produced
+          ! test -f build/bin/libn0s_cuda_backend.so
+          ! test -f build/bin/libn0s_opencl_backend.so
+
+      - name: Golden hash constants test
+        run: |
+          cd tests
+          g++ -std=c++17 -O2 -I.. test_constants.cpp -o test_constants
+          ./test_constants
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: n0s-ryo-miner-linux-opencl
+          path: build/bin/n0s-ryo-miner
+          retention-days: 14
+
+  # ─── Linux CUDA 11.8 + OpenCL Container Build ─────────────────────────────
+  linux-cuda11:
+    name: Linux CUDA 11.8 (Container)
+    runs-on: ubuntu-24.04
+    container:
+      image: docker.io/nvidia/cuda:11.8.0-devel-ubuntu22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq \
+            cmake g++ \
+            libmicrohttpd-dev libssl-dev \
+            gzip xxd
+
+      - name: Generate embedded GUI assets
+        run: bash scripts/embed_assets.sh gui n0s/http/embedded_assets.hpp
+
+      - name: Configure (CUDA 11.8, no OpenCL, no hwloc)
+        run: |
+          mkdir -p build && cd build
+          cmake .. \
+            -DCUDA_ENABLE=ON \
+            -DOpenCL_ENABLE=OFF \
+            -DMICROHTTPD_ENABLE=ON \
+            -DHWLOC_ENABLE=OFF \
+            -DCUDA_ARCH="61;75;80;86;89" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DN0S_COMPILE=generic
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
+
+      - name: Verify single binary
+        run: |
+          test -f build/bin/n0s-ryo-miner
+          echo "Binary size: $(du -h build/bin/n0s-ryo-miner | cut -f1)"
+          ! test -f build/bin/libn0s_cuda_backend.so
+
+      - name: Golden hash constants test
+        run: |
+          cd tests
+          g++ -std=c++17 -O2 -I.. test_constants.cpp -o test_constants
+          ./test_constants
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: n0s-ryo-miner-linux-cuda11
+          path: build/bin/n0s-ryo-miner
+          retention-days: 14
+
+  # ─── Linux CUDA 12.8 + OpenCL Container Build ─────────────────────────────
+  linux-cuda12:
+    name: Linux CUDA 12.8 (Container)
+    runs-on: ubuntu-24.04
+    container:
+      image: docker.io/nvidia/cuda:12.8.0-devel-ubuntu24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq \
+            cmake g++ \
+            libmicrohttpd-dev libssl-dev \
+            ocl-icd-opencl-dev opencl-headers \
+            gzip xxd
+
+      - name: Generate embedded GUI assets
+        run: bash scripts/embed_assets.sh gui n0s/http/embedded_assets.hpp
+
+      - name: Configure (CUDA 12.8 + OpenCL, no hwloc)
+        run: |
+          mkdir -p build && cd build
+          cmake .. \
+            -DCUDA_ENABLE=ON \
+            -DOpenCL_ENABLE=ON \
+            -DMICROHTTPD_ENABLE=ON \
+            -DHWLOC_ENABLE=OFF \
+            -DCUDA_ARCH="61;75;80;86;89;90;100;120" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DN0S_COMPILE=generic
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
+
+      - name: Verify single binary
+        run: |
+          test -f build/bin/n0s-ryo-miner
+          echo "Binary size: $(du -h build/bin/n0s-ryo-miner | cut -f1)"
+          ! test -f build/bin/libn0s_cuda_backend.so
+          ! test -f build/bin/libn0s_opencl_backend.so
+
+      - name: Golden hash constants test
+        run: |
+          cd tests
+          g++ -std=c++17 -O2 -I.. test_constants.cpp -o test_constants
+          ./test_constants
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: n0s-ryo-miner-linux-cuda12-opencl
+          path: build/bin/n0s-ryo-miner
+          retention-days: 14
