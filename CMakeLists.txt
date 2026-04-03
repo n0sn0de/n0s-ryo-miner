@@ -286,7 +286,8 @@ file(GLOB BACKEND_CPP
     "n0s/backend/cpu/crypto/*.cpp"
     "n0s/http/*.cpp"
     "n0s/misc/*.cpp"
-    "n0s/net/*.cpp")
+    "n0s/net/*.cpp"
+    "n0s/platform/*.cpp")
 add_library(n0s-backend STATIC ${BACKEND_CPP})
 add_dependencies(n0s-backend gui_assets)
 if(MICROHTTPD_ENABLE)

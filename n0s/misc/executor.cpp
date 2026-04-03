@@ -461,21 +461,11 @@ void executor::on_miner_result(size_t pool_id, job_result& oResult)
 	}
 }
 
-#include <signal.h>
-
-static void disable_sigpipe()
-{
-	struct sigaction sa;
-	memset(&sa, 0, sizeof(sa));
-	sa.sa_handler = SIG_IGN;
-	sa.sa_flags = 0;
-	if(sigaction(SIGPIPE, &sa, 0) == -1)
-		printer::inst()->print_msg(L1, "ERROR: Call to sigaction failed!");
-}
+#include "n0s/platform/platform.hpp"
 
 void executor::ex_main()
 {
-	disable_sigpipe();
+	n0s::platform::disableSigpipe();
 
 	assert(1000 % iTickTime == 0);
 

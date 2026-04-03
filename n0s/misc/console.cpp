@@ -22,26 +22,17 @@
   */
 
 #include "n0s/misc/console.hpp"
+#include "n0s/platform/platform.hpp"
 
 #include <cstdlib>
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
-#include <termios.h>
 #include <ctime>
-#include <unistd.h>
 
 int get_key()
 {
-	struct termios oldattr, newattr;
-	int ch;
-	tcgetattr(STDIN_FILENO, &oldattr);
-	newattr = oldattr;
-	newattr.c_lflag &= ~(ICANON | ECHO);
-	tcsetattr(STDIN_FILENO, TCSANOW, &newattr);
-	ch = getchar();
-	tcsetattr(STDIN_FILENO, TCSANOW, &oldattr);
-	return ch;
+	return n0s::platform::getKey();
 }
 
 void set_colour(out_colours cl)
@@ -108,6 +99,9 @@ printer::printer()
 	verbose_level = LINF;
 	logfile = nullptr;
 	setvbuf(stdout, nullptr, _IOFBF, BUFSIZ);
+
+	// Enable ANSI colors on Windows
+	n0s::platform::enableConsoleColors();
 }
 
 bool printer::open_logfile(const char* file)
@@ -123,11 +117,9 @@ void printer::print_msg(verbosity verbose, const char* fmt, ...)
 
 	char buf[1024];
 	size_t bpos;
-	tm stime;
 
 	time_t now = time(nullptr);
-	localtime_r(&now, &stime);
-	strftime(buf, sizeof(buf), "[%F %T] : ", &stime);
+	n0s::platform::formatLocalTime(buf, sizeof(buf), "[%F %T] : ", static_cast<int64_t>(now));
 	bpos = strlen(buf);
 
 	va_list args;

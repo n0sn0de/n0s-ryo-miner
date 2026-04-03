@@ -1,19 +1,12 @@
 #pragma once
 
-#include <cstdlib>
-#include <pwd.h>
+#include "n0s/platform/platform.hpp"
 #include <string>
-#include <unistd.h>
 
 namespace
 {
 inline std::string get_home()
 {
-	const char* home = ".";
-
-	if((home = getenv("HOME")) == nullptr)
-		home = getpwuid(getuid())->pw_dir;
-
-	return home;
+	return n0s::platform::getHomePath();
 }
 } // namespace

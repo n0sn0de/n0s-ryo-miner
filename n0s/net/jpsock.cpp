@@ -54,6 +54,7 @@
 #include "n0s/jconf.hpp"
 #include "n0s/misc/executor.hpp"
 #include "n0s/misc/jext.hpp"
+#include "n0s/platform/platform.hpp"
 #include "n0s/version.hpp"
 
 using namespace rapidjson;
@@ -132,7 +133,7 @@ jpsock::jpsock(size_t id, const char* sAddr, const char* sLogin, const char* sRi
 	disconnect_time(0),
 	quiet_close(false)
 {
-	sock_init();
+	n0s::platform::sockInit();
 
 	bJsonCallMem = std::make_unique<uint8_t[]>(iJsonMemSize);
 	bJsonRecvMem = std::make_unique<uint8_t[]>(iJsonMemSize);

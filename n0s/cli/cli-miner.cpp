@@ -32,6 +32,7 @@
 #include "n0s/autotune/autotune_entry.hpp"
 #include "n0s/misc/banner.hpp"
 #include "n0s/params.hpp"
+#include "n0s/platform/platform.hpp"
 #include "n0s/version.hpp"
 
 #ifndef CONF_NO_HTTPD
@@ -46,10 +47,10 @@
 #include <cmath>
 #include <ctime>
 
-// For --gui browser launch (fork + exec)
-#include <fcntl.h>
-#include <sys/types.h>
-#include <unistd.h>
+// Platform-specific includes for non-mining operations
+#ifndef _WIN32
+#include <unistd.h>  // getuid() for config wizard
+#endif
 
 #ifndef CONF_NO_TLS
 #include <openssl/err.h>
@@ -929,17 +930,7 @@ int main(int argc, char* argv[])
 			char url[128];
 			snprintf(url, sizeof(url), "http://localhost:%d/gui/index.html", jconf::inst()->GetHttpdPort());
 			printer::inst()->print_msg(L0, "Opening dashboard: %s", url);
-
-			// Fork + xdg-open (Linux). Non-blocking.
-			pid_t pid = fork();
-			if(pid == 0)
-			{
-				// Child: redirect stdout/stderr to /dev/null
-				int devnull = open("/dev/null", O_WRONLY);
-				if(devnull >= 0) { dup2(devnull, 1); dup2(devnull, 2); close(devnull); }
-				execlp("xdg-open", "xdg-open", url, nullptr);
-				_exit(1); // execlp failed
-			}
+			n0s::platform::openBrowser(url);
 		}
 #endif
 	}
