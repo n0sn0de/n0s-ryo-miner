@@ -76,13 +76,12 @@ jobs:
 
       - name: Verify
         run: |
+          test -f build/bin/n0s-ryo-miner && echo "Binary exists"
           ls -lh build/bin/n0s-ryo-miner
-          # --version needs libcuda.so.1 (NVIDIA driver) which isn't in the
-          # build container.  Just verify the binary exists and is executable.
-          file build/bin/n0s-ryo-miner
-          # Smoke-test: binary should at least print version before failing on
-          # missing driver.  Allow exit-code != 0 from missing libcuda.
-          build/bin/n0s-ryo-miner --version 2>&1 || true
+          # --version requires libcuda.so.1 (NVIDIA driver) which isn't in the
+          # build container.  Binary existence + size is sufficient validation.
+          # Smoke-test: allow non-zero exit from missing driver stub.
+          build/bin/n0s-ryo-miner --version 2>&1 || echo "Note: --version failed (expected in driverless container)"
 
   # ─── Windows CUDA + OpenCL (MSVC native) ────────────────────────────────────
   build-windows-cuda:
