@@ -32,3 +32,26 @@ __global__ void cryptonight_extra_gpu_final(
 	uint32_t* __restrict__ d_res_nonce,
 	uint32_t* __restrict__ d_ctx_state,
 	uint32_t* __restrict__ d_ctx_key2);
+
+// Host launch wrappers kept with the kernel definitions for CUDA 13.x.
+void launch_cryptonight_gpu_implode_scratchpad(
+	dim3 grid,
+	dim3 block,
+	const uint32_t iterations,
+	const size_t memory,
+	int threads,
+	int bfactor,
+	int partidx,
+	uint32_t* scratchpad_in,
+	const uint32_t* state_buffer_in,
+	uint32_t* d_ctx_key2);
+
+void launch_cryptonight_gpu_final(
+	dim3 grid,
+	dim3 block,
+	int threads,
+	uint64_t target,
+	uint32_t* d_res_count,
+	uint32_t* d_res_nonce,
+	uint32_t* d_ctx_state,
+	uint32_t* d_ctx_key2);

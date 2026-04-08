@@ -220,3 +220,45 @@ template __global__ void cryptonight_extra_gpu_final<cryptonight_gpu>(
 	uint32_t* __restrict__ d_res_nonce,
 	uint32_t* __restrict__ d_ctx_state,
 	uint32_t* __restrict__ d_ctx_key2);
+
+void launch_cryptonight_gpu_implode_scratchpad(
+	dim3 grid,
+	dim3 block,
+	const uint32_t iterations,
+	const size_t memory,
+	int threads,
+	int bfactor,
+	int partidx,
+	uint32_t* scratchpad_in,
+	const uint32_t* state_buffer_in,
+	uint32_t* d_ctx_key2)
+{
+	kernel_implode_scratchpad<cryptonight_gpu><<<grid, block>>>(
+		iterations,
+		memory,
+		threads,
+		bfactor,
+		partidx,
+		scratchpad_in,
+		state_buffer_in,
+		d_ctx_key2);
+}
+
+void launch_cryptonight_gpu_final(
+	dim3 grid,
+	dim3 block,
+	int threads,
+	uint64_t target,
+	uint32_t* d_res_count,
+	uint32_t* d_res_nonce,
+	uint32_t* d_ctx_state,
+	uint32_t* d_ctx_key2)
+{
+	cryptonight_extra_gpu_final<cryptonight_gpu><<<grid, block>>>(
+		threads,
+		target,
+		d_res_count,
+		d_res_nonce,
+		d_ctx_state,
+		d_ctx_key2);
+}

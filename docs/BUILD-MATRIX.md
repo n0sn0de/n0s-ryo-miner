@@ -1,83 +1,65 @@
-# Build & Test Matrix
+# Build Matrix
 
-**Current validation status of n0s-ryo-miner across platforms.**
+Truthful build and validation status for `n0s-ryo-miner`.
 
-*Last updated: 2026-03-29 (Phase 3.8)*
+Last updated: 2026-04-08
 
----
+## What is actually verified
 
-## Validated Build Matrix
+| Platform | Backend | Build | Run / benchmark | Status | Notes |
+|---|---|---|---|---|---|
+| Ubuntu 24.04 (`nitro`) | AMD OpenCL | Native CMake | Native benchmark | ✅ verified | RX 9070 XT, OpenCL runtime detected via `clinfo`, benchmark JSON recorded at **2457.6 H/s** |
+| Ubuntu 24.04 (`nosnode`) | NVIDIA CUDA | Native CMake | Native benchmark | ✅ verified | RTX 2070, CUDA 13.2 toolchain, benchmark JSON recorded at **2227.2 H/s** |
+| Ubuntu 22.04 container | AMD OpenCL | `scripts/container-build-opencl.sh` | Not hardware-run in container | ✅ compile-verified | Produces a single binary plus sample config files |
+| Windows x64 | OpenCL | MinGW cross-build from Ubuntu | Not run on Windows in this pass | ⚠️ compile only | `scripts/cross-build-windows.sh --skip-deps` produces `dist/windows-opencl/n0s-ryo-miner.exe` |
+| Windows x64 | NVIDIA CUDA + OpenCL | MSVC / GitHub Actions config present | Not natively validated in this pass | ⚠️ unvalidated runtime | `build-windows.ps1` and CI workflow exist, but `win11` access was blocked by SSH auth |
+| Windows x64 | AMD OpenCL | — | — | ❌ unvalidated | No Windows+AMD box available right now |
 
-### NVIDIA CUDA Builds
+## Key reality checks
 
-| CUDA | Ubuntu | cmake | Architectures (sm_) | Cards Covered | Compile | Mine Test |
-|------|--------|-------|---------------------|---------------|---------|-----------|
-| 11.8 | 18.04 (bionic) | Kitware PPA | 61, 75, 80, 86, 89 | Pascal → Ada | ✅ | — |
-| 11.8 | 20.04 (focal) | Kitware PPA | 61, 75, 80, 86, 89 | Pascal → Ada | ✅ | — |
-| 11.8 | 22.04 (jammy) | apt | 61, 75, 80, 86, 89 | Pascal → Ada | ✅ | ✅ nos2 (Pascal) |
-| 12.6 | 22.04 (jammy) | apt | 61, 75, 80, 86, 89, 90 | Pascal → Hopper | ✅ | ✅ nosnode (Turing) |
-| 12.6 | 24.04 (noble) | apt | 61, 75, 80, 86, 89, 90 | Pascal → Hopper | ✅ | — |
-| 12.8 | 22.04 (jammy) | apt | 61, 75, 80, 86, 89, 90, 100, 120 | Pascal → Blackwell | ✅ | — |
-| 12.8 | 24.04 (noble) | apt | 61, 75, 80, 86, 89, 90, 100, 120 | Pascal → Blackwell | ✅ | — |
+- The repo now builds a **single executable per target**. It does **not** ship separate backend `.so` / `.dll` files anymore.
+- The web GUI is **embedded into the executable** on the validated Linux builds and on the Windows MinGW cross-build.
+- It is **not honest yet** to publish a single generic `n0s-ryo-miner-linux` / `n0s-ryo-miner-win` pair and imply the whole matrix is equally real.
+- Linux NVIDIA support is real, but the important fix here was for **CUDA 13.x native builds**. Older docs overstated what had actually been rechecked.
 
-### AMD OpenCL Builds
+## Verified hosts
 
-| Ubuntu | Compile | Mine Test |
-|--------|---------|-----------|
-| 20.04 (focal) | ✅ | — |
-| 22.04 (jammy) | ✅ | — |
-| 24.04 (noble) | ✅ | ✅ nitro (RX 9070 XT, RDNA 4) |
+| Host | OS | GPU | Toolchain / runtime | Result |
+|---|---|---|---|---|
+| `nitro` | Ubuntu 24.04.4 | AMD Radeon RX 9070 XT | OpenCL 2.0 / AMD APP 3581.0 | Native build + benchmark verified |
+| `nosnode` | Ubuntu 24.04 | NVIDIA RTX 2070 (`sm_75`) | CUDA 13.2 / driver 580.126.09 | Native build + benchmark verified |
+| `win11` | Windows 11 | NVIDIA GPU | Intended native validation target | Blocked this pass, SSH auth failed |
 
-### Intentionally Skipped Combinations
+## What changed to make the matrix more honest
 
-| Combination | Reason |
-|---|---|
-| CUDA 11.8 × noble (24.04) | NVIDIA doesn't ship CUDA 11.8 for noble |
-| CUDA 12.6+ × bionic (18.04) | NVIDIA dropped bionic support after 11.x |
-| CUDA 12.6+ × focal (20.04) | NVIDIA dropped focal for 12.6+ |
-| OpenCL × bionic (18.04) | Ubuntu 18.04 is EOL |
+- Fixed native Linux CUDA builds on modern NVCC by moving templated kernel launches behind translation-unit-local wrappers, which avoids CUDA 13.x link failures.
+- Fixed the startup banner so it reports the real version instead of a stale hard-coded one.
+- Stopped CMake source-archive builds from spewing Git errors when `.git/` is absent.
+- Pinned OpenCL compilation to the 1.2 API target that the code actually uses.
+- Fixed the OpenCL container builder to install `xxd` and package the current single-binary layout.
+- Fixed remote CUDA test tooling to stop expecting a non-existent `libn0s_cuda_backend.so`.
 
----
+## Recommended release posture right now
 
-## Hardware Test Fleet
+### Safe to claim
 
-| Host | GPU | Architecture | CUDA/Driver | OS | Role |
-|------|-----|-------------|-------------|-----|------|
-| nitro | AMD RX 9070 XT | RDNA 4 (gfx1201) | ROCm 7.2 | Ubuntu 24.04 | Primary AMD test |
-| nos2 | NVIDIA GTX 1070 Ti | Pascal (sm_61) | CUDA 11.8 / Driver 580 | Ubuntu 22.04 | CUDA 11.8 mine test |
-| nosnode | NVIDIA RTX 2070 | Turing (sm_75) | CUDA 12.6 / Driver 535 | Ubuntu 22.04 | CUDA 12.6 mine test |
+- Ubuntu AMD OpenCL: verified
+- Ubuntu NVIDIA CUDA: verified
+- Windows OpenCL: compile-only
+- Windows NVIDIA CUDA: prepared, but still needs native validation on `win11`
 
-### Architecture Coverage Gaps
+### Not safe to claim yet
 
-| Architecture | Status | What's Needed |
-|---|---|---|
-| Pascal (sm_61) | ✅ Compile + Mine | nos2 (GTX 1070 Ti) |
-| Turing (sm_75) | ✅ Compile + Mine | nosnode (RTX 2070) |
-| Ampere (sm_80/86) | ✅ Compile only | Need RTX 3060-3090 or A100 |
-| Ada (sm_89) | ✅ Compile only | Need RTX 4060-4090 |
-| Hopper (sm_90) | ✅ Compile only | Need H100/H200 (cloud) |
-| Blackwell (sm_100/120) | ✅ Compile only | Need RTX 5090/B200 (future) |
+- Windows AMD OpenCL support
+- A fully verified single-binary Windows release covering both CUDA and OpenCL
+- A generic `n0s-ryo-miner-win` release alias that implies equivalent validation to Linux
 
----
+## Highest-leverage next step
 
-## Running the Matrix
+Regain native access to `win11`, run `scripts/build-windows.ps1 -CudaEnable -OpenclEnable`, then do at least:
 
-```bash
-# Full compile validation (all 10 combos)
-./scripts/matrix-test.sh
+1. `n0s-ryo-miner.exe --version`
+2. a short GPU benchmark run
+3. if possible, a short pool smoke test
 
-# Quick smoke test
-./scripts/matrix-test.sh --quick
-
-# Filter by keyword
-./scripts/matrix-test.sh --filter "12.8"
-./scripts/matrix-test.sh --filter "opencl"
-
-# Build artifacts for distribution
-./scripts/build-matrix.sh
-
-# Build + hardware mine test
-./scripts/build-matrix.sh --test
-# OR
-./scripts/matrix-test.sh --test
-```
+That is the blocker between today's honest matrix and a truthful Windows release story.

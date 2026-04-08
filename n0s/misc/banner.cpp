@@ -1,5 +1,6 @@
 #include "banner.hpp"
 #include "console.hpp"
+#include "n0s/version.hpp"
 
 #include <cstdio>
 #include <cstring>
@@ -33,6 +34,10 @@ namespace n0s
 void print_banner()
 {
 	printer* p = printer::inst();
+	char version_line[128];
+	snprintf(version_line, sizeof(version_line),
+		RYO_DARK  "   ║" CLR_DIM "     GPU Miner for RYO Currency • CryptoNight-GPU • v%-10s" RYO_DARK  "║\n" RST,
+		ver_number);
 
 	p->print_str("\n");
 
@@ -57,9 +62,9 @@ void print_banner()
 		RYO_DARK  "   ║ " RST
 			RYO_CYAN  "╚═╝  ╚═══╝ ╚═════╝ ╚══════╝" RYO_DARK "      " RYO_BCYAN "╚═╝  ╚═╝   ╚═╝    ╚═════╝    " RYO_DARK  "║\n" RST
 		RYO_DARK  "   ║" "                                                               " RYO_DARK "║\n" RST
-		RYO_DARK  "   ║" CLR_DIM "     GPU Miner for RYO Currency • CryptoNight-GPU • v3.3.0     " RYO_DARK  "║\n" RST
-		RYO_DARK  "   ╚═══════════════════════════════════════════════════════════════╝\n" RST
 	);
+	p->print_str(version_line);
+	p->print_str(RYO_DARK  "   ╚═══════════════════════════════════════════════════════════════╝\n" RST);
 
 	p->print_str("\n");
 }

@@ -110,16 +110,16 @@ void cryptonight_core_gpu_hash(nvid_ctx* ctx, uint32_t nonce, const n0s_algo& al
 	for(int i = 0; i < phase4_partitions; i++)
 	{
 		CUDA_CHECK_KERNEL(ctx->device_id,
-			kernel_implode_scratchpad<ALGO><<<
+			launch_cryptonight_gpu_implode_scratchpad(
 				phase4_grid,
 				phase4_block,
-				0>>>(  // No dynamic shared memory needed (sm_60+ has native shuffle)
 				ITERATIONS,
 				MEM / 4,
 				ctx->device_blocks * ctx->device_threads,
 				phase4_bfactor, i,
 				ctx->d_long_state,
-				ctx->d_ctx_state, ctx->d_ctx_key2));
+				ctx->d_ctx_state,
+				ctx->d_ctx_key2));
 	}
 }
 
@@ -200,16 +200,16 @@ void cryptonight_core_gpu_hash_profile(nvid_ctx* ctx, uint32_t nonce, const n0s_
 	for(int i = 0; i < phase4_partitions; i++)
 	{
 		CUDA_CHECK_KERNEL(ctx->device_id,
-			kernel_implode_scratchpad<ALGO><<<
+			launch_cryptonight_gpu_implode_scratchpad(
 				phase4_grid,
 				phase4_block,
-				0>>>(  // No dynamic shared memory needed (sm_60+ has native shuffle)
 				ITERATIONS,
 				MEM / 4,
 				ctx->device_blocks * ctx->device_threads,
 				phase4_bfactor, i,
 				ctx->d_long_state,
-				ctx->d_ctx_state, ctx->d_ctx_key2));
+				ctx->d_ctx_state,
+				ctx->d_ctx_key2));
 	}
 
 	cudaEventRecord(ev_p4);
@@ -287,8 +287,19 @@ extern "C" void cryptonight_extra_cpu_prepare(nvid_ctx* ctx, uint32_t startNonce
 	dim3 grid((wsize + threadsperblock - 1) / threadsperblock);
 	dim3 block(threadsperblock);
 
-	CUDA_CHECK_KERNEL(ctx->device_id, cryptonight_extra_gpu_prepare<cryptonight_gpu><<<grid, block>>>(wsize, ctx->d_input, ctx->inputlen, startNonce,
-										  ctx->d_ctx_state, ctx->d_ctx_state2, ctx->d_ctx_a, ctx->d_ctx_b, ctx->d_ctx_key1, ctx->d_ctx_key2));
+	CUDA_CHECK_KERNEL(ctx->device_id, launch_cryptonight_gpu_prepare(
+		grid,
+		block,
+		wsize,
+		ctx->d_input,
+		ctx->inputlen,
+		startNonce,
+		ctx->d_ctx_state,
+		ctx->d_ctx_state2,
+		ctx->d_ctx_a,
+		ctx->d_ctx_b,
+		ctx->d_ctx_key1,
+		ctx->d_ctx_key2));
 }
 
 extern "C" void cryptonight_extra_cpu_final(nvid_ctx* ctx, uint32_t startNonce, uint64_t target, uint32_t* rescount, uint32_t* resnonce, const n0s_algo& miner_algo)
@@ -305,7 +316,15 @@ extern "C" void cryptonight_extra_cpu_final(nvid_ctx* ctx, uint32_t startNonce, 
 	CUDA_CHECK_MSG_KERNEL(
 		ctx->device_id,
 		"\n**suggestion: Try to increase the value of the attribute 'bfactor' in the NVIDIA config file.**",
-		cryptonight_extra_gpu_final<cryptonight_gpu><<<grid, block>>>(wsize, target, ctx->d_result_count, ctx->d_result_nonce, ctx->d_ctx_state, ctx->d_ctx_key2));
+		launch_cryptonight_gpu_final(
+			grid,
+			block,
+			wsize,
+			target,
+			ctx->d_result_count,
+			ctx->d_result_nonce,
+			ctx->d_ctx_state,
+			ctx->d_ctx_key2));
 
 	CUDA_CHECK(ctx->device_id, cudaMemcpy(rescount, ctx->d_result_count, sizeof(uint32_t), cudaMemcpyDeviceToHost));
 	CUDA_CHECK_MSG(

@@ -23,3 +23,19 @@ __global__ void cryptonight_extra_gpu_prepare(
 	uint32_t* __restrict__ d_ctx_b,
 	uint32_t* __restrict__ d_ctx_key1,
 	uint32_t* __restrict__ d_ctx_key2);
+
+// Host launch wrapper kept in the same translation unit as the kernel
+// so newer NVCC releases do not emit unresolved template stubs at link time.
+void launch_cryptonight_gpu_prepare(
+	dim3 grid,
+	dim3 block,
+	int threads,
+	uint32_t* d_input,
+	uint32_t len,
+	uint32_t startNonce,
+	uint32_t* d_ctx_state,
+	uint32_t* d_ctx_state2,
+	uint32_t* d_ctx_a,
+	uint32_t* d_ctx_b,
+	uint32_t* d_ctx_key1,
+	uint32_t* d_ctx_key2);

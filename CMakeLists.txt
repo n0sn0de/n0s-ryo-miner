@@ -1,4 +1,9 @@
 cmake_minimum_required(VERSION 3.18.0)
+
+if(POLICY CMP0146)
+    cmake_policy(SET CMP0146 OLD)
+endif()
+
 project(n0s-ryo-miner)
 
 ################################################################################
@@ -163,6 +168,7 @@ if(OpenCL_ENABLE)
     # On Windows: finds OpenCL.lib from CUDA toolkit, AMD SDK, or Khronos loader
     find_package(OpenCL)
     if(OpenCL_FOUND)
+        add_definitions("-DCL_TARGET_OPENCL_VERSION=120" "-DCL_USE_DEPRECATED_OPENCL_1_2_APIS")
         list(APPEND BACKEND_TYPES "amd")
         include_directories(SYSTEM ${OpenCL_INCLUDE_DIRS})
         if(NOT WIN32)
@@ -260,12 +266,32 @@ endif()
 # Versioning
 ################################################################################
 
-execute_process(COMMAND git rev-parse --abbrev-ref HEAD
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    OUTPUT_VARIABLE GIT_BRANCH OUTPUT_STRIP_TRAILING_WHITESPACE)
-execute_process(COMMAND git log -1 --format=%h
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    OUTPUT_VARIABLE GIT_COMMIT_HASH OUTPUT_STRIP_TRAILING_WHITESPACE)
+set(GIT_BRANCH "")
+set(GIT_COMMIT_HASH "")
+find_package(Git QUIET)
+if(GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} rev-parse --abbrev-ref HEAD
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE GIT_BRANCH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+        RESULT_VARIABLE GIT_BRANCH_RESULT)
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} log -1 --format=%h
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE GIT_COMMIT_HASH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+        RESULT_VARIABLE GIT_COMMIT_HASH_RESULT)
+
+    if(NOT GIT_BRANCH_RESULT EQUAL 0)
+        set(GIT_BRANCH "")
+    endif()
+    if(NOT GIT_COMMIT_HASH_RESULT EQUAL 0)
+        set(GIT_COMMIT_HASH "")
+    endif()
+endif()
 
 if(GIT_COMMIT_HASH)
     add_definitions("-DGIT_COMMIT_HASH=${GIT_COMMIT_HASH}")

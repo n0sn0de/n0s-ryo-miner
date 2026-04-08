@@ -46,6 +46,7 @@ podman run --rm \
             cmake g++ \
             opencl-headers ocl-icd-opencl-dev \
             libmicrohttpd-dev libssl-dev \
+            xxd \
             >/dev/null 2>&1
 
         # Copy source (read-only mount, build in /tmp)
@@ -66,14 +67,15 @@ podman run --rm \
         # Build
         cmake --build . -j\$(nproc) 2>&1 | tail -10
 
-        # Verify
-        test -f bin/n0s-ryo-miner && test -f bin/libn0s_opencl_backend.so
+        # Verify — single binary, no backend .so needed
+        test -f bin/n0s-ryo-miner
+        ! test -f bin/libn0s_opencl_backend.so || echo 'WARNING: unexpected .so found'
 
         # Copy artifacts
         cp bin/n0s-ryo-miner /out/
-        cp bin/libn0s_opencl_backend.so /out/
+        cp ../config.txt ../pools.txt ../amd.txt /out/
         echo ''
-        echo '=== Build artifacts ==='
+        echo '=== Build artifacts (single binary + sample configs) ==='
         ls -lh /out/
     "
 
