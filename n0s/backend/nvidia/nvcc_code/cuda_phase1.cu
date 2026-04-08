@@ -125,3 +125,30 @@ template __global__ void cryptonight_extra_gpu_prepare<cryptonight_gpu>(
 	uint32_t* __restrict__ d_ctx_b,
 	uint32_t* __restrict__ d_ctx_key1,
 	uint32_t* __restrict__ d_ctx_key2);
+
+void launch_cryptonight_gpu_prepare(
+	dim3 grid,
+	dim3 block,
+	int threads,
+	uint32_t* d_input,
+	uint32_t len,
+	uint32_t startNonce,
+	uint32_t* d_ctx_state,
+	uint32_t* d_ctx_state2,
+	uint32_t* d_ctx_a,
+	uint32_t* d_ctx_b,
+	uint32_t* d_ctx_key1,
+	uint32_t* d_ctx_key2)
+{
+	cryptonight_extra_gpu_prepare<cryptonight_gpu><<<grid, block>>>(
+		threads,
+		d_input,
+		len,
+		startNonce,
+		d_ctx_state,
+		d_ctx_state2,
+		d_ctx_a,
+		d_ctx_b,
+		d_ctx_key1,
+		d_ctx_key2);
+}

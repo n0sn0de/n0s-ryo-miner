@@ -37,3 +37,4 @@
 const char ver_long[] = VERSION_LONG;
 const char ver_short[] = VERSION_SHORT;
 const char ver_html[] = VERSION_HTML;
+const char ver_number[] = N0S_VERSION;
