@@ -182,6 +182,8 @@ http://localhost:<port>/api.json
 
 Returns JSON with hashrate, pool stats, and GPU status. Port is configured in the miner's config.
 
+---
+
 ## Benchmarks
 
 Tested on 3 GPU architectures with autotuned settings:
@@ -206,6 +208,75 @@ Use `--benchmark 10 --profile` to see where time is spent:
 | Phase 4+5 | AES implode + finalize | 18.5% | 15.1% | 11.7% |
 
 Phase 3 (cooperative floating-point computation with data-dependent memory access) dominates on all architectures. The algorithm is designed to be GPU-friendly but resistant to algorithmic shortcuts.
+
+---
+
+## Tested Platforms
+
+Real-world build validations on specific hardware/OS combinations:
+
+### Ubuntu 24.04 + CUDA 13.2 + RTX 2070 (April 2026)
+
+| Component | Version |
+|---|---|
+| **OS** | Ubuntu 24.04.4 LTS (Noble Numbat) |
+| **Kernel** | 6.17.0-20-generic |
+| **GPU** | NVIDIA GeForce RTX 2070 (8 GB, Turing sm_75) |
+| **CUDA Toolkit** | 13.2.0 (nvcc V13.2.51) |
+| **NVIDIA Driver** | 580.126.09 (reports CUDA runtime 13.0) |
+| **GCC** | 13.3.0 |
+| **CMake** | 3.28.3 |
+
+**Build commands (exact):**
+
+```bash
+# Ensure CUDA is in PATH
+export PATH=/usr/local/cuda/bin:$PATH
+export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+
+# Install dependencies (if not already present)
+sudo apt-get install -y build-essential cmake git libmicrohttpd-dev libssl-dev libhwloc-dev
+
+# Clone and build
+git clone https://github.com/n0sn0de/n0s-ryo-miner.git
+cd n0s-ryo-miner
+mkdir build && cd build
+
+# CUDA 13.x REQUIRES the -static-global-template-stub=false flag
+cmake .. -DOpenCL_ENABLE=OFF -DCUDA_ENABLE=ON \
+    -DCUDA_ARCH="75" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCUDA_NVCC_FLAGS="-static-global-template-stub=false"
+
+cmake --build . -j$(nproc)
+```
+
+**Validation results:**
+- `--version`: `n0s-ryo-miner 3.4.0 d673c6e` ✅
+- Golden hash test: 3/3 passed ✅
+- Benchmark: **2,150 H/s** (RTX 2070, threads=8, blocks=216) ✅
+- CUDA detection: `CUDA [13.0/13.2] GPU#0, device architecture 75: "NVIDIA GeForce RTX 2070"` ✅
+
+> **Note:** The driver reports CUDA 13.0 while the toolkit is 13.2. This triggers a "minor version forward compat mode" message — this is normal and everything works correctly.
+
+#### CUDA 13.x Notes
+
+CUDA 13.x introduced a breaking change: the default for `-static-global-template-stub` changed to `true` in whole-program compilation mode (`-rdc=false`). This causes linker errors for `__global__` function templates that are declared in headers but defined in separate `.cu` files:
+
+```
+undefined reference to `kernel_implode_scratchpad<...>'
+undefined reference to `cryptonight_extra_gpu_final<...>'
+```
+
+**Fix:** Pass `-static-global-template-stub=false` to nvcc via:
+
+```bash
+cmake .. -DCUDA_NVCC_FLAGS="-static-global-template-stub=false" [other flags...]
+```
+
+This restores the CUDA 12.x behavior where template stub symbols remain visible across translation units. CUDA 11.x and 12.x do **not** need this flag.
+
+---
 
 ## Testing
 
@@ -236,16 +307,23 @@ REMOTE=nosnode ./test-mine-remote.sh   # Build on remote NVIDIA host, mine or be
 ./scripts/matrix-test.sh --test        # Compile + hardware mine tests
 ```
 
+---
+
 ## Project Structure
 
 ```
 ├── CMakeLists.txt              # Build system (C++17, CUDA + OpenCL)
 ├── scripts/
+│   ├── build-windows.ps1       # Windows MSVC build helper
+│   ├── cross-build-windows.sh  # MinGW cross-compile (Linux → Windows)
 │   ├── container-build.sh      # Containerized CUDA build (podman)
+│   ├── container-build-opencl.sh # Containerized OpenCL build
 │   ├── build-matrix.sh         # Build all CUDA versions + optional test
 │   ├── matrix-test.sh          # Full 10-platform compile validation
 │   ├── test-remote-binary.sh   # Deploy + mine-test on remote GPU host
 │   └── test-nosnode.sh         # nosnode-specific test script
+├── cmake/
+│   └── mingw-w64-x86_64.cmake # MinGW cross-compile toolchain file
 ├── n0s/
 │   ├── cli/                    # CLI entry point
 │   ├── autotune/               # GPU autotuning framework
@@ -265,6 +343,8 @@ REMOTE=nosnode ./test-mine-remote.sh   # Build on remote NVIDIA host, mine or be
 └── test-both.sh                # Triple-GPU integration test
 ```
 
+---
+
 ## Algorithm
 
 This miner implements **CryptoNight-GPU** (`cn/gpu`), a proof-of-work algorithm designed specifically for GPU mining. It uses:
@@ -275,6 +355,8 @@ This miner implements **CryptoNight-GPU** (`cn/gpu`), a proof-of-work algorithm 
 - Final Keccak hash for proof verification
 
 See [`docs/CN-GPU-WHITEPAPER.md`](docs/CN-GPU-WHITEPAPER.md) for the complete algorithm specification.
+
+---
 
 ## License
 
