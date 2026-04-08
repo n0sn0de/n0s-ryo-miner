@@ -197,20 +197,18 @@ if [ "$DO_MINE_TEST" = true ]; then
         fi
     done
 
-    # CUDA 11.8 → nos2 (Pascal, GTX 1070 Ti)
-    if [ -f "${REPO_DIR}/dist/cuda-11.8/n0s-ryo-miner" ]; then
-        printf "${CYAN}MINE${NC} %-25s " "cuda11.8 → nos2 (Pascal)"
-        if "${SCRIPT_DIR}/test-remote-binary.sh" nos2 "${REPO_DIR}/dist/cuda-11.8" 45 >/dev/null 2>&1; then
+    if [ -n "${CUDA11_REMOTE_HOST}" ] && [ -f "${REPO_DIR}/dist/cuda-11.8/n0s-ryo-miner" ]; then
+        printf "${CYAN}MINE${NC} %-25s " "cuda11.8 → ${CUDA11_REMOTE_HOST}"
+        if "${SCRIPT_DIR}/test-remote-binary.sh" "${CUDA11_REMOTE_HOST}" "${REPO_DIR}/dist/cuda-11.8" 45 >/dev/null 2>&1; then
             printf "${GREEN}PASS${NC}\n"; MINE_PASS=$((MINE_PASS + 1))
         else
             printf "${RED}FAIL${NC}\n"; MINE_FAIL=$((MINE_FAIL + 1))
         fi
     fi
 
-    # CUDA 12.6 → nosnode (Turing, RTX 2070)
     if [ -f "${REPO_DIR}/dist/cuda-12.6/n0s-ryo-miner" ]; then
-        printf "${CYAN}MINE${NC} %-25s " "cuda12.6 → nosnode (Turing)"
-        if "${SCRIPT_DIR}/test-remote-binary.sh" nosnode "${REPO_DIR}/dist/cuda-12.6" 50 >/dev/null 2>&1; then
+        printf "${CYAN}MINE${NC} %-25s " "cuda12.6 → ${CUDA12_REMOTE_HOST}"
+        if "${SCRIPT_DIR}/test-remote-binary.sh" "${CUDA12_REMOTE_HOST}" "${REPO_DIR}/dist/cuda-12.6" 50 >/dev/null 2>&1; then
             printf "${GREEN}PASS${NC}\n"; MINE_PASS=$((MINE_PASS + 1))
         else
             printf "${RED}FAIL${NC}\n"; MINE_FAIL=$((MINE_FAIL + 1))

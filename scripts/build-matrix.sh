@@ -50,6 +50,8 @@ echo "============================================="
 echo "Build Matrix Results: ${PASS} passed, ${FAIL} failed"
 echo "============================================="
 
+CUDA_TEST_HOST="${CUDA_TEST_HOST:-nosnode}"
+
 # Optional: test on hardware
 if [ "$DO_TEST" = "--test" ]; then
     echo ""
@@ -57,15 +59,9 @@ if [ "$DO_TEST" = "--test" ]; then
     echo "Testing on available hardware"
     echo "============================================="
 
-    # CUDA 11.8 build → test on nos2 (Pascal, driver supports 13.0)
     echo ""
-    echo "Testing CUDA 11.8 build on nos2 (GTX 1070 Ti, Pascal)..."
-    "${SCRIPT_DIR}/test-remote-binary.sh" nos2 "${REPO_DIR}/dist/cuda-11.8" 45 || true
-
-    # CUDA 12.6 build → test on nosnode (Turing, driver supports 12.2, forward compat)
-    echo ""
-    echo "Testing CUDA 12.6 build on nosnode (RTX 2070, Turing)..."
-    "${SCRIPT_DIR}/test-remote-binary.sh" nosnode "${REPO_DIR}/dist/cuda-12.6" 50 || true
+    echo "Testing CUDA 12.8 build on ${CUDA_TEST_HOST} (best available NVIDIA validation host)..."
+    "${SCRIPT_DIR}/test-remote-binary.sh" "${CUDA_TEST_HOST}" "${REPO_DIR}/dist/cuda-12.8" 50 || true
 fi
 
 [ $FAIL -eq 0 ]

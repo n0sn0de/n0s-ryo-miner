@@ -1,71 +1,54 @@
 #!/bin/bash
-# Remote NVIDIA mining test
+# Remote NVIDIA mining / benchmark smoke test
 set -e
 
-REMOTE="${REMOTE:-nos2}"
+REMOTE="${REMOTE:-nosnode}"
 POOL="${POOL:-192.168.50.186:3333}"
-TIMEOUT="${TIMEOUT:-40}"
+TIMEOUT="${TIMEOUT:-45}"
 REPO_URL="https://github.com/n0sn0de/n0s-ryo-miner.git"
-
-# Resolve remote home directory dynamically
-# Use printf to avoid capturing ssh-agent noise
-REMOTE_HOME=$(ssh "$REMOTE" 'printf "%s" "$HOME"' 2>/dev/null | tail -1)
-if [ -z "$REMOTE_HOME" ]; then
-    echo "❌ Could not resolve remote HOME for $REMOTE"
-    exit 1
-fi
-REMOTE_DIR="${REMOTE_HOME}/n0s-ryo-miner"
+REMOTE_DIR="/home/${REMOTE}/n0s-ryo-miner"
+CUDA_HOME="${CUDA_HOME:-/usr/local/cuda}"
+CUDA_ARCH="${CUDA_ARCH:-75}"
+MODE="${MODE:-mine}"
 
 echo "====================================="
-echo "Remote NVIDIA Mining Test"
-echo "Remote: $REMOTE"
-echo "Remote dir: $REMOTE_DIR"
-echo "Pool: $POOL"
-echo "Timeout: ${TIMEOUT}s"
+echo "Remote NVIDIA Test"
+echo "Remote: ${REMOTE}"
+echo "CUDA home: ${CUDA_HOME}"
+echo "Mode: ${MODE}"
 echo "====================================="
 
-# Deploy code
-echo "Deploying to $REMOTE..."
 BRANCH="${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}"
-ssh "$REMOTE" "rm -rf '$REMOTE_DIR' && git clone -b '$BRANCH' '$REPO_URL' '$REMOTE_DIR' 2>&1 | tail -3"
+echo "Deploying branch ${BRANCH} to ${REMOTE}..."
+ssh "${REMOTE}" "rm -rf ${REMOTE_DIR} && git clone -b ${BRANCH} ${REPO_URL} ${REMOTE_DIR} 2>&1 | tail -3"
 
-# Build (NVIDIA only, no AMD)
-echo "Building on remote..."
-ssh "$REMOTE" "set -e && export PATH=/usr/local/cuda-11.8/bin:\$PATH && \
-  export LD_LIBRARY_PATH=/usr/local/cuda-11.8/lib64:\$LD_LIBRARY_PATH && \
-  cd '$REMOTE_DIR' && rm -rf build && mkdir build && cd build && \
-  cmake .. -DCUDA_ENABLE=ON -DOpenCL_ENABLE=OFF -DMICROHTTPD_ENABLE=OFF \
-    -DCUDA_ARCH='61' -DCMAKE_BUILD_TYPE=Release >/dev/null 2>&1 && \
-  cmake --build . -j\$(nproc) 2>&1 | tail -5 && \
-  test -f bin/n0s-ryo-miner"
+echo "Building on ${REMOTE}..."
+ssh "${REMOTE}" "set -e &&   export PATH=\$HOME/.local/bin:${CUDA_HOME}/bin:\$PATH &&   export LD_LIBRARY_PATH=${CUDA_HOME}/lib64:\$LD_LIBRARY_PATH &&   cd ${REMOTE_DIR} && rm -rf build && mkdir build && cd build &&   cmake .. -DCUDA_ENABLE=ON -DOpenCL_ENABLE=OFF -DMICROHTTPD_ENABLE=ON     -DN0S_COMPILE=generic -DCUDA_ARCH='${CUDA_ARCH}' -DCMAKE_BUILD_TYPE=Release &&   cmake --build . -j\$(nproc) &&   test -f bin/n0s-ryo-miner"
 
-if [ $? -ne 0 ]; then
-    echo "❌ REMOTE BUILD FAILED"
-    exit 1
+echo "✅ Remote CUDA build succeeded"
+
+if [ "${MODE}" = "benchmark" ]; then
+  echo "Running benchmark on ${REMOTE}..."
+  ssh "${REMOTE}" "set -e &&     export LD_LIBRARY_PATH=${CUDA_HOME}/lib64:\$LD_LIBRARY_PATH &&     cd ${REMOTE_DIR} && timeout 130 ./build/bin/n0s-ryo-miner --noAMD       --benchmark 10 --benchmark-json ${REMOTE_DIR}/benchmark.json >/dev/null 2>&1 || true &&     cat ${REMOTE_DIR}/benchmark.json"
+  exit 0
 fi
-echo "✅ Remote build successful"
 
-# Mine test
-echo ""
-echo "Mining for ${TIMEOUT} seconds on $REMOTE..."
-OUTPUT=$(ssh "$REMOTE" "cd '$REMOTE_DIR' && timeout $TIMEOUT ./build/bin/n0s-ryo-miner --noAMD \
-  -o $POOL -u WALLET -p x 2>&1" || true)
+echo "Mining for ${TIMEOUT} seconds on ${REMOTE}..."
+OUTPUT=$(ssh "${REMOTE}" "export LD_LIBRARY_PATH=${CUDA_HOME}/lib64:\$LD_LIBRARY_PATH &&   cd ${REMOTE_DIR}/build/bin && timeout ${TIMEOUT} ./n0s-ryo-miner --noAMD   -o ${POOL} -u WALLET -p x 2>&1" || true)
 
-# Check for errors
 if echo "$OUTPUT" | grep -q "CUDA.*ERROR\|Error.*cuda\|INVALID_DEVICE"; then
-    echo "❌ CUDA ERRORS DETECTED:"
-    echo "$OUTPUT" | grep "CUDA.*ERROR\|Error.*cuda\|INVALID_DEVICE" | head -10
-    exit 1
+  echo "❌ CUDA ERRORS DETECTED:"
+  echo "$OUTPUT" | grep -iE "error|warning|cuda|failed" | head -10
+  exit 1
 fi
 
-# Check for shares
 SHARES=$(echo "$OUTPUT" | grep -c "Share accepted" || true)
 if [ "$SHARES" -gt 0 ]; then
-    echo "✅ NVIDIA MINING WORKS — $SHARES shares accepted"
-    echo "$OUTPUT" | grep "HASHRATE\|Share accepted" | tail -10
-    exit 0
+  echo "✅ MINING WORKS — ${SHARES} shares accepted"
+  echo "$OUTPUT" | grep -E "HASHRATE|Share accepted" | tail -10
+  exit 0
 else
-    echo "⚠️  NO SHARES FOUND (may need longer timeout)"
-    echo "$OUTPUT" | grep -E "Pool|connected|logged|GPU" | tail -10
-    exit 1
+  echo "⚠️  NO SHARES FOUND (benchmark mode is often more reliable for smoke testing)"
+  echo "$OUTPUT" | grep -E "Pool|connected|logged|GPU" | tail -10
+  exit 1
 fi

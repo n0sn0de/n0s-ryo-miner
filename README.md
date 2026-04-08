@@ -2,158 +2,106 @@
 
 GPU miner for [RYO Currency](https://ryo-currency.com) using the **CryptoNight-GPU** algorithm.
 
-Supports **AMD** (OpenCL) and **NVIDIA** (CUDA) GPUs. No CPU mining — this is a GPU-only miner.
+Fork of [xmr-stak](https://github.com/fireice-uk/xmr-stak), stripped down to the GPU paths that still matter here.
 
-Fork of [xmr-stak](https://github.com/fireice-uk/xmr-stak) by fireice-uk and psychocrypt, stripped down and modernized for CryptoNight-GPU exclusively.
+**Important:** the repo now builds a **single executable per target** with the web GUI embedded. It does **not** ship separate backend `.so` / `.dll` files anymore.
 
-**Latest Release:** [v3.1.0 - GPU Autotune](https://github.com/n0sn0de/n0s-ryo-miner/releases/tag/v3.1.0) 🚀
+## Reality check
 
-## Download Pre-Built Binaries
+This is the current honest status after revalidating the repo instead of trusting stale docs:
 
-Grab the latest release from [GitHub Releases](https://github.com/n0sn0de/n0s-ryo-miner/releases):
+- ✅ **Ubuntu 24.04 AMD OpenCL** native build + native benchmark verified on `nitro` (RX 9070 XT, **2457.6 H/s**)
+- ✅ **Ubuntu 24.04 NVIDIA CUDA** native build + native benchmark verified on `nosnode` (RTX 2070, CUDA 13.2, **2227.2 H/s**)
+- ✅ **Windows OpenCL cross-build** verified from Ubuntu with MinGW, compile-only
+- ⚠️ **Windows CUDA + OpenCL** build scripts and CI exist, but native validation on `win11` is still blocked by SSH auth
+- ⚠️ **Windows AMD OpenCL** remains unvalidated
+- ⚠️ It is **not honest yet** to pretend there is one fully verified `n0s-ryo-miner-linux` / `n0s-ryo-miner-win` release pair
 
-| Platform | Binary | Backend Library | Architectures |
-|---|---|---|---|
-| **OpenCL (AMD)** | `n0s-ryo-miner-v3.1.0-opencl-ubuntu22.04` | `libn0s_opencl_backend-v3.1.0-ubuntu22.04.so` | GCN/RDNA/CDNA |
-| **CUDA 11.8** | `n0s-ryo-miner-v3.1.0-cuda11.8` | `libn0s_cuda_backend-v3.1.0-cuda11.8.so` | Pascal→Ada (sm_61-89) |
-| **CUDA 12.6** | `n0s-ryo-miner-v3.1.0-cuda12.6` | `libn0s_cuda_backend-v3.1.0-cuda12.6.so` | Pascal→Hopper (sm_61-90) |
-| **CUDA 12.8** | `n0s-ryo-miner-v3.1.0-cuda12.8` | `libn0s_cuda_backend-v3.1.0-cuda12.8.so` | Pascal→Blackwell (sm_61-120) |
+For the detailed matrix, read [docs/BUILD-MATRIX.md](docs/BUILD-MATRIX.md).
 
-**Note:** Download BOTH the binary and backend library, place them in the same directory.
+## Prebuilt releases
 
-## Supported Hardware
+Check [GitHub Releases](https://github.com/n0sn0de/n0s-ryo-miner/releases), but use the build matrix above before assuming a platform/backend combination is fully validated.
 
-### NVIDIA (CUDA)
+## Validated build paths
 
-Minimum: Pascal architecture (GTX 10xx series). Requires CUDA 11.0+.
+### Ubuntu AMD / OpenCL (verified)
 
-| Architecture | Compute | Example GPUs | Min CUDA |
-|---|---|---|---|
-| Pascal | 6.0, 6.1 | GTX 1060/1070/1080, P100 | 11.0 |
-| Turing | 7.5 | RTX 2060/2070/2080, T4 | 11.0 |
-| Ampere | 8.0, 8.6 | RTX 3060/3070/3080/3090, A100 | 11.0 |
-| Ada Lovelace | 8.9 | RTX 4060/4070/4080/4090 | 11.8 |
-| Hopper | 9.0 | H100, H200 | 12.0 |
-| Blackwell | 10.0, 12.0 | RTX 5090, B100/B200 | 12.8 |
-
-Pre-built binaries are produced for CUDA 11.8 (Pascal→Ada), CUDA 12.6 (Pascal→Hopper), and CUDA 12.8 (Pascal→Blackwell).
-
-### AMD (OpenCL)
-
-Any GPU with OpenCL 1.2+ support. Tested on:
-- RX 9070 XT (RDNA 4) via ROCm 7.2
-- Should work on GCN, RDNA, RDNA 2/3/4 architectures
-
-## Build Requirements
-
-| Dependency | Required | Notes |
-|---|---|---|
-| CMake | >= 3.18 | Kitware PPA for Ubuntu 18.04/20.04 |
-| C++ compiler | GCC >= 7 or Clang >= 5 | C++17 required |
-| CUDA Toolkit | >= 11.0 | For NVIDIA builds |
-| OpenCL | any | For AMD builds (via ROCm, AMD APP SDK, or `ocl-icd`) |
-| libmicrohttpd | optional | HTTP monitoring API |
-| OpenSSL | optional | TLS pool connections |
-| hwloc | optional | NUMA-aware memory allocation |
-
-## Quick Build
-
-### AMD Only (OpenCL)
 ```bash
-mkdir build && cd build
-cmake .. -DCUDA_ENABLE=OFF -DOpenCL_ENABLE=ON
-cmake --build . -j$(nproc)
+cmake -S . -B build-amd \
+  -DCUDA_ENABLE=OFF \
+  -DOpenCL_ENABLE=ON \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DN0S_COMPILE=generic
+cmake --build build-amd -j$(nproc)
 ```
 
-For ROCm, you may need to specify paths:
+Optional sanity run:
+
 ```bash
-cmake .. -DCUDA_ENABLE=OFF -DOpenCL_ENABLE=ON \
-  -DOpenCL_INCLUDE_DIR=/opt/rocm/include \
-  -DOpenCL_LIBRARY=/usr/lib/x86_64-linux-gnu/libOpenCL.so
+./build-amd/bin/n0s-ryo-miner --version
+./build-amd/bin/n0s-ryo-miner --noNVIDIA --benchmark 10 --benchmark-json amd-benchmark.json
 ```
 
-### NVIDIA Only (CUDA)
+### Ubuntu NVIDIA / CUDA (verified on `nosnode`)
+
 ```bash
-mkdir build && cd build
-cmake .. -DOpenCL_ENABLE=OFF -DCUDA_ENABLE=ON -DCUDA_ARCH="61;75;86"
-cmake --build . -j$(nproc)
+cmake -S . -B build-cuda \
+  -DCUDA_ENABLE=ON \
+  -DOpenCL_ENABLE=OFF \
+  -DCUDA_ARCH=75 \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DN0S_COMPILE=generic
+cmake --build build-cuda -j$(nproc)
 ```
 
-Set `CUDA_ARCH` to match your GPU's compute capability. Common values:
-- `61` — GTX 1060/1070/1080
-- `75` — RTX 2060/2070/2080
-- `86` — RTX 3060/3070/3080/3090
-- `89` — RTX 4060/4070/4080/4090
-- `90` — H100/H200
-- `100;120` — RTX 5090/B200 (requires CUDA 12.8+)
+Optional sanity run:
 
-### Both Backends
 ```bash
-mkdir build && cd build
-cmake .. -DCUDA_ARCH="61;75;86"
-cmake --build . -j$(nproc)
+./build-cuda/bin/n0s-ryo-miner --version
+./build-cuda/bin/n0s-ryo-miner --noAMD --benchmark 10 --benchmark-json cuda-benchmark.json
 ```
 
-### Portable / Release Builds
+### Windows OpenCL cross-build from Ubuntu (compile only)
+
 ```bash
-cmake .. -DN0S_COMPILE=generic -DCMAKE_BUILD_TYPE=Release
+./scripts/cross-build-windows.sh --skip-deps
 ```
 
-The `N0S_COMPILE=generic` flag avoids `-march=native` so binaries run on any x86_64 CPU.
+Output lands in `dist/windows-opencl/`. This produces a Windows `.exe`, but it was **not** natively executed on Windows in this validation pass.
 
-## Container Builds (Recommended)
+### Windows MSVC CUDA + OpenCL (prepared, not natively validated in this pass)
 
-Build for **any CUDA version** without installing the toolkit locally. Uses Podman or Docker with official NVIDIA CUDA images.
+If you have a real Windows box with Visual Studio, CUDA, and vcpkg set up:
 
-### Quick Start
+```powershell
+.\scripts\build-windows.ps1 -CudaEnable -OpenclEnable
+```
+
+That path still needs a native run on `win11` before it should be treated as verified.
+
+## Container builds
+
+Container builds are useful for compile validation and packaging, not as a replacement for real hardware checks.
 
 ```bash
-# OpenCL (AMD GPUs)
+# OpenCL / AMD compile path
 ./scripts/container-build-opencl.sh
 
-# CUDA 11.8 (Pascal→Ada)
+# CUDA compile matrix
 ./scripts/container-build.sh 11.8
-
-# CUDA 12.6 (Pascal→Hopper)
 ./scripts/container-build.sh 12.6
-
-# CUDA 12.8 (Pascal→Blackwell)
 ./scripts/container-build.sh 12.8
 
-# Full build matrix (all 4 backends)
+# Build all configured CUDA variants
 ./scripts/build-matrix.sh
 ```
 
-Artifacts land in `dist/opencl-ubuntu22.04/` or `dist/cuda-{version}/`.
+Notes:
 
-### Advanced Options
-
-```bash
-# Custom architectures
-./scripts/container-build.sh 11.8 "61,75,86"       # Specific compute capabilities
-./scripts/container-build.sh 12.8 "auto"           # All supported archs for CUDA version
-
-# Different Ubuntu base
-./scripts/container-build.sh 12.6 "" 24.04         # Ubuntu 24.04 instead of 22.04
-
-# Full validation suite (10 platform combos, compile-only)
-./scripts/matrix-test.sh
-
-# Quick smoke test (1 CUDA + 1 OpenCL build)
-./scripts/matrix-test.sh --quick
-
-# Filter specific platforms
-./scripts/matrix-test.sh --filter "12.8"
-./scripts/matrix-test.sh --filter "opencl"
-```
-
-### Why Container Builds?
-
-- ✅ **No local CUDA toolkit required** — Just Podman/Docker
-- ✅ **Reproducible** — Same source → same binaries every time
-- ✅ **Multiple CUDA versions** — Build for 11.8, 12.6, and 12.8 on same machine
-- ✅ **Clean environment** — No conflicts with system libraries
-- ✅ **CI/CD ready** — Same scripts work in GitHub Actions / GitLab CI
+- `scripts/container-build-opencl.sh` now packages the current **single-binary** layout
+- GUI assets are embedded into the executable during the build
+- Container success only proves the code compiles in that image, not that it ran on real hardware
 
 ## Usage
 
@@ -274,7 +222,7 @@ bash tests/build_autotune_test.sh                       # Autotune framework (21
 
 ### Remote NVIDIA Test
 ```bash
-REMOTE=nos2 ./test-mine-remote.sh      # Build on remote, mine for 40s
+REMOTE=nosnode ./test-mine-remote.sh   # Build on remote NVIDIA host, mine or benchmark
 ```
 
 ### Triple-GPU Integration Test
