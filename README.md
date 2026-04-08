@@ -12,10 +12,10 @@ This is the current honest status after revalidating the repo instead of trustin
 
 - ✅ **Ubuntu 24.04 AMD OpenCL** native build + native benchmark verified on `nitro` (RX 9070 XT, **2457.6 H/s**)
 - ✅ **Ubuntu 24.04 NVIDIA CUDA** native build + native benchmark verified on `nosnode` (RTX 2070, CUDA 13.2, **2227.2 H/s**)
+- ✅ **Windows 11 NVIDIA CUDA + OpenCL** native build + benchmark + pool smoke verified on `win11` (RTX 3070, CUDA 11.0, **2742.1 H/s CUDA**, **3085.2 H/s OpenCL**)
 - ✅ **Windows OpenCL cross-build** verified from Ubuntu with MinGW, compile-only
-- ⚠️ **Windows CUDA + OpenCL** build scripts and CI exist, but native validation on `win11` is still blocked by SSH auth
-- ⚠️ **Windows AMD OpenCL** remains unvalidated
-- ⚠️ It is **not honest yet** to pretend there is one fully verified `n0s-ryo-miner-linux` / `n0s-ryo-miner-win` release pair
+- ⚠️ **Windows AMD OpenCL** remains unvalidated (no Windows+AMD box available)
+- ✅ The core miner (CUDA + OpenCL, no HTTP/TLS/hwloc) is now verified on both Linux and Windows
 
 For the detailed matrix, read [docs/BUILD-MATRIX.md](docs/BUILD-MATRIX.md).
 
@@ -70,15 +70,22 @@ Optional sanity run:
 
 Output lands in `dist/windows-opencl/`. This produces a Windows `.exe`, but it was **not** natively executed on Windows in this validation pass.
 
-### Windows MSVC CUDA + OpenCL (prepared, not natively validated in this pass)
+### Windows MSVC CUDA + OpenCL (verified on Windows 11)
 
-If you have a real Windows box with Visual Studio, CUDA, and vcpkg set up:
+**Prerequisites:**
+- Visual Studio 2019 or 2022 with C++ workload (Build Tools or Community)
+- CUDA Toolkit 11.0+ (if `-CudaEnable`)
+- CMake 3.18+ (ships with Visual Studio)
+- vcpkg (optional, for HTTP/TLS/hwloc support)
 
+**Build:**
 ```powershell
 .\scripts\build-windows.ps1 -CudaEnable -OpenclEnable
 ```
 
-That path still needs a native run on `win11` before it should be treated as verified.
+The script auto-detects your CUDA version and selects compatible GPU architectures. Without vcpkg, it builds a core miner (no HTTP API, no TLS, no hwloc) that is sufficient for mining and benchmarking.
+
+**Verified on:** Windows 11, RTX 3070, CUDA 11.0, MSVC 2019, no vcpkg
 
 ## Container builds
 

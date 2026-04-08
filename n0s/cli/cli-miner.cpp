@@ -867,19 +867,26 @@ int main(int argc, char* argv[])
 	if(!hasConfigFile)
 		do_guided_config();
 
-	// Skip pool config in autotune/benchmark modes — they don't need a pool
+	// Skip guided pool config in autotune/benchmark modes.
 	if(!hasPoolConfig && !params::inst().autotune && params::inst().benchmark_block_version < 0)
 		do_guided_pool_config();
 
-	// In autotune mode, create a dummy pool config if none exists
-	if(!hasPoolConfig && params::inst().autotune)
+	// Autotune and benchmark modes still parse a pool config, so create a dummy file if needed.
+	if(!hasPoolConfig && (params::inst().autotune || params::inst().benchmark_block_version >= 0))
 	{
+		if(params::inst().configFilePools == "pools.txt")
+		{
+			params::inst().configFilePools = params::inst().autotune ? "autotune-pools.txt" : "benchmark-pools.txt";
+		}
+
 		FILE* f = fopen(params::inst().configFilePools.c_str(), "w");
 		if(f)
 		{
+			const char* poolAddress = params::inst().autotune ? "autotune.local:3333" : "benchmark.local:3333";
+			const char* walletAddress = params::inst().autotune ? "autotune" : "benchmark";
 			fprintf(f, "\"pool_list\" :\n[\n");
-			fprintf(f, "  {\"pool_address\" : \"autotune.local:3333\",\n");
-			fprintf(f, "   \"wallet_address\" : \"autotune\",\n");
+			fprintf(f, "  {\"pool_address\" : \"%s\",\n", poolAddress);
+			fprintf(f, "   \"wallet_address\" : \"%s\",\n", walletAddress);
 			fprintf(f, "   \"rig_id\" : \"\",\n");
 			fprintf(f, "   \"pool_password\" : \"\",\n");
 			fprintf(f, "   \"use_nicehash\" : false,\n");

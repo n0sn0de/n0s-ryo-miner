@@ -12,7 +12,7 @@ Last updated: 2026-04-08
 | Ubuntu 24.04 (`nosnode`) | NVIDIA CUDA | Native CMake | Native benchmark | ✅ verified | RTX 2070, CUDA 13.2 toolchain, benchmark JSON recorded at **2227.2 H/s** |
 | Ubuntu 22.04 container | AMD OpenCL | `scripts/container-build-opencl.sh` | Not hardware-run in container | ✅ compile-verified | Produces a single binary plus sample config files |
 | Windows x64 | OpenCL | MinGW cross-build from Ubuntu | Not run on Windows in this pass | ⚠️ compile only | `scripts/cross-build-windows.sh --skip-deps` produces `dist/windows-opencl/n0s-ryo-miner.exe` |
-| Windows x64 | NVIDIA CUDA + OpenCL | MSVC / GitHub Actions config present | Not natively validated in this pass | ⚠️ unvalidated runtime | `build-windows.ps1` and CI workflow exist, but `win11` access was blocked by SSH auth |
+| Windows 11 (`win11`) | NVIDIA CUDA + OpenCL | MSVC 2019 + NMake | Native build + benchmark + pool smoke | ✅ verified | RTX 3070, CUDA 11.0 toolchain, CUDA benchmark **2742.1 H/s**, OpenCL benchmark **3085.2 H/s**, pool smoke test passed |
 | Windows x64 | AMD OpenCL | — | — | ❌ unvalidated | No Windows+AMD box available right now |
 
 ## Key reality checks
@@ -28,7 +28,7 @@ Last updated: 2026-04-08
 |---|---|---|---|---|
 | `nitro` | Ubuntu 24.04.4 | AMD Radeon RX 9070 XT | OpenCL 2.0 / AMD APP 3581.0 | Native build + benchmark verified |
 | `nosnode` | Ubuntu 24.04 | NVIDIA RTX 2070 (`sm_75`) | CUDA 13.2 / driver 580.126.09 | Native build + benchmark verified |
-| `win11` | Windows 11 | NVIDIA GPU | Intended native validation target | Blocked this pass, SSH auth failed |
+| `win11` | Windows 11 | NVIDIA RTX 3070 (`sm_86`) | CUDA 11.0 / driver 586.09 | Native build + benchmark + pool smoke verified |
 
 ## What changed to make the matrix more honest
 
@@ -54,12 +54,17 @@ Last updated: 2026-04-08
 - A fully verified single-binary Windows release covering both CUDA and OpenCL
 - A generic `n0s-ryo-miner-win` release alias that implies equivalent validation to Linux
 
-## Highest-leverage next step
+## What is now verified on Windows
 
-Regain native access to `win11`, run `scripts/build-windows.ps1 -CudaEnable -OpenclEnable`, then do at least:
+- **Native Windows build with MSVC 2019** works without vcpkg (core miner with HTTP/TLS/hwloc disabled)
+- **CUDA 11.0 + OpenCL** build succeeds on Windows 11
+- **RTX 3070 CUDA benchmark**: 2742.1 H/s (15-second test)
+- **RTX 3070 OpenCL benchmark**: 3085.2 H/s (15-second test, using NVIDIA's OpenCL runtime)
+- **Pool smoke test**: Successfully connected to pool, submitted 13 accepted shares in 20 seconds
+- **Build script** (`scripts/build-windows.ps1`) now auto-detects CUDA version and works on stock Windows PowerShell 5.1
 
-1. `n0s-ryo-miner.exe --version`
-2. a short GPU benchmark run
-3. if possible, a short pool smoke test
+## Remaining Windows work
 
-That is the blocker between today's honest matrix and a truthful Windows release story.
+- Windows AMD OpenCL: still unvalidated (no Windows+AMD box available)
+- vcpkg-based builds (with full HTTP/TLS/hwloc): build script supports it, but not tested in this pass
+- Release artifact automation: Windows binaries can now be built and validated, but release workflow may need adjustment
