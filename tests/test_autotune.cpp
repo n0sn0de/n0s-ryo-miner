@@ -191,12 +191,12 @@ TEST(nvidia_candidates_pascal_vs_turing)
 	auto turing = generateNvidiaCandidates(36, 8ULL * 1024 * 1024 * 1024, 75, TuneMode::Quick);
 	ASSERT(!pascal.empty(), "pascal should have candidates");
 	ASSERT(!turing.empty(), "turing should have candidates");
-	// Pascal optimal mult is 7, Turing is 6 — different center points
-	bool pascal_has_7x = false, turing_has_6x = false;
-	for(const auto& c : pascal) if(c.blocks == 15 * 7) pascal_has_7x = true;
-	for(const auto& c : turing) if(c.blocks == 36 * 6) turing_has_6x = true;
-	ASSERT(pascal_has_7x, "pascal should include 7×SM optimal blocks");
-	ASSERT(turing_has_6x, "turing should include 6×SM optimal blocks");
+	// Quick mode centers Pascal at 6×SM and Turing+ at 8×SM.
+	bool pascal_has_6x = false, turing_has_8x = false;
+	for(const auto& c : pascal) if(c.blocks == 15 * 6) pascal_has_6x = true;
+	for(const auto& c : turing) if(c.blocks == 36 * 8) turing_has_8x = true;
+	ASSERT(pascal_has_6x, "pascal should include 6×SM blocks");
+	ASSERT(turing_has_8x, "turing should include 8×SM blocks");
 	PASS("nvidia_candidates_pascal_vs_turing");
 }
 
@@ -360,6 +360,44 @@ TEST(persist_nvidia_roundtrip)
 
 	std::remove(testfile);
 	PASS("persist_nvidia_roundtrip");
+}
+
+TEST(persist_reload_replaces_existing_state)
+{
+	const char* testfile = "/tmp/test_autotune_reload.json";
+
+	AutotuneResult initial;
+	initial.miner_version = "v0.9.0-test";
+	initial.timestamp = "2026-03-30T20:00:00Z";
+
+	AutotuneState state;
+	state.device_index = 0;
+	state.fingerprint = {BackendType::OpenCL, "RX 9070 XT", "gfx1201", 16ULL*1024*1024*1024, 32, "6.1.0", "3.0", "v0.9.0-test", "cryptonight_gpu"};
+	state.completed = true;
+	state.best_candidate_id = 0;
+	state.timestamp = "2026-03-30T20:01:00Z";
+
+	CandidateRecord only;
+	only.candidate_id = 0;
+	only.status = CandidateStatus::Success;
+	only.amd = {256, 8};
+	only.metrics.avg_hashrate = 4200.0;
+	only.score.final_score = 4200.0;
+	state.candidates.push_back(only);
+	initial.devices.push_back(state);
+
+	ASSERT(saveAutotuneResult(initial, testfile), "initial save should succeed");
+
+	AutotuneResult loaded;
+	loaded.devices.push_back(state);
+	loaded.devices[0].candidates.push_back(only);
+	ASSERT(loadAutotuneResult(loaded, testfile), "reload should succeed");
+	ASSERT(loaded.devices.size() == 1, "reload should replace device list");
+	ASSERT(loaded.devices[0].candidates.size() == 1, "reload should clear stale candidates");
+	ASSERT(loaded.devices[0].candidates[0].amd.intensity == 256, "reloaded candidate should match saved state");
+
+	std::remove(testfile);
+	PASS("persist_reload_replaces_existing_state");
 }
 
 int main()

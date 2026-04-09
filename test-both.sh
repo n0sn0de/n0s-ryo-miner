@@ -2,7 +2,7 @@
 # Test the currently available GPU paths: local AMD + one remote NVIDIA host.
 set -e
 
-REMOTE="${REMOTE:-nosnode}"
+REMOTE="${REMOTE:-cuda-test-host}"
 
 PASS=0
 FAIL=0

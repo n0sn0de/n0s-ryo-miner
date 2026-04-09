@@ -154,11 +154,7 @@ const CandidateRecord* AutotuneManager::tuneDevice(
 	// Phase 1: Coarse search — evaluate all candidates
 	coarseSearch(state, evaluator);
 
-	// Phase 2: Refine around top candidates
-	// (For v1, coarse search covers the full candidate set already)
-	// refineSearch(state, evaluator);
-
-	// Phase 3: Stability validation on the best
+	// Stability validation on the best coarse-search candidate
 	state.best_candidate_id = selectBest(state);
 	if(state.best_candidate_id >= 0)
 		stabilityValidation(state, evaluator);
@@ -169,18 +165,21 @@ const CandidateRecord* AutotuneManager::tuneDevice(
 	state.completed = (state.best_candidate_id >= 0);
 
 	// Replace or append device state in result
-	bool found = false;
-	for(auto& dev : result_.devices)
+	size_t result_index = result_.devices.size();
+	for(size_t i = 0; i < result_.devices.size(); ++i)
 	{
-		if(dev.fingerprint.isCompatible(fingerprint))
+		if(result_.devices[i].fingerprint.isCompatible(fingerprint))
 		{
-			dev = state;
-			found = true;
+			result_.devices[i] = state;
+			result_index = i;
 			break;
 		}
 	}
-	if(!found)
+	if(result_index == result_.devices.size())
+	{
 		result_.devices.push_back(state);
+		result_index = result_.devices.size() - 1;
+	}
 
 	// Persist
 	result_.timestamp = nowISO8601();
@@ -208,7 +207,7 @@ const CandidateRecord* AutotuneManager::tuneDevice(
 			"AUTOTUNE: GPU %u — completed in %.1f seconds, tested %zu candidates",
 			device_index, state.total_elapsed_seconds, state.candidates.size());
 
-		return &result_.devices.back().candidates[state.best_candidate_id];
+		return &result_.devices[result_index].candidates[state.best_candidate_id];
 	}
 
 	printer::inst()->print_msg(L0, "AUTOTUNE: GPU %u — no valid candidate found!", device_index);
@@ -270,14 +269,6 @@ void AutotuneManager::coarseSearch(AutotuneState& state, CandidateEvaluator& eva
 			"AUTOTUNE: [%zu/%zu] OK — %.1f H/s (CV=%.1f%%, score=%.1f)",
 			evaluated, total, metrics.avg_hashrate, metrics.cv_percent, candidate.score.final_score);
 	}
-}
-
-void AutotuneManager::refineSearch(AutotuneState& state, CandidateEvaluator& evaluator)
-{
-	// TODO: In v1.1, generate refined candidates around the top N from coarse search
-	// For now, coarse search covers the full candidate set
-	(void)state;
-	(void)evaluator;
 }
 
 bool AutotuneManager::stabilityValidation(AutotuneState& state, CandidateEvaluator& evaluator)

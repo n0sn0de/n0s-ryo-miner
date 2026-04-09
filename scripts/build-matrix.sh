@@ -50,7 +50,7 @@ echo "============================================="
 echo "Build Matrix Results: ${PASS} passed, ${FAIL} failed"
 echo "============================================="
 
-CUDA_TEST_HOST="${CUDA_TEST_HOST:-nosnode}"
+CUDA_TEST_HOST="${CUDA_TEST_HOST:-cuda-test-host}"
 
 # Optional: test on hardware
 if [ "$DO_TEST" = "--test" ]; then

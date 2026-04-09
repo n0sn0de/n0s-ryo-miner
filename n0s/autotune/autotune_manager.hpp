@@ -53,7 +53,7 @@ using FingerprintCollector = std::function<bool(
 /// This class manages the full autotune lifecycle:
 ///   1. Device discovery and fingerprinting
 ///   2. Candidate generation
-///   3. Coarse search → refinement → stability validation
+///   3. Coarse search → stability validation
 ///   4. Scoring and winner selection
 ///   5. Persistence to autotune.json
 ///
@@ -83,9 +83,6 @@ public:
 private:
 	/// Run coarse search phase
 	void coarseSearch(AutotuneState& state, CandidateEvaluator& evaluator);
-
-	/// Run refinement around top N candidates
-	void refineSearch(AutotuneState& state, CandidateEvaluator& evaluator);
 
 	/// Run stability validation on the best candidate
 	bool stabilityValidation(AutotuneState& state, CandidateEvaluator& evaluator);

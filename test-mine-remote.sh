@@ -2,8 +2,8 @@
 # Remote NVIDIA mining / benchmark smoke test
 set -e
 
-REMOTE="${REMOTE:-nosnode}"
-POOL="${POOL:-192.168.50.186:3333}"
+REMOTE="${REMOTE:-cuda-test-host}"
+POOL="${POOL:-pool.example.com:3333}"
 TIMEOUT="${TIMEOUT:-45}"
 REPO_URL="https://github.com/n0sn0de/n0s-ryo-miner.git"
 REMOTE_DIR="/home/${REMOTE}/n0s-ryo-miner"

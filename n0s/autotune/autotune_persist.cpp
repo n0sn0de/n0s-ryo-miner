@@ -217,6 +217,7 @@ bool loadAutotuneResult(AutotuneResult& result, const std::string& filepath)
 
 	if(doc.HasMember("miner_version")) result.miner_version = doc["miner_version"].GetString();
 	if(doc.HasMember("timestamp")) result.timestamp = doc["timestamp"].GetString();
+	result.devices.clear();
 
 	if(!doc.HasMember("devices") || !doc["devices"].IsArray()) return false;
 

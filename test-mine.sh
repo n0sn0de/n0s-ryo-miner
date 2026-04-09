@@ -2,7 +2,7 @@
 # Quick mining test script — verifies miner can actually mine
 set -e
 
-POOL="${POOL:-192.168.50.186:3333}"
+POOL="${POOL:-pool.example.com:3333}"
 TIMEOUT="${TIMEOUT:-30}"
 BINARY="${BINARY:-./build/bin/n0s-ryo-miner}"
 

@@ -34,8 +34,8 @@ This PRD is scoped to the repo as it exists today:
 - It supports **AMD via OpenCL** and **NVIDIA via CUDA**.
 - It generates `pools.txt`, `amd.txt`, and `nvidia.txt` on first run.
 - It includes an optional **HTTP monitoring API**.
-- It already has local AMD mining tests, remote NVIDIA tests, a triple-GPU integration test, and a compile/build matrix.
-- The build is split into a core backend library plus separately built CUDA and OpenCL backend libraries.
+- It already has local AMD mining tests, remote NVIDIA tests, broader mixed-backend smoke coverage, and a compile/build matrix.
+- The repo now builds a single executable per target with the web assets embedded.
 
 ## Problem statement
 Users need the miner to select **stable, high-performing kernel/runtime settings automatically** for the exact GPU(s) and software stack present on their machine.
