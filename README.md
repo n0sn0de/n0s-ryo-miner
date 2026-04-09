@@ -11,8 +11,8 @@ Fork of [xmr-stak](https://github.com/fireice-uk/xmr-stak), stripped down to the
 This is the current honest status after revalidating the repo instead of trusting stale docs:
 
 - ✅ **Ubuntu 24.04 AMD OpenCL** native build + native benchmark verified on `nitro` (RX 9070 XT, **2457.6 H/s**)
-- ✅ **Ubuntu 24.04 NVIDIA CUDA** native build + native benchmark verified on `nosnode` (RTX 2070, CUDA 13.2, **2227.2 H/s**)
-- ✅ **Windows 11 NVIDIA CUDA + OpenCL** native build + benchmark + pool smoke verified on `win11` (RTX 3070, CUDA 11.0, **2742.1 H/s CUDA**, **3085.2 H/s OpenCL**)
+- ✅ **Ubuntu 24.04 NVIDIA CUDA** native build + native benchmark verified on a dedicated NVIDIA Linux host (RTX 2070, CUDA 13.2, **2227.2 H/s**)
+- ✅ **Windows NVIDIA CUDA + OpenCL** native build + benchmark + pool smoke verified on a dedicated Windows host (RTX 3070, CUDA 11.0, **2742.1 H/s CUDA**, **3085.2 H/s OpenCL**)
 - ✅ **Windows OpenCL cross-build** verified from Ubuntu with MinGW, compile-only, and kept as a manual path instead of a primary release target
 - ⚠️ **Windows AMD OpenCL** remains unvalidated (no Windows+AMD box available)
 - ✅ The core miner (CUDA + OpenCL, no HTTP/TLS/hwloc) is now verified on both Linux and Windows
@@ -23,15 +23,18 @@ For the detailed matrix, read [docs/BUILD-MATRIX.md](docs/BUILD-MATRIX.md).
 
 Check [GitHub Releases](https://github.com/n0sn0de/n0s-ryo-miner/releases).
 
-The release workflow now ships two primary assets:
+The tagged release workflow now publishes downloadable archives plus checksums:
 
-- `n0s-ryo-miner-linux` - Linux x86_64 release binary with CUDA + OpenCL enabled, built in CI from the CUDA 12.8 Linux release job
-- `n0s-ryo-miner-win.exe` - native Windows x64 release binary with CUDA + OpenCL enabled, built in CI with MSVC
+- `n0s-ryo-miner-linux-opencl.tar.gz` - Linux x86_64 OpenCL-only build
+- `n0s-ryo-miner-linux-cuda12-opencl.tar.gz` - Linux x86_64 CUDA 12.8 + OpenCL build
+- `n0s-ryo-miner-windows-opencl-cross.zip` - Windows x64 OpenCL-only cross-build from Ubuntu via MinGW
+- `n0s-ryo-miner-windows-cuda12-opencl.zip` - native Windows x64 CUDA 12.8 + OpenCL build from the MSVC runner
+- `SHA256SUMS` - checksums for all published release archives
 
 That does **not** mean every platform/backend combination is equally revalidated. The honest caveats still matter:
 
 - Linux runtime confidence comes from separate native validation on Ubuntu AMD OpenCL and Ubuntu NVIDIA CUDA hosts
-- Windows runtime confidence is currently Windows 11 + NVIDIA
+- Windows runtime confidence is currently native Windows + NVIDIA
 - Windows AMD OpenCL remains unvalidated
 - Extra CI coverage builds are compile and sanity checks, not extra shipped release promises
 
@@ -55,7 +58,7 @@ Optional sanity run:
 ./build-amd/bin/n0s-ryo-miner --noNVIDIA --benchmark 10 --benchmark-json amd-benchmark.json
 ```
 
-### Ubuntu NVIDIA / CUDA (verified on `nosnode`)
+### Ubuntu NVIDIA / CUDA (verified on a dedicated NVIDIA Linux host)
 
 ```bash
 cmake -S . -B build-cuda \
@@ -82,7 +85,7 @@ Optional sanity run:
 
 Output lands in `dist/windows-opencl/`. This produces a Windows `.exe`, but it was **not** natively executed on Windows in this validation pass and is **not** one of the default GitHub release assets.
 
-### Windows MSVC CUDA + OpenCL (verified on Windows 11)
+### Windows MSVC CUDA + OpenCL (verified on a dedicated Windows host)
 
 **Prerequisites:**
 - Visual Studio 2019 or 2022 with C++ workload (Build Tools or Community)
@@ -97,9 +100,9 @@ Output lands in `dist/windows-opencl/`. This produces a Windows `.exe`, but it w
 
 The script auto-detects your CUDA version and selects compatible GPU architectures. Without vcpkg, it builds a core miner (no HTTP API, no TLS, no hwloc) that is sufficient for mining and benchmarking.
 
-**Verified on:** Windows 11, RTX 3070, CUDA 11.0, MSVC 2019, no vcpkg
+**Verified on:** native Windows, RTX 3070, CUDA 11.0, MSVC 2019, no vcpkg
 
-**Release workflow note:** the shipped `n0s-ryo-miner-win.exe` asset comes from the native MSVC GitHub Actions job. It is the right Windows release target for NVIDIA users today, but Windows AMD OpenCL is still not something we should oversell.
+**Release workflow note:** the native Windows CUDA+OpenCL archive is the right Windows release target for NVIDIA users today, while the MinGW Windows OpenCL cross-build is published as a convenience artifact, not as a claim of native Windows AMD validation.
 
 ## Console + memory notice behavior
 
@@ -313,7 +316,7 @@ This restores the CUDA 12.x behavior where template stub symbols remain visible 
 ### Unit Tests
 ```bash
 bash tests/build_harness.sh && ./tests/cn_gpu_harness   # Golden hash verification
-bash tests/build_autotune_test.sh                       # Autotune framework (21 tests)
+bash tests/build_autotune_test.sh                       # Autotune framework (22 tests)
 ```
 
 ### Local AMD Test
@@ -323,7 +326,7 @@ bash tests/build_autotune_test.sh                       # Autotune framework (21
 
 ### Remote NVIDIA Test
 ```bash
-REMOTE=nosnode ./test-mine-remote.sh   # Build on remote NVIDIA host, mine or benchmark
+REMOTE=cuda-test-host ./test-mine-remote.sh   # Build on remote NVIDIA host, mine or benchmark
 ```
 
 ### Triple-GPU Integration Test
@@ -351,7 +354,7 @@ REMOTE=nosnode ./test-mine-remote.sh   # Build on remote NVIDIA host, mine or be
 │   ├── build-matrix.sh         # Build all CUDA versions + optional test
 │   ├── matrix-test.sh          # Full 10-platform compile validation
 │   ├── test-remote-binary.sh   # Deploy + mine-test on remote GPU host
-│   └── test-nosnode.sh         # nosnode-specific test script
+│   └── test-remote-cuda-host.sh # generic remote CUDA test helper
 ├── cmake/
 │   └── mingw-w64-x86_64.cmake # MinGW cross-compile toolchain file
 ├── n0s/

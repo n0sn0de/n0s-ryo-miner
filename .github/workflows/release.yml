@@ -4,17 +4,67 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: write
 
-jobs:
-  # Release workflow only. Ship the two primary assets we can explain and
-  # defend, instead of publishing every compile target as a release promise.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
-  build-linux-release:
-    name: Build n0s-ryo-miner-linux
+jobs:
+  # Release workflow only. Ship the assets we can honestly explain and defend.
+
+  build-linux-opencl-release:
+    name: Build linux-opencl
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            cmake g++ \
+            libmicrohttpd-dev libssl-dev \
+            ocl-icd-opencl-dev opencl-headers \
+            tar gzip zip xxd
+
+      - name: Generate embedded GUI assets
+        run: bash scripts/embed_assets.sh gui n0s/http/embedded_assets.hpp
+
+      - name: Build
+        run: |
+          cmake -S . -B build-linux-opencl \
+            -DCUDA_ENABLE=OFF \
+            -DOpenCL_ENABLE=ON \
+            -DMICROHTTPD_ENABLE=ON \
+            -DHWLOC_ENABLE=OFF \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DN0S_COMPILE=generic \
+            -DCMAKE_LINK_STATIC=ON
+          cmake --build build-linux-opencl -j$(nproc)
+
+      - name: Package release asset
+        run: |
+          mkdir -p release/linux-opencl
+          install -m 0755 build-linux-opencl/bin/n0s-ryo-miner release/linux-opencl/n0s-ryo-miner
+          tar -C release/linux-opencl -czf release/n0s-ryo-miner-linux-opencl.tar.gz n0s-ryo-miner
+          test -s release/n0s-ryo-miner-linux-opencl.tar.gz
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-opencl-release
+          path: release/n0s-ryo-miner-linux-opencl.tar.gz
+          if-no-files-found: error
+
+  build-linux-cuda12-opencl-release:
+    name: Build linux-cuda12-opencl
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     container:
       image: docker.io/nvidia/cuda:12.8.0-devel-ubuntu24.04
     steps:
@@ -27,15 +77,14 @@ jobs:
             cmake g++ \
             libmicrohttpd-dev libssl-dev \
             ocl-icd-opencl-dev opencl-headers \
-            gzip xxd
+            tar gzip zip xxd
 
       - name: Generate embedded GUI assets
         run: bash scripts/embed_assets.sh gui n0s/http/embedded_assets.hpp
 
       - name: Build
         run: |
-          mkdir -p build && cd build
-          cmake .. \
+          cmake -S . -B build-linux-cuda12-opencl \
             -DCUDA_ENABLE=ON \
             -DOpenCL_ENABLE=ON \
             -DMICROHTTPD_ENABLE=ON \
@@ -44,28 +93,62 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DN0S_COMPILE=generic \
             -DCMAKE_LINK_STATIC=ON
-          cmake --build . -j$(nproc)
+          cmake --build build-linux-cuda12-opencl -j$(nproc)
 
-      - name: Stage release asset
+      - name: Package release asset
         run: |
-          mkdir -p release
-          install -m 0755 build/bin/n0s-ryo-miner release/n0s-ryo-miner-linux
-
-      - name: Verify release asset
-        run: |
-          test -x release/n0s-ryo-miner-linux
-          ls -lh release/n0s-ryo-miner-linux
-          release/n0s-ryo-miner-linux --version 2>&1 || echo "Note: --version failed (expected in driverless container)"
+          mkdir -p release/linux-cuda12-opencl
+          install -m 0755 build-linux-cuda12-opencl/bin/n0s-ryo-miner release/linux-cuda12-opencl/n0s-ryo-miner
+          tar -C release/linux-cuda12-opencl -czf release/n0s-ryo-miner-linux-cuda12-opencl.tar.gz n0s-ryo-miner
+          test -s release/n0s-ryo-miner-linux-cuda12-opencl.tar.gz
 
       - name: Upload release artifact
         uses: actions/upload-artifact@v4
         with:
-          name: release-linux
-          path: release/n0s-ryo-miner-linux
+          name: linux-cuda12-opencl-release
+          path: release/n0s-ryo-miner-linux-cuda12-opencl.tar.gz
+          if-no-files-found: error
 
-  build-windows-release:
-    name: Build n0s-ryo-miner-win.exe
+  build-windows-opencl-cross-release:
+    name: Build windows-opencl-cross
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            mingw-w64 cmake g++ pkg-config \
+            zip xxd
+
+      - name: Generate embedded GUI assets
+        run: bash scripts/embed_assets.sh gui n0s/http/embedded_assets.hpp
+
+      - name: Build
+        run: ./scripts/cross-build-windows.sh --skip-deps
+
+      - name: Package release asset
+        run: |
+          mkdir -p release/windows-opencl-cross
+          install -m 0755 dist/windows-opencl/n0s-ryo-miner.exe release/windows-opencl-cross/n0s-ryo-miner.exe
+          cd release/windows-opencl-cross
+          zip -9 ../n0s-ryo-miner-windows-opencl-cross.zip n0s-ryo-miner.exe
+          cd ../..
+          test -s release/n0s-ryo-miner-windows-opencl-cross.zip
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-opencl-cross-release
+          path: release/n0s-ryo-miner-windows-opencl-cross.zip
+          if-no-files-found: error
+
+  build-windows-cuda12-opencl-release:
+    name: Build windows-cuda12-opencl
     runs-on: windows-2022
+    timeout-minutes: 75
     env:
       VCPKG_DEFAULT_TRIPLET: x64-windows-static
     steps:
@@ -97,7 +180,7 @@ jobs:
 
       - name: Configure CMake
         run: |
-          cmake -B build -G "Visual Studio 17 2022" -A x64 `
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64 `
             -DCMAKE_TOOLCHAIN_FILE="${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" `
             -DVCPKG_TARGET_TRIPLET=x64-windows-static `
             -DCUDA_ENABLE=ON `
@@ -112,42 +195,37 @@ jobs:
       - name: Build
         run: cmake --build build --config Release -j $env:NUMBER_OF_PROCESSORS
 
-      - name: Stage release asset
+      - name: Package release asset
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $binary = Get-ChildItem -Path build -Recurse -Filter "n0s-ryo-miner.exe" | Select-Object -First 1
+          $binary = Get-ChildItem -Path build/bin/Release -Filter "n0s-ryo-miner.exe" -File | Select-Object -First 1
           if (-not $binary) {
-            throw "n0s-ryo-miner.exe not found"
+            throw "Expected build/bin/Release/n0s-ryo-miner.exe"
           }
-          New-Item -ItemType Directory -Force -Path release | Out-Null
-          Copy-Item $binary.FullName release/n0s-ryo-miner-win.exe
-          Write-Host "Staged: release/n0s-ryo-miner-win.exe"
-
-      - name: Verify release asset
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Continue'
-          $binary = Resolve-Path release/n0s-ryo-miner-win.exe
-          $item = Get-Item $binary
-          Write-Host "Binary: $($item.FullName)"
-          Write-Host "Size: $([math]::Round($item.Length / 1MB, 1)) MB"
-          & $item.FullName --version 2>&1
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "Note: --version exited $LASTEXITCODE (expected on a headless runner without GPU driver state)"
+          New-Item -ItemType Directory -Force -Path release/windows-cuda12-opencl | Out-Null
+          Copy-Item $binary.FullName release/windows-cuda12-opencl/n0s-ryo-miner.exe
+          Compress-Archive -Path release/windows-cuda12-opencl/n0s-ryo-miner.exe -DestinationPath release/n0s-ryo-miner-windows-cuda12-opencl.zip -Force
+          if (-not (Test-Path release/n0s-ryo-miner-windows-cuda12-opencl.zip)) {
+            throw "Failed to create release/n0s-ryo-miner-windows-cuda12-opencl.zip"
           }
-          exit 0
 
       - name: Upload release artifact
         uses: actions/upload-artifact@v4
         with:
-          name: release-win
-          path: release/n0s-ryo-miner-win.exe
+          name: windows-cuda12-opencl-release
+          path: release/n0s-ryo-miner-windows-cuda12-opencl.zip
+          if-no-files-found: error
 
   release:
     name: Create Release
-    needs: [build-linux-release, build-windows-release]
+    needs:
+      - build-linux-opencl-release
+      - build-linux-cuda12-opencl-release
+      - build-windows-opencl-cross-release
+      - build-windows-cuda12-opencl-release
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - name: Download release artifacts
         uses: actions/download-artifact@v4
@@ -157,10 +235,17 @@ jobs:
       - name: Prepare release assets
         run: |
           mkdir -p release
-          cp artifacts/release-linux/n0s-ryo-miner-linux release/
-          cp artifacts/release-win/n0s-ryo-miner-win.exe release/
+          cp artifacts/linux-opencl-release/n0s-ryo-miner-linux-opencl.tar.gz release/
+          cp artifacts/linux-cuda12-opencl-release/n0s-ryo-miner-linux-cuda12-opencl.tar.gz release/
+          cp artifacts/windows-opencl-cross-release/n0s-ryo-miner-windows-opencl-cross.zip release/
+          cp artifacts/windows-cuda12-opencl-release/n0s-ryo-miner-windows-cuda12-opencl.zip release/
           cd release
-          sha256sum n0s-ryo-miner-linux n0s-ryo-miner-win.exe > SHA256SUMS
+          sha256sum \
+            n0s-ryo-miner-linux-opencl.tar.gz \
+            n0s-ryo-miner-linux-cuda12-opencl.tar.gz \
+            n0s-ryo-miner-windows-opencl-cross.zip \
+            n0s-ryo-miner-windows-cuda12-opencl.zip \
+            > SHA256SUMS
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -169,6 +254,8 @@ jobs:
           prerelease: false
           generate_release_notes: true
           files: |
-            release/n0s-ryo-miner-linux
-            release/n0s-ryo-miner-win.exe
+            release/n0s-ryo-miner-linux-opencl.tar.gz
+            release/n0s-ryo-miner-linux-cuda12-opencl.tar.gz
+            release/n0s-ryo-miner-windows-opencl-cross.zip
+            release/n0s-ryo-miner-windows-cuda12-opencl.zip
             release/SHA256SUMS

@@ -3,7 +3,7 @@
 set -e
 
 BINARY="$(dirname "$0")/../build/bin/n0s-ryo-miner"
-POOL="192.168.50.186:3333"
+POOL="${POOL:-pool.example.com:3333}"
 DURATION=${1:-45}
 
 if [ ! -x "$BINARY" ]; then

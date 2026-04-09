@@ -3,7 +3,7 @@
 # Usage: ./scripts/test-remote-binary.sh <remote_host> <binary_dir> [timeout]
 #
 # Examples:
-#   ./scripts/test-remote-binary.sh nosnode dist/cuda-12.8 50
+#   ./scripts/test-remote-binary.sh cuda-test-host dist/cuda-12.8 50
 #   ./scripts/test-remote-binary.sh other-cuda-host dist/cuda-11.8 45
 
 set -e
@@ -11,7 +11,7 @@ set -e
 REMOTE="${1:?Usage: $0 <remote_host> <binary_dir> [timeout]}"
 BINARY_DIR="${2:?Usage: $0 <remote_host> <binary_dir> [timeout]}"
 TIMEOUT="${3:-45}"
-POOL="${POOL:-192.168.50.186:3333}"
+POOL="${POOL:-pool.example.com:3333}"
 REMOTE_DIR="/tmp/n0s-mine-test"
 
 echo "====================================="
