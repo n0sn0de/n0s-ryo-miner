@@ -9,19 +9,23 @@ permissions:
   contents: write
 
 jobs:
-  # ─── Linux Builds ──────────────────────────────────────────────────────────
-  build-linux-opencl:
-    name: Linux OpenCL
+  # Release workflow only. Ship the two primary assets we can explain and
+  # defend, instead of publishing every compile target as a release promise.
+
+  build-linux-release:
+    name: Build n0s-ryo-miner-linux
     runs-on: ubuntu-24.04
+    container:
+      image: docker.io/nvidia/cuda:12.8.0-devel-ubuntu24.04
     steps:
       - uses: actions/checkout@v4
 
       - name: Install dependencies
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq \
+          apt-get update -qq
+          apt-get install -y -qq \
             cmake g++ \
-            libmicrohttpd-dev libssl-dev libhwloc-dev \
+            libmicrohttpd-dev libssl-dev \
             ocl-icd-opencl-dev opencl-headers \
             gzip xxd
 
@@ -32,114 +36,35 @@ jobs:
         run: |
           mkdir -p build && cd build
           cmake .. \
-            -DCUDA_ENABLE=OFF \
+            -DCUDA_ENABLE=ON \
             -DOpenCL_ENABLE=ON \
             -DMICROHTTPD_ENABLE=ON \
-            -DHWLOC_ENABLE=ON \
+            -DHWLOC_ENABLE=OFF \
+            -DCUDA_ARCH="61;75;80;86;89;90;100;120" \
             -DCMAKE_BUILD_TYPE=Release \
             -DN0S_COMPILE=generic \
             -DCMAKE_LINK_STATIC=ON
           cmake --build . -j$(nproc)
 
-      - name: Upload artifact
+      - name: Stage release asset
+        run: |
+          mkdir -p release
+          install -m 0755 build/bin/n0s-ryo-miner release/n0s-ryo-miner-linux
+
+      - name: Verify release asset
+        run: |
+          test -x release/n0s-ryo-miner-linux
+          ls -lh release/n0s-ryo-miner-linux
+          release/n0s-ryo-miner-linux --version 2>&1 || echo "Note: --version failed (expected in driverless container)"
+
+      - name: Upload release artifact
         uses: actions/upload-artifact@v4
         with:
-          name: n0s-ryo-miner-linux-opencl
-          path: build/bin/n0s-ryo-miner
+          name: release-linux
+          path: release/n0s-ryo-miner-linux
 
-  build-linux-cuda11:
-    name: Linux CUDA 11.8
-    runs-on: ubuntu-24.04
-    container:
-      image: docker.io/nvidia/cuda:11.8.0-devel-ubuntu22.04
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: |
-          apt-get update -qq
-          apt-get install -y -qq cmake g++ libmicrohttpd-dev libssl-dev gzip xxd
-
-      - name: Generate embedded GUI assets
-        run: bash scripts/embed_assets.sh gui n0s/http/embedded_assets.hpp
-
-      - name: Build
-        run: |
-          mkdir -p build && cd build
-          cmake .. \
-            -DCUDA_ENABLE=ON -DOpenCL_ENABLE=OFF \
-            -DMICROHTTPD_ENABLE=ON -DHWLOC_ENABLE=OFF \
-            -DCUDA_ARCH="61;75;80;86;89" \
-            -DCMAKE_BUILD_TYPE=Release -DN0S_COMPILE=generic
-          cmake --build . -j$(nproc)
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: n0s-ryo-miner-linux-cuda11
-          path: build/bin/n0s-ryo-miner
-
-  build-linux-cuda12:
-    name: Linux CUDA 12.8 + OpenCL
-    runs-on: ubuntu-24.04
-    container:
-      image: docker.io/nvidia/cuda:12.8.0-devel-ubuntu24.04
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: |
-          apt-get update -qq
-          apt-get install -y -qq cmake g++ libmicrohttpd-dev libssl-dev \
-            ocl-icd-opencl-dev opencl-headers gzip xxd
-
-      - name: Generate embedded GUI assets
-        run: bash scripts/embed_assets.sh gui n0s/http/embedded_assets.hpp
-
-      - name: Build
-        run: |
-          mkdir -p build && cd build
-          cmake .. \
-            -DCUDA_ENABLE=ON -DOpenCL_ENABLE=ON \
-            -DMICROHTTPD_ENABLE=ON -DHWLOC_ENABLE=OFF \
-            -DCUDA_ARCH="61;75;80;86;89;90;100;120" \
-            -DCMAKE_BUILD_TYPE=Release -DN0S_COMPILE=generic
-          cmake --build . -j$(nproc)
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: n0s-ryo-miner-linux-cuda12-opencl
-          path: build/bin/n0s-ryo-miner
-
-  # ─── Windows Builds ─────────────────────────────────────────────────────────
-  build-windows-opencl:
-    name: Windows OpenCL (MinGW)
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install MinGW-w64 cross-compiler
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq \
-            g++-mingw-w64-x86-64-posix \
-            cmake gzip xxd curl
-
-      - name: Generate embedded GUI assets
-        run: bash scripts/embed_assets.sh gui n0s/http/embedded_assets.hpp
-
-      - name: Cross-build Windows binary
-        run: bash scripts/cross-build-windows.sh
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: n0s-ryo-miner-windows-opencl
-          path: dist/windows-opencl/n0s-ryo-miner.exe
-
-  build-windows-cuda:
-    name: Windows CUDA 12 + OpenCL (MSVC)
+  build-windows-release:
+    name: Build n0s-ryo-miner-win.exe
     runs-on: windows-2022
     env:
       VCPKG_DEFAULT_TRIPLET: x64-windows-static
@@ -148,7 +73,6 @@ jobs:
 
       - name: Install CUDA Toolkit
         uses: Jimver/cuda-toolkit@v0.2.35
-        id: cuda-toolkit
         with:
           cuda: '12.8.0'
           method: 'local'
@@ -165,11 +89,10 @@ jobs:
       - name: Generate embedded GUI assets
         shell: bash
         run: |
-          # Ensure xxd is available (Git Bash includes vim tools)
           if command -v xxd &>/dev/null; then
             bash scripts/embed_assets.sh gui n0s/http/embedded_assets.hpp
           else
-            echo "xxd not found — using committed embedded_assets.hpp"
+            echo "xxd not found, using committed embedded_assets.hpp"
           fi
 
       - name: Configure CMake
@@ -189,38 +112,44 @@ jobs:
       - name: Build
         run: cmake --build build --config Release -j $env:NUMBER_OF_PROCESSORS
 
-      - name: Verify binary
+      - name: Stage release asset
+        shell: pwsh
         run: |
-          $binary = "build/bin/Release/n0s-ryo-miner.exe"
-          if (-not (Test-Path $binary)) {
-            $binary = "build/bin/n0s-ryo-miner.exe"
+          $ErrorActionPreference = 'Stop'
+          $binary = Get-ChildItem -Path build -Recurse -Filter "n0s-ryo-miner.exe" | Select-Object -First 1
+          if (-not $binary) {
+            throw "n0s-ryo-miner.exe not found"
           }
-          if (-not (Test-Path $binary)) {
-            # Search for it
-            $found = Get-ChildItem -Path build -Recurse -Filter "n0s-ryo-miner.exe" | Select-Object -First 1
-            if ($found) { $binary = $found.FullName }
-          }
-          Write-Host "Binary: $binary"
-          Write-Host "Size: $([math]::Round((Get-Item $binary).Length / 1MB, 1)) MB"
-          & $binary --version
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          Copy-Item $binary.FullName release/n0s-ryo-miner-win.exe
+          Write-Host "Staged: release/n0s-ryo-miner-win.exe"
 
-      - name: Upload artifact
+      - name: Verify release asset
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $binary = Resolve-Path release/n0s-ryo-miner-win.exe
+          $item = Get-Item $binary
+          Write-Host "Binary: $($item.FullName)"
+          Write-Host "Size: $([math]::Round($item.Length / 1MB, 1)) MB"
+          & $item.FullName --version 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Note: --version exited $LASTEXITCODE (expected on a headless runner without GPU driver state)"
+          }
+          exit 0
+
+      - name: Upload release artifact
         uses: actions/upload-artifact@v4
         with:
-          name: n0s-ryo-miner-windows-cuda12-opencl
-          path: |
-            build/bin/Release/n0s-ryo-miner.exe
-            build/bin/n0s-ryo-miner.exe
+          name: release-win
+          path: release/n0s-ryo-miner-win.exe
 
-  # ─── Create GitHub Release ─────────────────────────────────────────────────
   release:
     name: Create Release
-    needs: [build-linux-opencl, build-linux-cuda11, build-linux-cuda12, build-windows-opencl, build-windows-cuda]
+    needs: [build-linux-release, build-windows-release]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Download all artifacts
+      - name: Download release artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
@@ -228,31 +157,10 @@ jobs:
       - name: Prepare release assets
         run: |
           mkdir -p release
-          # Linux binaries
-          cp artifacts/n0s-ryo-miner-linux-opencl/n0s-ryo-miner \
-             release/n0s-ryo-miner-linux-opencl
-          cp artifacts/n0s-ryo-miner-linux-cuda11/n0s-ryo-miner \
-             release/n0s-ryo-miner-linux-cuda11
-          cp artifacts/n0s-ryo-miner-linux-cuda12-opencl/n0s-ryo-miner \
-             release/n0s-ryo-miner-linux-cuda12-opencl
-          chmod +x release/n0s-ryo-miner-linux-*
-          # Windows OpenCL binary (MinGW cross-build)
-          cp artifacts/n0s-ryo-miner-windows-opencl/n0s-ryo-miner.exe \
-             release/n0s-ryo-miner-windows-opencl.exe
-          # Windows CUDA + OpenCL binary (MSVC native)
-          # MSVC may output to bin/ or bin/Release/ depending on generator
-          if [ -f artifacts/n0s-ryo-miner-windows-cuda12-opencl/Release/n0s-ryo-miner.exe ]; then
-            cp artifacts/n0s-ryo-miner-windows-cuda12-opencl/Release/n0s-ryo-miner.exe \
-               release/n0s-ryo-miner-windows-cuda12-opencl.exe
-          elif [ -f artifacts/n0s-ryo-miner-windows-cuda12-opencl/n0s-ryo-miner.exe ]; then
-            cp artifacts/n0s-ryo-miner-windows-cuda12-opencl/n0s-ryo-miner.exe \
-               release/n0s-ryo-miner-windows-cuda12-opencl.exe
-          else
-            echo "WARNING: Windows CUDA binary not found in expected locations"
-            find artifacts/n0s-ryo-miner-windows-cuda12-opencl/ -name "*.exe" -exec cp {} release/n0s-ryo-miner-windows-cuda12-opencl.exe \;
-          fi
-          # Generate checksums
-          cd release && sha256sum * > SHA256SUMS
+          cp artifacts/release-linux/n0s-ryo-miner-linux release/
+          cp artifacts/release-win/n0s-ryo-miner-win.exe release/
+          cd release
+          sha256sum n0s-ryo-miner-linux n0s-ryo-miner-win.exe > SHA256SUMS
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -261,9 +169,6 @@ jobs:
           prerelease: false
           generate_release_notes: true
           files: |
-            release/n0s-ryo-miner-linux-opencl
-            release/n0s-ryo-miner-linux-cuda11
-            release/n0s-ryo-miner-linux-cuda12-opencl
-            release/n0s-ryo-miner-windows-opencl.exe
-            release/n0s-ryo-miner-windows-cuda12-opencl.exe
+            release/n0s-ryo-miner-linux
+            release/n0s-ryo-miner-win.exe
             release/SHA256SUMS

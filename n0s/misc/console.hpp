@@ -65,6 +65,8 @@ class printer
 	/// Print a string with color (color is NOT written to logfile)
 	void print_str_color(out_colours cl, const char* str);
 	bool open_logfile(const char* file);
+	bool supports_color() const { return color_supported; }
+	bool supports_unicode() const { return unicode_supported; }
 
   private:
 	printer();
@@ -72,6 +74,8 @@ class printer
 	std::mutex print_mutex;
 	verbosity verbose_level;
 	FILE* logfile;
+	bool color_supported;
+	bool unicode_supported;
 };
 
 /// Clean exit — replaces the old win_exit() Windows-ism

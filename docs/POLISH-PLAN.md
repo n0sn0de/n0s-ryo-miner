@@ -2,7 +2,7 @@
 
 **From Optimized Engine to Shipped Product**
 
-*Status: Active. Pillar 1 complete (Session 50). Pillar 2 complete including auth (Session 59). Pillar 3.1–3.5 complete (Sessions 56–62). CI/CD live. v3.4.0 released. Windows CUDA build validated on live hardware — RTX 3070 + MSVC 2019 + CUDA 11.0 (Session 62b). Remaining: GHA CI validation, PR merge, v3.5.0 tag.*
+*Status: Historical planning reference. The current release/build truth now lives in `README.md` and `docs/BUILD-MATRIX.md`. Current primary release assets are `n0s-ryo-miner-linux` and `n0s-ryo-miner-win.exe`. Windows AMD OpenCL is still unvalidated and should not be oversold.*
 
 ---
 

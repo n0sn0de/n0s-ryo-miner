@@ -34,46 +34,71 @@ namespace n0s
 void print_banner()
 {
 	printer* p = printer::inst();
+	const bool fancy = p->supports_unicode();
 	char version_line[128];
-	snprintf(version_line, sizeof(version_line),
-		RYO_DARK  "   ║" CLR_DIM "     GPU Miner for RYO Currency • CryptoNight-GPU • v%-10s" RYO_DARK  "║\n" RST,
-		ver_number);
 
 	p->print_str("\n");
 
-	// Gradient ASCII art — n0s-ryo-miner branded
-	// Uses the RYO blue→cyan color theme
-	// Inner width = 63 visible chars between ║ delimiters
-	// N0S-RYO ASCII art with blue→cyan gradient
-	// All inner lines are exactly 63 visible chars between ║ delimiters
-	p->print_str(
-		RYO_DARK  "   ╔═══════════════════════════════════════════════════════════════╗\n" RST
-		RYO_DARK  "   ║" "                                                               " RYO_DARK "║\n" RST
-		RYO_DARK  "   ║ " RST
-			RYO_MED  "███╗   ██╗ ██████╗ ███████╗" RYO_DARK "━━━━━━" RYO_CYAN "██████╗ ██╗   ██╗ ██████╗    " RYO_DARK  "║\n" RST
-		RYO_DARK  "   ║ " RST
-			RYO_MED  "████╗  ██║██╔═══██╗██╔════╝" RYO_DARK "      " RYO_CYAN "██╔══██╗╚██╗ ██╔╝██╔═══██╗   " RYO_DARK  "║\n" RST
-		RYO_DARK  "   ║ " RST
-			RYO_LIGHT "██╔██╗ ██║██║   ██║███████╗" RYO_BCYAN "█████╗██████╔╝ ╚████╔╝ ██║   ██║   " RYO_DARK  "║\n" RST
-		RYO_DARK  "   ║ " RST
-			RYO_LIGHT "██║╚██╗██║██║   ██║╚════██║" RYO_BCYAN "╚════╝██╔══██╗  ╚██╔╝  ██║   ██║   " RYO_DARK  "║\n" RST
-		RYO_DARK  "   ║ " RST
-			RYO_CYAN  "██║ ╚████║╚██████╔╝███████║" RYO_DARK "      " RYO_BCYAN "██║  ██║   ██║   ╚██████╔╝   " RYO_DARK  "║\n" RST
-		RYO_DARK  "   ║ " RST
-			RYO_CYAN  "╚═╝  ╚═══╝ ╚═════╝ ╚══════╝" RYO_DARK "      " RYO_BCYAN "╚═╝  ╚═╝   ╚═╝    ╚═════╝    " RYO_DARK  "║\n" RST
-		RYO_DARK  "   ║" "                                                               " RYO_DARK "║\n" RST
-	);
+	if(fancy)
+	{
+		snprintf(version_line, sizeof(version_line),
+			RYO_DARK  "   ║" CLR_DIM "     GPU Miner for RYO Currency • CryptoNight-GPU • v%-10s" RYO_DARK  "║\n" RST,
+			ver_number);
+
+		p->print_str(
+			RYO_DARK  "   ╔═══════════════════════════════════════════════════════════════╗\n" RST
+			RYO_DARK  "   ║" "                                                               " RYO_DARK "║\n" RST
+			RYO_DARK  "   ║ " RST
+				RYO_MED  "███╗   ██╗ ██████╗ ███████╗" RYO_DARK "━━━━━━" RYO_CYAN "██████╗ ██╗   ██╗ ██████╗    " RYO_DARK  "║\n" RST
+			RYO_DARK  "   ║ " RST
+				RYO_MED  "████╗  ██║██╔═══██╗██╔════╝" RYO_DARK "      " RYO_CYAN "██╔══██╗╚██╗ ██╔╝██╔═══██╗   " RYO_DARK  "║\n" RST
+			RYO_DARK  "   ║ " RST
+				RYO_LIGHT "██╔██╗ ██║██║   ██║███████╗" RYO_BCYAN "█████╗██████╔╝ ╚████╔╝ ██║   ██║   " RYO_DARK  "║\n" RST
+			RYO_DARK  "   ║ " RST
+				RYO_LIGHT "██║╚██╗██║██║   ██║╚════██║" RYO_BCYAN "╚════╝██╔══██╗  ╚██╔╝  ██║   ██║   " RYO_DARK  "║\n" RST
+			RYO_DARK  "   ║ " RST
+				RYO_CYAN  "██║ ╚████║╚██████╔╝███████║" RYO_DARK "      " RYO_BCYAN "██║  ██║   ██║   ╚██████╔╝   " RYO_DARK  "║\n" RST
+			RYO_DARK  "   ║ " RST
+				RYO_CYAN  "╚═╝  ╚═══╝ ╚═════╝ ╚══════╝" RYO_DARK "      " RYO_BCYAN "╚═╝  ╚═╝   ╚═╝    ╚═════╝    " RYO_DARK  "║\n" RST
+			RYO_DARK  "   ║" "                                                               " RYO_DARK "║\n" RST
+		);
+	}
+	else
+	{
+		snprintf(version_line, sizeof(version_line),
+			RYO_DARK  "   |" CLR_DIM "     GPU Miner for RYO Currency - CryptoNight-GPU - v%-10s" RYO_DARK  "|\n" RST,
+			ver_number);
+
+		p->print_str(
+			RYO_DARK  "   +---------------------------------------------------------------+\n" RST
+			RYO_DARK  "   |" "                                                               " RYO_DARK "|\n" RST
+			RYO_DARK  "   | " RST
+				RYO_MED  " _   _  ___  ____         ______   __   __  ___              " RYO_DARK  "|\n" RST
+			RYO_DARK  "   | " RST
+				RYO_MED  "| \\ | |/ _ \\/ ___| _____|  _ \\  \\ \\ / / / _ \\             " RYO_DARK  "|\n" RST
+			RYO_DARK  "   | " RST
+				RYO_LIGHT "|  \\| | | | \\___ \\|_____| |_) |  \\ V / | | | |            " RYO_DARK  "|\n" RST
+			RYO_DARK  "   | " RST
+				RYO_CYAN  "| |\\  | |_| |___) |     |  _ <    | |  | |_| |            " RYO_DARK  "|\n" RST
+			RYO_DARK  "   | " RST
+				RYO_CYAN  "|_| \\_|\\___/|____/      |_| \\_\\   |_|   \\___/             " RYO_DARK  "|\n" RST
+			RYO_DARK  "   |" "                                                               " RYO_DARK "|\n" RST
+		);
+	}
+
 	p->print_str(version_line);
-	p->print_str(RYO_DARK  "   ╚═══════════════════════════════════════════════════════════════╝\n" RST);
+	p->print_str(fancy ?
+		RYO_DARK  "   ╚═══════════════════════════════════════════════════════════════╝\n" RST :
+		RYO_DARK  "   +---------------------------------------------------------------+\n" RST);
 
 	p->print_str("\n");
 }
 
 void print_separator()
 {
-	printer::inst()->print_str(
-		RYO_DARK "   ═════════════════════════════════════════════════════════════════\n" RST
-	);
+	printer::inst()->print_str(printer::inst()->supports_unicode() ?
+		RYO_DARK "   ═════════════════════════════════════════════════════════════════\n" RST :
+		RYO_DARK "   -----------------------------------------------------------------\n" RST);
 }
 
 void print_share_accepted(const char* backend, uint32_t gpu_index, const char* pool_addr)

@@ -49,6 +49,7 @@
 #include <cstring>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 
 #ifndef _WIN32
 #include <pthread.h>
@@ -58,6 +59,26 @@ namespace n0s
 {
 namespace cpu
 {
+
+namespace
+{
+
+std::mutex g_alloc_notice_mutex;
+std::unordered_set<std::string> g_alloc_notices_seen;
+
+void print_alloc_notice_once(const std::string& msg)
+{
+	if(msg.empty())
+		return;
+
+	std::lock_guard<std::mutex> lock(g_alloc_notice_mutex);
+	if(!g_alloc_notices_seen.insert(msg).second)
+		return;
+
+	printer::inst()->print_msg(L0, "MEMORY NOTICE: %s", msg.c_str());
+}
+
+} // namespace
 
 bool minethd::thd_setaffinity(std::thread::native_handle_type h, uint64_t cpu_id)
 {
@@ -115,16 +136,17 @@ minethd::minethd(miner_work& pWork, size_t iNo, int iMultiway, bool no_prefetch,
 cryptonight_ctx* minethd::minethd_alloc_ctx()
 {
 	cryptonight_ctx* ctx;
-	alloc_msg msg = {0};
+	alloc_msg msg;
 
 	switch(::jconf::inst()->GetSlowMemSetting())
 	{
 	case ::jconf::never_use:
-		ctx = cryptonight_alloc_ctx(1, 1, &msg);
+		ctx = cryptonight_alloc_ctx(1, 1, false, &msg);
 		if(ctx == nullptr)
-			printer::inst()->print_msg(L0, "MEMORY ALLOC FAILED: %s", msg.warning);
+			printer::inst()->print_msg(L0, "MEMORY ALLOC FAILED: %s", msg.warning.c_str());
 		else
 		{
+			print_alloc_notice_once(msg.warning);
 			ctx->hash_fn = nullptr;
 			ctx->loop_fn = nullptr;
 			ctx->fun_data = nullptr;
@@ -133,11 +155,12 @@ cryptonight_ctx* minethd::minethd_alloc_ctx()
 		return ctx;
 
 	case ::jconf::no_mlck:
-		ctx = cryptonight_alloc_ctx(1, 0, &msg);
+		ctx = cryptonight_alloc_ctx(1, 0, false, &msg);
 		if(ctx == nullptr)
-			printer::inst()->print_msg(L0, "MEMORY ALLOC FAILED: %s", msg.warning);
+			printer::inst()->print_msg(L0, "MEMORY ALLOC FAILED: %s", msg.warning.c_str());
 		else
 		{
+			print_alloc_notice_once(msg.warning);
 			ctx->hash_fn = nullptr;
 			ctx->loop_fn = nullptr;
 			ctx->fun_data = nullptr;
@@ -146,11 +169,11 @@ cryptonight_ctx* minethd::minethd_alloc_ctx()
 		return ctx;
 
 	case ::jconf::print_warning:
-		ctx = cryptonight_alloc_ctx(1, 1, &msg);
-		if(msg.warning != nullptr)
-			printer::inst()->print_msg(L0, "MEMORY ALLOC FAILED: %s", msg.warning);
+		ctx = cryptonight_alloc_ctx(1, 1, true, &msg);
 		if(ctx == nullptr)
-			ctx = cryptonight_alloc_ctx(0, 0, nullptr);
+			printer::inst()->print_msg(L0, "MEMORY ALLOC FAILED: %s", msg.warning.c_str());
+		else
+			print_alloc_notice_once(msg.warning);
 
 		if(ctx != nullptr)
 		{
@@ -162,11 +185,16 @@ cryptonight_ctx* minethd::minethd_alloc_ctx()
 		return ctx;
 
 	case ::jconf::always_use:
-		ctx = cryptonight_alloc_ctx(0, 0, nullptr);
+		ctx = cryptonight_alloc_ctx(0, 0, true, nullptr);
+		if(ctx == nullptr)
+			printer::inst()->print_msg(L0, "MEMORY ALLOC FAILED: unable to allocate standard mining memory");
 
-		ctx->hash_fn = nullptr;
-		ctx->loop_fn = nullptr;
-		ctx->fun_data = nullptr;
+		if(ctx != nullptr)
+		{
+			ctx->hash_fn = nullptr;
+			ctx->loop_fn = nullptr;
+			ctx->fun_data = nullptr;
+		}
 		
 
 		return ctx;
@@ -181,7 +209,7 @@ cryptonight_ctx* minethd::minethd_alloc_ctx()
 static constexpr size_t MAX_N = 5;
 bool minethd::self_test()
 {
-	alloc_msg msg = {0};
+	alloc_msg msg;
 	size_t res;
 	bool fatal = false;
 
@@ -210,8 +238,8 @@ bool minethd::self_test()
 		return false; //Shut up compiler
 	}
 
-	if(msg.warning != nullptr)
-		printer::inst()->print_msg(L0, "MEMORY INIT ERROR: %s", msg.warning);
+	if(!msg.warning.empty())
+		print_alloc_notice_once(msg.warning);
 
 	if(res == 0 && fatal)
 		return false;

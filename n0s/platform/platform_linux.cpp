@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <cctype>
 #include <fcntl.h>
 #include <pthread.h>
 #include <pwd.h>
@@ -24,6 +25,39 @@ namespace n0s
 {
 namespace platform
 {
+
+namespace
+{
+
+ConsoleCapabilities g_console_caps;
+bool g_console_caps_init = false;
+
+bool env_is_truthy(const char* name)
+{
+	const char* value = getenv(name);
+	return value != nullptr && value[0] != '\0' && strcmp(value, "0") != 0;
+}
+
+bool locale_looks_utf8()
+{
+	const char* vars[] = {"LC_ALL", "LC_CTYPE", "LANG"};
+	for(const char* var : vars)
+	{
+		const char* value = getenv(var);
+		if(value == nullptr)
+			continue;
+
+		std::string upper(value);
+		for(char& ch : upper)
+			ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+
+		if(upper.find("UTF-8") != std::string::npos || upper.find("UTF8") != std::string::npos)
+			return true;
+	}
+	return false;
+}
+
+} // namespace
 
 // ─── Filesystem Paths ────────────────────────────────────────────────────────
 
@@ -81,6 +115,32 @@ int getKey()
 void enableConsoleColors()
 {
 	// No-op on Linux — ANSI colors are natively supported
+}
+
+ConsoleCapabilities initConsole()
+{
+	if(g_console_caps_init)
+		return g_console_caps;
+
+	g_console_caps_init = true;
+	g_console_caps.isTTY = isatty(STDOUT_FILENO) != 0;
+
+	const bool no_color = env_is_truthy("NO_COLOR");
+	const bool force_color = env_is_truthy("CLICOLOR_FORCE") || env_is_truthy("FORCE_COLOR") || env_is_truthy("N0S_FORCE_COLOR");
+	const bool force_ascii = env_is_truthy("N0S_FORCE_ASCII");
+
+	const char* term = getenv("TERM");
+	const bool term_ok = term != nullptr && term[0] != '\0' && strcmp(term, "dumb") != 0;
+
+	g_console_caps.color = !no_color && ((g_console_caps.isTTY && term_ok) || force_color);
+	g_console_caps.unicode = !force_ascii && locale_looks_utf8();
+
+	return g_console_caps;
+}
+
+ConsoleCapabilities getConsoleCapabilities()
+{
+	return g_console_caps_init ? g_console_caps : initConsole();
 }
 
 void formatLocalTime(char* buf, size_t bufLen, const char* fmt, int64_t t)
