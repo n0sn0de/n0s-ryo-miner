@@ -23,10 +23,13 @@ For the detailed matrix, read [docs/BUILD-MATRIX.md](docs/BUILD-MATRIX.md).
 
 Check [GitHub Releases](https://github.com/n0sn0de/n0s-ryo-miner/releases).
 
-The release workflow now ships two primary assets:
+The tagged release workflow now publishes downloadable archives plus checksums:
 
-- `n0s-ryo-miner-linux` - Linux x86_64 release binary with CUDA + OpenCL enabled, built in CI from the CUDA 12.8 Linux release job
-- `n0s-ryo-miner-win.exe` - native Windows x64 release binary with CUDA + OpenCL enabled, built in CI with MSVC
+- `n0s-ryo-miner-linux-opencl.tar.gz` - Linux x86_64 OpenCL-only build
+- `n0s-ryo-miner-linux-cuda12-opencl.tar.gz` - Linux x86_64 CUDA 12.8 + OpenCL build
+- `n0s-ryo-miner-windows-opencl-cross.zip` - Windows x64 OpenCL-only cross-build from Ubuntu via MinGW
+- `n0s-ryo-miner-windows-cuda12-opencl.zip` - native Windows x64 CUDA 12.8 + OpenCL build from the MSVC runner
+- `SHA256SUMS` - checksums for all published release archives
 
 That does **not** mean every platform/backend combination is equally revalidated. The honest caveats still matter:
 
@@ -99,7 +102,7 @@ The script auto-detects your CUDA version and selects compatible GPU architectur
 
 **Verified on:** native Windows, RTX 3070, CUDA 11.0, MSVC 2019, no vcpkg
 
-**Release workflow note:** the shipped `n0s-ryo-miner-win.exe` asset comes from the native MSVC GitHub Actions job. It is the right Windows release target for NVIDIA users today, but Windows AMD OpenCL is still not something we should oversell.
+**Release workflow note:** the native Windows CUDA+OpenCL archive is the right Windows release target for NVIDIA users today, while the MinGW Windows OpenCL cross-build is published as a convenience artifact, not as a claim of native Windows AMD validation.
 
 ## Console + memory notice behavior
 
