@@ -18,8 +18,8 @@ Last updated: 2026-04-08
 ## Key reality checks
 
 - The repo now builds a **single executable per target**. It does **not** ship separate backend `.so` / `.dll` files anymore.
-- The web GUI is **embedded into the executable** on the validated Linux builds and on the Windows MinGW cross-build.
-- It is **not honest yet** to publish a single generic `n0s-ryo-miner-linux` / `n0s-ryo-miner-win` pair and imply the whole matrix is equally real.
+- The web GUI assets are embedded at build time. The Linux release build enables the HTTP/TLS path, while the currently trusted Windows release path is still the simpler native core build.
+- It is now honest to ship one primary `n0s-ryo-miner-linux` asset and one primary `n0s-ryo-miner-win.exe` asset, as long as the docs keep the validation caveats explicit.
 - Linux NVIDIA support is real, but the important fix here was for **CUDA 13.x native builds**. Older docs overstated what had actually been rechecked.
 
 ## Verified hosts
@@ -39,20 +39,22 @@ Last updated: 2026-04-08
 - Fixed the OpenCL container builder to install `xxd` and package the current single-binary layout.
 - Fixed remote CUDA test tooling to stop expecting a non-existent `libn0s_cuda_backend.so`.
 
-## Recommended release posture right now
+## Current shipped release assets
 
-### Safe to claim
+| Asset | Built from | Honest claim | Caveats |
+|---|---|---|---|
+| `n0s-ryo-miner-linux` | GitHub Actions Linux release job (`ubuntu-24.04` + CUDA 12.8 container, CUDA + OpenCL enabled) | Primary Linux release binary for the validated Linux AMD OpenCL and Linux NVIDIA CUDA code paths | Built in CI, not re-benchmarked as one combined release artifact on a single host in this pass |
+| `n0s-ryo-miner-win.exe` | GitHub Actions native Windows release job (`windows-2022`, MSVC, CUDA + OpenCL enabled) | Primary Windows release binary for the validated Windows 11 NVIDIA path | Windows AMD OpenCL remains unvalidated, and the current release build keeps HTTP/hwloc off |
 
-- Ubuntu AMD OpenCL: verified
-- Ubuntu NVIDIA CUDA: verified
-- Windows OpenCL: compile-only
-- Windows NVIDIA CUDA: prepared, but still needs native validation on `win11`
+## What CI still verifies
 
-### Not safe to claim yet
-
-- Windows AMD OpenCL support
-- A fully verified single-binary Windows release covering both CUDA and OpenCL
-- A generic `n0s-ryo-miner-win` release alias that implies equivalent validation to Linux
+| Workflow | Purpose |
+|---|---|
+| `Linux OpenCL (native sanity)` | Fast Linux OpenCL compile and single-binary sanity check |
+| `Linux CUDA 11.8 (compile coverage)` | Keeps older Linux NVIDIA toolchain coverage in CI without turning it into a release asset |
+| `Linux CUDA 12.8 (compile coverage)` | Keeps current Linux NVIDIA toolchain coverage in CI and matches the Linux release base |
+| `Windows x64 native CUDA + OpenCL (coverage)` | Native Windows compile coverage on the MSVC path we actually trust |
+| Tag release workflow | Rebuilds only `n0s-ryo-miner-linux`, `n0s-ryo-miner-win.exe`, and `SHA256SUMS` |
 
 ## What is now verified on Windows
 
@@ -66,5 +68,5 @@ Last updated: 2026-04-08
 ## Remaining Windows work
 
 - Windows AMD OpenCL: still unvalidated (no Windows+AMD box available)
-- vcpkg-based builds (with full HTTP/TLS/hwloc): build script supports it, but not tested in this pass
-- Release artifact automation: Windows binaries can now be built and validated, but release workflow may need adjustment
+- vcpkg-based builds with full HTTP/TLS/hwloc need a fresh native validation pass before we claim parity with the Linux release binary
+- If Windows AMD hardware becomes available, re-run the native MSVC release build and benchmark both CUDA-disabled and OpenCL-only paths before broadening release claims

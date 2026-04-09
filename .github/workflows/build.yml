@@ -9,9 +9,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # ─── Linux OpenCL (fast sanity check) ───────────────────────────────────────
+  # Coverage workflow only. This keeps compile and sanity checks honest, but it
+  # does not define the release artifact set.
+
+  # Linux OpenCL remains the fastest native sanity path.
   build-linux-opencl:
-    name: Linux OpenCL
+    name: Linux OpenCL (native sanity)
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -47,12 +50,23 @@ jobs:
           file build/bin/n0s-ryo-miner
           build/bin/n0s-ryo-miner --version || true
 
-  # ─── Linux CUDA 12.8 (container build) ──────────────────────────────────────
-  build-linux-cuda12:
-    name: Linux CUDA 12.8
+  # Container CUDA coverage keeps older and current Linux NVIDIA toolchains in
+  # CI without turning each one into a public release artifact.
+  build-linux-cuda:
+    name: ${{ matrix.name }}
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux CUDA 11.8 (compile coverage)
+            image: docker.io/nvidia/cuda:11.8.0-devel-ubuntu22.04
+            cuda_arch: "61;75;80;86;89"
+          - name: Linux CUDA 12.8 (compile coverage)
+            image: docker.io/nvidia/cuda:12.8.0-devel-ubuntu24.04
+            cuda_arch: "61;75;80;86;89;90;100;120"
     container:
-      image: docker.io/nvidia/cuda:12.8.0-devel-ubuntu24.04
+      image: ${{ matrix.image }}
     steps:
       - uses: actions/checkout@v4
 
@@ -70,7 +84,7 @@ jobs:
           cmake .. \
             -DCUDA_ENABLE=ON -DOpenCL_ENABLE=OFF \
             -DMICROHTTPD_ENABLE=ON -DHWLOC_ENABLE=OFF \
-            -DCUDA_ARCH="61;75;80;86;89;90;100;120" \
+            -DCUDA_ARCH="${{ matrix.cuda_arch }}" \
             -DCMAKE_BUILD_TYPE=Release -DN0S_COMPILE=generic
           cmake --build . -j$(nproc)
 
@@ -78,14 +92,13 @@ jobs:
         run: |
           test -f build/bin/n0s-ryo-miner && echo "Binary exists"
           ls -lh build/bin/n0s-ryo-miner
-          # --version requires libcuda.so.1 (NVIDIA driver) which isn't in the
-          # build container.  Binary existence + size is sufficient validation.
-          # Smoke-test: allow non-zero exit from missing driver stub.
+          # --version requires libcuda.so.1 (NVIDIA driver) which is not in the
+          # build container. Binary existence plus size is enough here.
           build/bin/n0s-ryo-miner --version 2>&1 || echo "Note: --version failed (expected in driverless container)"
 
-  # ─── Windows CUDA + OpenCL (MSVC native) ────────────────────────────────────
+  # Native Windows coverage is the path we actually trust for release quality.
   build-windows-cuda:
-    name: Windows CUDA 12 + OpenCL (MSVC)
+    name: Windows x64 native CUDA + OpenCL (coverage)
     runs-on: windows-2022
     env:
       VCPKG_DEFAULT_TRIPLET: x64-windows-static
@@ -94,7 +107,6 @@ jobs:
 
       - name: Install CUDA Toolkit
         uses: Jimver/cuda-toolkit@v0.2.35
-        id: cuda-toolkit
         with:
           cuda: '12.8.0'
           method: 'local'
@@ -114,7 +126,7 @@ jobs:
           if command -v xxd &>/dev/null; then
             bash scripts/embed_assets.sh gui n0s/http/embedded_assets.hpp
           else
-            echo "xxd not found — using committed embedded_assets.hpp"
+            echo "xxd not found, using committed embedded_assets.hpp"
           fi
 
       - name: Configure CMake
@@ -140,15 +152,13 @@ jobs:
           $ErrorActionPreference = 'Continue'
           $found = Get-ChildItem -Path build -Recurse -Filter "n0s-ryo-miner.exe" | Select-Object -First 1
           if (-not $found) {
-            Write-Error "Binary not found!"
+            Write-Error "Binary not found"
             exit 1
           }
           Write-Host "Binary: $($found.FullName)"
           Write-Host "Size: $([math]::Round($found.Length / 1MB, 1)) MB"
-          # --version may fail on GHA runner (missing CUDA DLLs / no GPU driver)
           & $found.FullName --version 2>&1
           if ($LASTEXITCODE -ne 0) {
-            Write-Host "Note: --version exited $LASTEXITCODE (expected — no GPU driver on runner)"
+            Write-Host "Note: --version exited $LASTEXITCODE (expected on a headless runner without GPU driver state)"
           }
-          Write-Host "Windows CUDA+OpenCL build verified successfully."
           exit 0
