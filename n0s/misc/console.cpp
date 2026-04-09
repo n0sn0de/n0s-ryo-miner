@@ -30,6 +30,71 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <string>
+#include <array>
+
+namespace
+{
+
+std::string strip_ansi_sequences(const char* str)
+{
+	std::string out;
+	for(size_t i = 0; str[i] != '\0'; ++i)
+	{
+		if(str[i] == '\x1B' && str[i + 1] == '[')
+		{
+			i += 2;
+			while(str[i] != '\0')
+			{
+				const unsigned char ch = static_cast<unsigned char>(str[i]);
+				if(ch >= '@' && ch <= '~')
+					break;
+				++i;
+			}
+			continue;
+		}
+		out.push_back(str[i]);
+	}
+	return out;
+}
+
+void replace_all(std::string& text, const char* from, const char* to)
+{
+	const std::string needle(from);
+	const std::string repl(to);
+	std::string::size_type pos = 0;
+	while((pos = text.find(needle, pos)) != std::string::npos)
+	{
+		text.replace(pos, needle.size(), repl);
+		pos += repl.size();
+	}
+}
+
+std::string apply_ascii_fallback(std::string text)
+{
+	static const std::array<std::pair<const char*, const char*>, 13> replacements = {{
+		{"•", "-"},
+		{"✓", "+"},
+		{"✗", "x"},
+		{"°", ""},
+		{"╔", "+"},
+		{"╗", "+"},
+		{"╚", "+"},
+		{"╝", "+"},
+		{"║", "|"},
+		{"═", "-"},
+		{"━", "-"},
+		{"█", "#"},
+		{"⟳", "~"},
+	}};
+
+	for(const auto& [from, to] : replacements)
+		replace_all(text, from, to);
+
+	return text;
+}
+
+} // namespace
 
 int get_key()
 {
@@ -38,6 +103,9 @@ int get_key()
 
 void set_colour(out_colours cl)
 {
+	if(!n0s::platform::getConsoleCapabilities().color)
+		return;
+
 	switch(cl)
 	{
 	case K_RED:
@@ -92,6 +160,9 @@ void set_colour(out_colours cl)
 
 void reset_colour()
 {
+	if(!n0s::platform::getConsoleCapabilities().color)
+		return;
+
 	fputs("\x1B[0m", stdout);
 }
 
@@ -99,10 +170,10 @@ printer::printer()
 {
 	verbose_level = LINF;
 	logfile = nullptr;
+	const auto caps = n0s::platform::initConsole();
+	color_supported = caps.color;
+	unicode_supported = caps.unicode;
 	setvbuf(stdout, nullptr, _IOFBF, BUFSIZ);
-
-	// Enable ANSI colors on Windows
-	n0s::platform::enableConsoleColors();
 }
 
 bool printer::open_logfile(const char* file)
@@ -141,12 +212,17 @@ void printer::print_msg(verbosity verbose, const char* fmt, ...)
 void printer::print_str(const char* str)
 {
 	std::unique_lock<std::mutex> lck(print_mutex);
-	fputs(str, stdout);
+	std::string stdout_text = color_supported ? std::string(str) : strip_ansi_sequences(str);
+	if(!unicode_supported)
+		stdout_text = apply_ascii_fallback(std::move(stdout_text));
+
+	fputs(stdout_text.c_str(), stdout);
 	fflush(stdout);
 
 	if(logfile != nullptr)
 	{
-		fputs(str, logfile);
+		std::string log_text = strip_ansi_sequences(str);
+		fputs(log_text.c_str(), logfile);
 		fflush(logfile);
 	}
 }

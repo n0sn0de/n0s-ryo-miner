@@ -1,6 +1,7 @@
 #pragma once
 #include <cinttypes>
 #include <cstddef>
+#include <string>
 
 #include "n0s/backend/cryptonight.hpp"
 
@@ -28,9 +29,9 @@ struct cryptonight_ctx
 
 struct alloc_msg
 {
-	const char* warning;
+	std::string warning;
 };
 
 size_t cryptonight_init(size_t use_fast_mem, size_t use_mlock, alloc_msg* msg);
-cryptonight_ctx* cryptonight_alloc_ctx(size_t use_fast_mem, size_t use_mlock, alloc_msg* msg);
+cryptonight_ctx* cryptonight_alloc_ctx(size_t use_fast_mem, size_t use_mlock, bool allow_slow_fallback, alloc_msg* msg);
 void cryptonight_free_ctx(cryptonight_ctx* ctx);

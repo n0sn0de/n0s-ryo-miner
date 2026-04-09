@@ -28,6 +28,13 @@ namespace n0s
 namespace platform
 {
 
+struct ConsoleCapabilities
+{
+	bool isTTY = false;
+	bool color = false;
+	bool unicode = false;
+};
+
 // ─── Filesystem Paths ────────────────────────────────────────────────────────
 
 /// User's home directory.
@@ -54,6 +61,14 @@ int getKey();
 /// Enable virtual terminal color sequences (needed on Windows 10+).
 /// No-op on Linux (ANSI is native).
 void enableConsoleColors();
+
+/// Detect and initialize console capabilities.
+/// Enables ANSI colors / UTF-8 where supported and returns the final capability set.
+ConsoleCapabilities initConsole();
+
+/// Returns the cached console capability set.
+/// Calls initConsole() on first use.
+ConsoleCapabilities getConsoleCapabilities();
 
 /// Get formatted local time string.
 /// Uses localtime_r (POSIX) or localtime_s (Windows).

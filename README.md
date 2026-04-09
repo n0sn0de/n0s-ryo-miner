@@ -87,6 +87,15 @@ The script auto-detects your CUDA version and selects compatible GPU architectur
 
 **Verified on:** Windows 11, RTX 3070, CUDA 11.0, MSVC 2019, no vcpkg
 
+## Console + memory notice behavior
+
+- **Windows banner / symbols:** the miner now detects console capability and falls back to safe ASCII when UTF-8 box drawing or glyphs are not trustworthy. That avoids mojibake in classic Windows consoles while keeping the richer banner on terminals that actually support it.
+- **ANSI colors:** if the terminal cannot do ANSI/VT colors, the miner strips escape codes instead of vomiting raw `\x1b[` junk into the console.
+- **`MEMORY NOTICE` messages:** these are non-fatal optimization notices, not mining failures. They mean the miner could not get huge pages or memory locking for the small CPU-side scratchpad buffer and continued with standard pageable memory.
+- **Expected impact:** on this GPU-focused miner, missing huge pages / `VirtualLock` / `mlock` is usually a small startup-side optimization loss, not a material hashrate cliff.
+- **If you want zero noise:** set `"use_slow_memory" : "always"` in `config.txt` to skip the huge-page attempt entirely.
+- **If you want to require huge pages:** set `"use_slow_memory" : "never"` (or `"no_mlck"` on Linux) and fix the OS privileges/config until startup succeeds.
+
 ## Container builds
 
 Container builds are useful for compile validation and packaging, not as a replacement for real hardware checks.

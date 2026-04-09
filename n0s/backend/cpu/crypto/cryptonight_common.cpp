@@ -37,6 +37,22 @@
 #include <malloc.h>
 #endif
 
+namespace
+{
+
+void set_alloc_warning(alloc_msg* msg, const std::string& warning)
+{
+	if(msg == nullptr || warning.empty())
+		return;
+
+	if(msg->warning.empty())
+		msg->warning = warning;
+	else if(msg->warning.find(warning) == std::string::npos)
+		msg->warning += "; " + warning;
+}
+
+} // namespace
+
 size_t cryptonight_init([[maybe_unused]] size_t use_fast_mem, [[maybe_unused]] size_t use_mlock, [[maybe_unused]] alloc_msg* msg)
 {
 #ifdef _WIN32
@@ -58,11 +74,18 @@ size_t cryptonight_init([[maybe_unused]] size_t use_fast_mem, [[maybe_unused]] s
 	return 1;
 }
 
-cryptonight_ctx* cryptonight_alloc_ctx(size_t use_fast_mem, size_t use_mlock, alloc_msg* msg)
+cryptonight_ctx* cryptonight_alloc_ctx(size_t use_fast_mem, size_t use_mlock, bool allow_slow_fallback, alloc_msg* msg)
 {
 	const size_t hashMemSize = ::jconf::inst()->GetMiningMemSize();
+	if(msg != nullptr)
+		msg->warning.clear();
 
 	cryptonight_ctx* ptr = static_cast<cryptonight_ctx*>(_mm_malloc(sizeof(cryptonight_ctx), 4096));
+	if(ptr == nullptr)
+	{
+		set_alloc_warning(msg, "context allocation failed");
+		return nullptr;
+	}
 
 	if(use_fast_mem == 0)
 	{
@@ -71,8 +94,11 @@ cryptonight_ctx* cryptonight_alloc_ctx(size_t use_fast_mem, size_t use_mlock, al
 		ptr->ctx_info[0] = 0;
 		ptr->ctx_info[1] = 0;
 		if(ptr->long_state == nullptr)
-			printer::inst()->print_msg(L0, "MEMORY ALLOC FAILED: _mm_malloc was not able to allocate %s byte",
-				std::to_string(hashMemSize).c_str());
+		{
+			set_alloc_warning(msg, "_mm_malloc was not able to allocate " + std::to_string(hashMemSize) + " byte");
+			_mm_free(ptr);
+			return nullptr;
+		}
 		return ptr;
 	}
 
@@ -83,7 +109,14 @@ cryptonight_ctx* cryptonight_alloc_ctx(size_t use_fast_mem, size_t use_mlock, al
 
 	if(ptr->long_state == nullptr)
 	{
-		msg->warning = "VirtualAlloc with large pages failed, attempting without";
+		if(!allow_slow_fallback)
+		{
+			set_alloc_warning(msg, "large pages requested but unavailable on this Windows session");
+			_mm_free(ptr);
+			return nullptr;
+		}
+
+		set_alloc_warning(msg, "large pages unavailable on this Windows session, continuing with standard memory");
 		ptr->long_state = static_cast<uint8_t*>(VirtualAlloc(nullptr, hashMemSize,
 			MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
 	}
@@ -91,7 +124,7 @@ cryptonight_ctx* cryptonight_alloc_ctx(size_t use_fast_mem, size_t use_mlock, al
 	if(ptr->long_state == nullptr)
 	{
 		_mm_free(ptr);
-		msg->warning = "VirtualAlloc failed";
+		set_alloc_warning(msg, "VirtualAlloc failed");
 		return nullptr;
 	}
 
@@ -104,7 +137,7 @@ cryptonight_ctx* cryptonight_alloc_ctx(size_t use_fast_mem, size_t use_mlock, al
 		if(VirtualLock(ptr->long_state, hashMemSize))
 			ptr->ctx_info[1] = 1;
 		else
-			msg->warning = "VirtualLock failed";
+			set_alloc_warning(msg, "memory lock unavailable on this Windows session, continuing without locked pages");
 	}
 #else
 	// Linux: mmap with huge pages (MAP_HUGETLB)
@@ -113,8 +146,15 @@ cryptonight_ctx* cryptonight_alloc_ctx(size_t use_fast_mem, size_t use_mlock, al
 
 	if(ptr->long_state == MAP_FAILED)
 	{
+		if(!allow_slow_fallback)
+		{
+			set_alloc_warning(msg, "huge pages requested but unavailable on this host");
+			_mm_free(ptr);
+			return nullptr;
+		}
+
 		// Fallback: mmap without huge pages
-		msg->warning = "mmap with HUGETLB failed, attempting without it (you should fix your kernel)";
+		set_alloc_warning(msg, "huge pages unavailable, continuing with standard pages");
 		ptr->long_state = static_cast<uint8_t*>(mmap(nullptr, hashMemSize, PROT_READ | PROT_WRITE,
 			MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE, -1, 0));
 	}
@@ -122,18 +162,17 @@ cryptonight_ctx* cryptonight_alloc_ctx(size_t use_fast_mem, size_t use_mlock, al
 	if(ptr->long_state == MAP_FAILED)
 	{
 		_mm_free(ptr);
-		msg->warning = "mmap failed, check attribute 'use_slow_memory' in 'config.txt'";
+		set_alloc_warning(msg, "mmap failed, check available RAM or 'use_slow_memory' in 'config.txt'");
 		return nullptr;
 	}
 
 	ptr->ctx_info[0] = 1;
 
-	if(madvise(ptr->long_state, hashMemSize, MADV_RANDOM | MADV_WILLNEED) != 0)
-		msg->warning = "madvise failed";
+	(void)madvise(ptr->long_state, hashMemSize, MADV_RANDOM | MADV_WILLNEED);
 
 	ptr->ctx_info[1] = 0;
 	if(use_mlock != 0 && mlock(ptr->long_state, hashMemSize) != 0)
-		msg->warning = "mlock failed";
+		set_alloc_warning(msg, "memory lock unavailable, continuing without locked pages");
 	else
 		ptr->ctx_info[1] = 1;
 #endif

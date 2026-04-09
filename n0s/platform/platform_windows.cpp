@@ -22,6 +22,7 @@
 #include <shellapi.h>
 #include <cstdio>
 #include <ctime>
+#include <cstring>
 
 // MinGW may not have _kbhit/_getch in <conio.h> — check
 #if defined(_MSC_VER)
@@ -39,6 +40,50 @@ namespace n0s
 {
 namespace platform
 {
+
+namespace
+{
+
+ConsoleCapabilities g_console_caps;
+bool g_console_caps_init = false;
+
+bool env_present(const char* name)
+{
+	char buf[8];
+	DWORD len = GetEnvironmentVariableA(name, buf, sizeof(buf));
+	return len > 0;
+}
+
+bool env_equals(const char* name, const char* expected)
+{
+	char buf[64];
+	DWORD len = GetEnvironmentVariableA(name, buf, sizeof(buf));
+	if(len == 0 || len >= sizeof(buf))
+		return false;
+	buf[len] = '\0';
+	return _stricmp(buf, expected) == 0;
+}
+
+bool env_is_truthy(const char* name)
+{
+	char buf[16];
+	DWORD len = GetEnvironmentVariableA(name, buf, sizeof(buf));
+	if(len == 0 || len >= sizeof(buf))
+		return false;
+	buf[len] = '\0';
+	return buf[0] != '\0' && strcmp(buf, "0") != 0;
+}
+
+bool terminal_host_looks_unicode_safe()
+{
+	return env_present("WT_SESSION") ||
+		env_equals("TERM_PROGRAM", "Windows_Terminal") ||
+		env_present("ANSICON") ||
+		env_equals("ConEmuANSI", "ON") ||
+		env_present("TERM");
+}
+
+} // namespace
 
 // ─── Filesystem Paths ────────────────────────────────────────────────────────
 
@@ -104,15 +149,50 @@ int getKey()
 
 void enableConsoleColors()
 {
-	// Enable virtual terminal processing on Windows 10+
+	(void)initConsole();
+}
+
+ConsoleCapabilities initConsole()
+{
+	if(g_console_caps_init)
+		return g_console_caps;
+
+	g_console_caps_init = true;
+	g_console_caps = {};
+
+	const bool no_color = env_is_truthy("NO_COLOR");
+	const bool force_color = env_is_truthy("CLICOLOR_FORCE") || env_is_truthy("FORCE_COLOR") || env_is_truthy("N0S_FORCE_COLOR");
+	const bool force_ascii = env_is_truthy("N0S_FORCE_ASCII");
+
 	HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-	if(hOut == INVALID_HANDLE_VALUE) return;
+	if(hOut != INVALID_HANDLE_VALUE)
+	{
+		DWORD mode = 0;
+		if(GetConsoleMode(hOut, &mode))
+		{
+			g_console_caps.isTTY = true;
+			if(SetConsoleMode(hOut, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING))
+				g_console_caps.color = !no_color;
+		}
+	}
 
-	DWORD mode = 0;
-	if(!GetConsoleMode(hOut, &mode)) return;
+	const char* term = getenv("TERM");
+	if(!g_console_caps.color && !no_color && (force_color || (term != nullptr && term[0] != '\0' && strcmp(term, "dumb") != 0)))
+		g_console_caps.color = true;
 
-	mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-	SetConsoleMode(hOut, mode);
+	if(!force_ascii)
+	{
+		SetConsoleOutputCP(CP_UTF8);
+		SetConsoleCP(CP_UTF8);
+		g_console_caps.unicode = terminal_host_looks_unicode_safe();
+	}
+
+	return g_console_caps;
+}
+
+ConsoleCapabilities getConsoleCapabilities()
+{
+	return g_console_caps_init ? g_console_caps : initConsole();
 }
 
 void formatLocalTime(char* buf, size_t bufLen, const char* fmt, int64_t t)
