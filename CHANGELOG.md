@@ -1,5 +1,58 @@
 # Changelog
 
+## v3.4.1 — Honest Release Assets, Windows Validation & Runtime Polish (2026-04-14)
+
+### Release workflow and packaging
+
+- **Tagged releases now ship honest archive names and checksums** instead of ambiguous raw binaries
+- **Published asset set is now explicit:**
+  - `n0s-ryo-miner-linux-opencl.tar.gz`
+  - `n0s-ryo-miner-linux-cuda12-opencl.tar.gz`
+  - `n0s-ryo-miner-windows-cuda12-opencl.zip`
+  - `n0s-ryo-miner-windows-opencl-cross.zip`
+  - `SHA256SUMS`
+- **Release workflow hardened** so tagged publishing matches the artifact set we can actually explain and defend
+
+### Windows validation and build hardening
+
+- **Native Windows 11 NVIDIA validation is now real, not assumed**
+  - MSVC 2019 build verified on RTX 3070
+  - CUDA benchmark: **2742.1 H/s**
+  - OpenCL benchmark on NVIDIA runtime: **3085.2 H/s**
+  - Pool smoke test passed with accepted shares
+- **`scripts/build-windows.ps1` now works on stock Windows setups**
+  - Removed assumptions around Ninja, PowerShell 7, and mandatory vcpkg
+  - Uses the MSVC / NMake path directly
+  - Adds CUDA arch fallback logic for older CUDA 11.0 installs
+- **Benchmark and autotune flows no longer trip over a missing `pools.txt`**
+
+### Runtime UX and autotune reliability
+
+- **Console capability detection** now avoids Windows mojibake and strips ANSI escapes on consoles that cannot render them cleanly
+- **Huge-page / memory-lock fallback is now honest**
+  - Non-fatal cases emit a single `MEMORY NOTICE`
+  - Real allocation failures still report `MEMORY ALLOC FAILED`
+- **Autotune persistence reload is hardened** so restored state cleanly replaces stale in-memory entries, with unit coverage tightened
+
+### Known caveats
+
+- **Windows AMD OpenCL remains unvalidated**
+- **The full Windows vcpkg + HTTP/TLS/hwloc path still needs a fresh native validation pass**
+- **The Windows OpenCL cross-build archive is a convenience compile artifact, not a native Windows AMD validation claim**
+
+---
+
+## v3.4.0 — Windows Support (2026-04-03)
+
+### Windows release foundation
+
+- **First tagged Windows-capable release of `n0s-ryo-miner`**
+- **MinGW cross-build path established** for Windows OpenCL packaging from Ubuntu
+- **MSVC compatibility work landed across the codebase** so native Windows builds became realistic instead of aspirational
+- **GitHub Actions Linux + Windows release automation** was introduced as the release foundation
+
+---
+
 ## v3.3.0 — CI/CD, NVML Telemetry & Windows Prep (2026-04-03)
 
 ### CI/CD Pipeline

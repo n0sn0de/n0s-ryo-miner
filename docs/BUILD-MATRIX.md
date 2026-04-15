@@ -2,7 +2,7 @@
 
 Truthful build and validation status for `n0s-ryo-miner`.
 
-Last updated: 2026-04-08
+Last updated: 2026-04-14
 
 ## What is actually verified
 
@@ -18,8 +18,8 @@ Last updated: 2026-04-08
 ## Key reality checks
 
 - The repo now builds a **single executable per target**. It does **not** ship separate backend `.so` / `.dll` files anymore.
-- The web GUI assets are embedded at build time. The Linux release build enables the HTTP/TLS path, while the currently trusted Windows release path is still the simpler native core build.
-- It is now honest to ship one primary `n0s-ryo-miner-linux` asset and one primary `n0s-ryo-miner-win.exe` asset, as long as the docs keep the validation caveats explicit.
+- The web GUI assets are embedded at build time. The Linux release builds enable the HTTP/TLS path, while the currently trusted native Windows release build is still the simpler core miner with HTTP/TLS/hwloc disabled.
+- It is now honest to ship a small set of explicit archives that match the validated paths: Linux OpenCL, Linux CUDA+OpenCL, native Windows CUDA+OpenCL, plus a clearly caveated Windows OpenCL cross-build convenience artifact.
 - Linux NVIDIA support is real, but the important fix here was for **CUDA 13.x native builds**. Older docs overstated what had actually been rechecked.
 
 ## Verified hosts
@@ -43,8 +43,11 @@ Last updated: 2026-04-08
 
 | Asset | Built from | Honest claim | Caveats |
 |---|---|---|---|
-| `n0s-ryo-miner-linux` | GitHub Actions Linux release job (`ubuntu-24.04` + CUDA 12.8 container, CUDA + OpenCL enabled) | Primary Linux release binary for the validated Linux AMD OpenCL and Linux NVIDIA CUDA code paths | Built in CI, not re-benchmarked as one combined release artifact on a single host in this pass |
-| `n0s-ryo-miner-win.exe` | GitHub Actions native Windows release job (`windows-2022`, MSVC, CUDA + OpenCL enabled) | Primary Windows release binary for the validated Windows 11 NVIDIA path | Windows AMD OpenCL remains unvalidated, and the current release build keeps HTTP/hwloc off |
+| `n0s-ryo-miner-linux-opencl.tar.gz` | GitHub Actions Linux native OpenCL release job (`ubuntu-24.04`, GCC, OpenCL only) | Primary Linux OpenCL archive for the natively validated AMD path | This archive does not include CUDA |
+| `n0s-ryo-miner-linux-cuda12-opencl.tar.gz` | GitHub Actions Linux CUDA 12.8 container release job | Linux CUDA+OpenCL archive aligned with the validated Linux NVIDIA code path | Built in CI and aligned with the validated code path, but not re-benchmarked as one combined release artifact in this pass |
+| `n0s-ryo-miner-windows-cuda12-opencl.zip` | GitHub Actions native Windows release job (`windows-2022`, MSVC, CUDA + OpenCL enabled) | Primary Windows archive for the validated Windows 11 NVIDIA path | Windows AMD OpenCL remains unvalidated, and the native Windows release build keeps HTTP/TLS/hwloc off |
+| `n0s-ryo-miner-windows-opencl-cross.zip` | GitHub Actions Ubuntu MinGW cross-build release job | Convenience Windows OpenCL-only archive for people who want the cross-built `.exe` | Compile-only in this validation pass, not a native Windows AMD validation claim |
+| `SHA256SUMS` | Release workflow checksum step | Verifiable checksums for all published archives | Checksums prove artifact integrity, not runtime validation |
 
 ## What CI still verifies
 
@@ -54,7 +57,7 @@ Last updated: 2026-04-08
 | `Linux CUDA 11.8 (compile coverage)` | Keeps older Linux NVIDIA toolchain coverage in CI without turning it into a release asset |
 | `Linux CUDA 12.8 (compile coverage)` | Keeps current Linux NVIDIA toolchain coverage in CI and matches the Linux release base |
 | `Windows x64 native CUDA + OpenCL (coverage)` | Native Windows compile coverage on the MSVC path we actually trust |
-| Tag release workflow | Rebuilds only `n0s-ryo-miner-linux`, `n0s-ryo-miner-win.exe`, and `SHA256SUMS` |
+| Tag release workflow | Rebuilds `n0s-ryo-miner-linux-opencl.tar.gz`, `n0s-ryo-miner-linux-cuda12-opencl.tar.gz`, `n0s-ryo-miner-windows-cuda12-opencl.zip`, `n0s-ryo-miner-windows-opencl-cross.zip`, and `SHA256SUMS` |
 
 ## What is now verified on Windows
 
