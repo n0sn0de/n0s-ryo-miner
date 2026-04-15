@@ -20,7 +20,7 @@
 #endif
 
 #define N0S_NAME "n0s-ryo-miner"
-#define N0S_VERSION "3.4.1"
+#define N0S_VERSION "3.4.2"
 #ifdef _WIN32
 #define OS_TYPE "win"
 #else
