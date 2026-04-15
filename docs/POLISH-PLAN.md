@@ -2,7 +2,7 @@
 
 **From Optimized Engine to Shipped Product**
 
-*Status: Historical planning reference. The current release/build truth now lives in `README.md` and `docs/BUILD-MATRIX.md`. Current primary release assets are `n0s-ryo-miner-linux` and `n0s-ryo-miner-win.exe`. Windows AMD OpenCL is still unvalidated and should not be oversold.*
+*Status: Historical planning reference. The current release/build truth now lives in `README.md` and `docs/BUILD-MATRIX.md`. Current published release assets are `n0s-ryo-miner-linux-opencl.tar.gz`, `n0s-ryo-miner-linux-cuda12-opencl.tar.gz`, `n0s-ryo-miner-windows-cuda12-opencl.zip`, and `n0s-ryo-miner-windows-opencl-cross.zip`. Windows AMD OpenCL is still unvalidated and should not be oversold.*
 
 ---
 
