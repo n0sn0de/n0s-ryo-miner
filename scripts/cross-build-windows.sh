@@ -371,14 +371,23 @@ else
     echo "  OpenCL: OFF (ICD loader not found)"
 fi
 
-if $ENABLE_TLS && [[ -d "${DEPS_PREFIX}" ]]; then
+OPENSSL_STATIC_LIB=""
+if [[ -f "${DEPS_PREFIX}/lib64/libssl.a" ]]; then
+    OPENSSL_STATIC_LIB="${DEPS_PREFIX}/lib64/libssl.a"
+elif [[ -f "${DEPS_PREFIX}/lib/libssl.a" ]]; then
+    OPENSSL_STATIC_LIB="${DEPS_PREFIX}/lib/libssl.a"
+fi
+
+if $ENABLE_TLS && [[ -n "${OPENSSL_STATIC_LIB}" ]] && [[ -d "${DEPS_PREFIX}/include/openssl" ]]; then
     CMAKE_ARGS+=(
         -DOpenSSL_ENABLE=ON
         -DOPENSSL_ROOT_DIR="${DEPS_PREFIX}"
         -DOPENSSL_USE_STATIC_LIBS=ON
     )
+    echo "  TLS: ON (OpenSSL)"
 else
     CMAKE_ARGS+=(-DOpenSSL_ENABLE=OFF)
+    echo "  TLS: OFF (OpenSSL not found)"
 fi
 
 if $ENABLE_HTTPD && [[ -f "${DEPS_PREFIX}/lib/libmicrohttpd.a" ]]; then

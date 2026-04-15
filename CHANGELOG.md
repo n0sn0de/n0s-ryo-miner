@@ -1,5 +1,21 @@
 # Changelog
 
+## v3.4.2 — Release Workflow Repair (2026-04-14)
+
+### Tagged release repair
+
+- **Fixed the GitHub release workflow regression** that made the `windows-opencl-cross` job fail on a fresh runner
+- **The MinGW cross-build release job now actually builds its dependencies** instead of incorrectly skipping them during tagged releases
+- **OpenSSL detection in `scripts/cross-build-windows.sh` is now honest** so `--skip-deps` no longer enables TLS against an empty dependency prefix
+
+### Release status
+
+- **Published asset set is unchanged from the intended `v3.4.1` release content**
+- **Windows AMD OpenCL remains unvalidated**
+- **`v3.4.1` should be treated as a failed tag attempt, not the clean published release**
+
+---
+
 ## v3.4.1 — Honest Release Assets, Windows Validation & Runtime Polish (2026-04-14)
 
 ### Release workflow and packaging

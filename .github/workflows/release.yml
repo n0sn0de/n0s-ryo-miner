@@ -121,13 +121,14 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
             mingw-w64 cmake g++ pkg-config \
+            curl perl make file \
             zip xxd
 
       - name: Generate embedded GUI assets
         run: bash scripts/embed_assets.sh gui n0s/http/embedded_assets.hpp
 
       - name: Build
-        run: ./scripts/cross-build-windows.sh --skip-deps
+        run: ./scripts/cross-build-windows.sh
 
       - name: Package release asset
         run: |
