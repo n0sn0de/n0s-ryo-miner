@@ -6,6 +6,8 @@ Fork of [xmr-stak](https://github.com/fireice-uk/xmr-stak), stripped down to the
 
 **Important:** the repo now builds a **single executable per target** with the web GUI embedded. It does **not** ship separate backend `.so` / `.dll` files anymore.
 
+On Linux, that still does **not** mean a fully static zero-dependency ELF. The binary still depends on a compatible glibc plus the system GPU runtime loaders and drivers (`libOpenCL.so.1`, `libcuda.so.1` when CUDA is enabled, and `libmicrohttpd.so.12` when the HTTP API is enabled).
+
 ## Reality check
 
 This is the current honest status after revalidating the repo instead of trusting stale docs:
@@ -31,9 +33,10 @@ The tagged release workflow now publishes downloadable archives plus checksums:
 - `n0s-ryo-miner-windows-cuda12-opencl.zip` - native Windows x64 CUDA 12.8 + OpenCL build from the MSVC runner
 - `SHA256SUMS` - checksums for all published release archives
 
-That does **not** mean every platform/backend combination is equally revalidated. The honest caveats still matter:
+That does **not** mean every platform/backend combination is equally revalidated, or that the Linux archives are magically dependency-free. The honest caveats still matter:
 
 - Linux runtime confidence comes from separate native validation on Ubuntu AMD OpenCL and Ubuntu NVIDIA CUDA hosts
+- Linux release archives are single executables, but they still require compatible glibc and the system GPU runtime libraries on the target machine
 - Windows runtime confidence is currently native Windows + NVIDIA
 - Windows AMD OpenCL remains unvalidated
 - Extra CI coverage builds are compile and sanity checks, not extra shipped release promises

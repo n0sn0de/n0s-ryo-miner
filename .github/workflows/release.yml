@@ -20,13 +20,16 @@ jobs:
     name: Build linux-opencl
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    container:
+      image: docker.io/library/ubuntu:22.04
     steps:
       - uses: actions/checkout@v4
 
       - name: Install dependencies
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq \
+          apt-get update -qq
+          apt-get install -y -qq \
+            binutils file \
             cmake g++ \
             libmicrohttpd-dev libssl-dev \
             ocl-icd-opencl-dev opencl-headers \
@@ -47,6 +50,14 @@ jobs:
             -DCMAKE_LINK_STATIC=ON
           cmake --build build-linux-opencl -j$(nproc)
 
+      - name: Verify Linux release portability
+        run: |
+          bash scripts/check-linux-release-portability.sh \
+            build-linux-opencl/bin/n0s-ryo-miner \
+            --max-glibc 2.35 \
+            --allow libmicrohttpd.so.12 \
+            --allow libOpenCL.so.1
+
       - name: Package release asset
         run: |
           mkdir -p release/linux-opencl
@@ -66,7 +77,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     container:
-      image: docker.io/nvidia/cuda:12.8.0-devel-ubuntu24.04
+      image: docker.io/nvidia/cuda:12.8.0-devel-ubuntu22.04
     steps:
       - uses: actions/checkout@v4
 
@@ -74,6 +85,7 @@ jobs:
         run: |
           apt-get update -qq
           apt-get install -y -qq \
+            binutils file \
             cmake g++ \
             libmicrohttpd-dev libssl-dev \
             ocl-icd-opencl-dev opencl-headers \
@@ -94,6 +106,15 @@ jobs:
             -DN0S_COMPILE=generic \
             -DCMAKE_LINK_STATIC=ON
           cmake --build build-linux-cuda12-opencl -j$(nproc)
+
+      - name: Verify Linux release portability
+        run: |
+          bash scripts/check-linux-release-portability.sh \
+            build-linux-cuda12-opencl/bin/n0s-ryo-miner \
+            --max-glibc 2.35 \
+            --allow libcuda.so.1 \
+            --allow libmicrohttpd.so.12 \
+            --allow libOpenCL.so.1
 
       - name: Package release asset
         run: |
