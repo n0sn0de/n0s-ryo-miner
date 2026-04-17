@@ -67,7 +67,7 @@ podman run --rm \
         # Build
         cmake --build . -j\$(nproc) 2>&1 | tail -10
 
-        # Verify — single binary, no backend .so needed
+        # Verify — single executable, with no companion backend .so files
         test -f bin/n0s-ryo-miner
         ! test -f bin/libn0s_opencl_backend.so || echo 'WARNING: unexpected .so found'
 
@@ -75,7 +75,7 @@ podman run --rm \
         cp bin/n0s-ryo-miner /out/
         cp ../config.txt ../pools.txt ../amd.txt /out/
         echo ''
-        echo '=== Build artifacts (single binary + sample configs) ==='
+        echo '=== Build artifacts (single executable + sample configs) ==='
         ls -lh /out/
     "
 

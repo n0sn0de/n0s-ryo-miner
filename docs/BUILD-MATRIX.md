@@ -18,6 +18,7 @@ Last updated: 2026-04-14
 ## Key reality checks
 
 - The repo now builds a **single executable per target**. It does **not** ship separate backend `.so` / `.dll` files anymore.
+- On Linux, “single executable” still does **not** mean a fully static no-deps ELF. The miner still needs compatible glibc plus the system CUDA/OpenCL loader libraries and drivers.
 - The web GUI assets are embedded at build time. The Linux release builds enable the HTTP/TLS path, while the currently trusted native Windows release build is still the simpler core miner with HTTP/TLS/hwloc disabled.
 - It is now honest to ship a small set of explicit archives that match the validated paths: Linux OpenCL, Linux CUDA+OpenCL, native Windows CUDA+OpenCL, plus a clearly caveated Windows OpenCL cross-build convenience artifact.
 - Linux NVIDIA support is real, but the important fix here was for **CUDA 13.x native builds**. Older docs overstated what had actually been rechecked.
