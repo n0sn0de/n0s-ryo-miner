@@ -1,0 +1,30 @@
+n0s-ryo-miner
+=============
+
+This project is a modified work derived from xmr-stak:
+
+  https://github.com/fireice-uk/xmr-stak
+
+The original xmr-stak project is licensed under the GNU General Public
+License version 3. This project remains licensed under GPLv3, and the full
+license text is included in LICENSE.
+
+The current n0s-ryo-miner codebase has been heavily refactored, renamed,
+and reduced to the RYO/CryptoNight-GPU mining paths, but it still carries
+lineage from xmr-stak and its contributors. Copyright in the original
+portions remains with the original copyright holders and contributors.
+
+Important upstream attribution:
+
+- xmr-stak project: fireice_uk, psychocrypt, and xmr-stak contributors
+- NVIDIA mining lineage: tsiv, KlausT, psychocrypt, and xmr-stak contributors
+- AMD/OpenCL mining lineage: wolf9466 and xmr-stak contributors
+- CPU/CryptoNight lineage: xmr-stak contributors and original upstream
+  CryptoNote/Monero-derived code where retained in source comments
+
+n0sn0de / n0s-ryo-miner contributors hold copyright only in their own
+modifications, refactors, documentation, build system changes, and newly
+authored code.
+
+This NOTICE is intentionally conservative: it preserves attribution even
+where files have been substantially rewritten, because FOSS lineage matters.

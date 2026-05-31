@@ -1,0 +1,254 @@
+
+#pragma once
+
+#include "amd_gpu/gpu.hpp"
+#include "autoAdjust.hpp"
+#include "jconf.hpp"
+
+#include "n0s/backend/cryptonight.hpp"
+#include "n0s/jconf.hpp"
+#include "n0s/misc/configEditor.hpp"
+#include "n0s/misc/console.hpp"
+#include "n0s/params.hpp"
+
+#include <algorithm>
+#include <cstdio>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
+
+#include <CL/cl.h>
+
+namespace n0s
+{
+namespace opencl
+{
+
+// Platform/device discovery functions from amd_gpu/gpu_platform.cpp
+using n0s::amd::getAMDPlatformIdx;
+using n0s::amd::getAMDDevices;
+
+class autoAdjust
+{
+  public:
+	autoAdjust()
+	{
+	}
+
+	/** print the adjusted values if needed
+	 *
+	 * Routine exit the application and print the adjusted values if needed else
+	 * nothing is happened.
+	 */
+	bool printConfig()
+	{
+		int platformIndex = getAMDPlatformIdx();
+
+		if(platformIndex == -1)
+		{
+			printer::inst()->print_msg(L0, "WARNING: No AMD OpenCL platform found. Possible driver issues or wrong vendor driver.");
+			return false;
+		}
+
+		devVec = getAMDDevices(platformIndex);
+
+		int deviceCount = devVec.size();
+
+		if(deviceCount == 0)
+		{
+			printer::inst()->print_msg(L0, "WARNING: No AMD device found.");
+			return false;
+		}
+
+		generateThreadConfig(platformIndex);
+		return true;
+	}
+
+  private:
+	void generateThreadConfig(const int platformIndex)
+	{
+		// load the template of the backend config into a char variable
+		const char* tpl =
+#include "./config.tpl"
+			;
+
+		configEditor configTpl{};
+		configTpl.set(std::string(tpl));
+
+		constexpr size_t byteToMiB = 1024u * 1024u;
+
+		const size_t hashMemSize = ::jconf::inst()->GetMiningMemSize();
+
+		std::string conf;
+		for(auto& ctx : devVec)
+		{
+			std::string enabledGpus = params::inst().amdGpus;
+			bool enabled = true;
+			if (!enabledGpus.empty())
+			{
+				enabled = false;
+				std::stringstream ss(enabledGpus);
+
+				size_t i = 0;
+				while (ss >> i)
+				{
+					if (i == ctx.deviceIdx)
+					{
+						enabled = true;
+						break;
+					}
+
+					while (ss.peek() == ',' || ss.peek() == ' ')
+						ss.ignore();
+				}
+			}
+
+			// Only cryptonight_gpu is supported
+			constexpr bool useCryptonight_gpu = true;
+
+			// 8 threads per block (this is a good value for the most gpus)
+			uint32_t default_workSize = 8;
+			size_t minFreeMem = 128u * byteToMiB;
+			/* 1000 is a magic selected limit, the reason is that more than 2GiB memory
+			 * sowing down the memory performance because of TLB cache misses
+			 */
+			size_t maxThreads = 1000u;
+			// Detect AMD GPU generation from device name (gfx ID)
+			// gfx9xx  = Vega/GCN5 (gfx900-906)
+			// gfx10xx = RDNA 1/2 (Navi 10-24)
+			// gfx11xx = RDNA 3 (Navi 31-33)
+			// gfx12xx = RDNA 4 (Navi 48-44)
+			const bool isVegaOrNewer =
+				ctx.name.compare("gfx900") == 0 ||
+				ctx.name.compare("gfx901") == 0 ||
+				ctx.name.compare("gfx902") == 0 ||
+				ctx.name.compare("gfx903") == 0 ||
+				ctx.name.compare("gfx904") == 0 ||
+				ctx.name.compare("gfx905") == 0 ||
+				ctx.name.compare("gfx906") == 0 ||
+				ctx.name.compare("Fiji") == 0;
+
+			// RDNA and newer: gfx10xx, gfx11xx, gfx12xx
+			const bool isRDNA =
+				(ctx.name.size() >= 7 && ctx.name.substr(0, 4) == "gfx1");
+
+			if(isVegaOrNewer || isRDNA)
+			{
+				/* Modern AMD GPUs benefit from higher thread counts.
+				 * VEGA+: more CUs and larger LDS than Polaris
+				 * RDNA+: worksize 16 benchmarked 4.4% faster than 8 on RDNA4 (gfx1201)
+				 */
+				maxThreads = 2024u;
+
+				if(useCryptonight_gpu)
+					default_workSize = 16u;
+			}
+
+			// NVIDIA optimizations
+			if(
+				ctx.isNVIDIA && (ctx.name.find("P100") != std::string::npos ||
+									ctx.name.find("V100") != std::string::npos))
+			{
+				// do not limit the number of threads
+				maxThreads = 40000u;
+				minFreeMem = 512u * byteToMiB;
+			}
+
+			// cn_gpu always uses direct (non-strided) scratchpad indexing
+
+			if(hashMemSize < CN_MEMORY)
+			{
+				size_t factor = CN_MEMORY / hashMemSize;
+				// increase all intensity relative to the original scratchpad size
+				maxThreads *= factor;
+			}
+
+			uint32_t numUnroll = 8;
+			uint32_t numThreads = 1u;
+
+			if(useCryptonight_gpu)
+			{
+				// 6 waves per CU × worksize threads per wave
+				// Benchmarked on RDNA4 (gfx1201, 32 CUs):
+				//   ws=16, CUs*6*8=1536  → 4,889 H/s
+				//   ws=16, CUs*6*16=3072 → 5,017 H/s (+2.6%)
+				maxThreads = ctx.computeUnits * 6 * default_workSize;
+				// do not change unroll for AMD RX5700 but set 2 threads per gpu
+				if(ctx.name.compare("gfx1010") == 0)
+					numThreads = 2;
+				else
+					numUnroll = 1;
+			}
+
+			// keep 128MiB memory free (value is randomly chosen) from the max available memory
+			const size_t maxAvailableFreeMem = ctx.freeMem - minFreeMem;
+
+			size_t memPerThread = std::min(ctx.maxMemPerAlloc, maxAvailableFreeMem);
+
+			if(ctx.isAMD && !useCryptonight_gpu)
+			{
+				numThreads = 2;
+				size_t memDoubleThread = maxAvailableFreeMem / numThreads;
+				memPerThread = std::min(memPerThread, memDoubleThread);
+			}
+
+			// 240byte extra memory is used per thread for meta data
+			size_t perThread = hashMemSize + 240u;
+			size_t maxIntensity = memPerThread / perThread;
+			size_t possibleIntensity = std::min(maxThreads, maxIntensity);
+			// map intensity to a multiple of the compute unit count, default_workSize is the number of threads per work group
+			size_t intensity = (possibleIntensity / (default_workSize * ctx.computeUnits)) * ctx.computeUnits * default_workSize;
+
+			size_t computeUnitUtilization = ((possibleIntensity * 100)  / (default_workSize * ctx.computeUnits)) % 100;
+			// in the case we use two threads per gpu or if we can utilize over 75% of the compute units
+			// we can be relax and need no multiple of the number of compute units
+			if(numThreads == 2 || computeUnitUtilization >= 75)
+				intensity = (possibleIntensity / default_workSize) * default_workSize;
+
+			//If the intensity is 0, then it's because the multiple of the unit count is greater than intensity
+			if(intensity == 0)
+			{
+				printer::inst()->print_msg(L0, "WARNING: Auto detected intensity unexpectedly low. Try to set the environment variable GPU_SINGLE_ALLOC_PERCENT.");
+				intensity = possibleIntensity;
+			}
+			if(intensity != 0)
+			{
+				if (!enabled)
+					conf += "/* Disabled\n";
+
+				for(uint32_t thd = 0; thd < numThreads; ++thd)
+				{
+					conf += "  // gpu: " + ctx.name + std::string("  compute units: ") + std::to_string(ctx.computeUnits) + "\n";
+					conf += "  // memory:" + std::to_string(memPerThread / byteToMiB) + "|" +
+							std::to_string(ctx.maxMemPerAlloc / byteToMiB) + "|" + std::to_string(maxAvailableFreeMem / byteToMiB) + " MiB (used per thread|max per alloc|total free)\n";
+					conf += std::string("  { \"index\" : ") + std::to_string(ctx.deviceIdx) + ",\n" +
+							"    \"intensity\" : " + std::to_string(intensity) + ", \"worksize\" : " + std::to_string(default_workSize) + ",\n" +
+							"    \"affine_to_cpu\" : false, \"strided_index\" : 0, \"mem_chunk\" : 2,\n"
+																													   "    \"unroll\" : " +
+							std::to_string(numUnroll) + ", \"comp_mode\" : true, \"interleave\" : " + std::to_string(ctx.interleave) + "\n" +
+							"  },\n";
+				}
+
+				if (!enabled)
+					conf += "*/\n";
+			}
+			else
+			{
+				printer::inst()->print_msg(L0, "WARNING: Ignore gpu %s, %s MiB free memory is not enough to suggest settings.", ctx.name.c_str(), std::to_string(memPerThread / byteToMiB).c_str());
+			}
+		}
+
+		configTpl.replace("PLATFORMINDEX", std::to_string(platformIndex));
+		configTpl.replace("GPUCONFIG", conf);
+		configTpl.write(params::inst().configFileAMD);
+
+		const std::string backendName = n0s::params::inst().openCLVendor;
+		printer::inst()->print_msg(L0, "%s: GPU (OpenCL) configuration stored in file '%s'", backendName.c_str(), params::inst().configFileAMD.c_str());
+	}
+
+	std::vector<GpuContext> devVec;
+};
+
+} // namespace opencl
+} // namespace n0s

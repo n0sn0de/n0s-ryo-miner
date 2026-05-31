@@ -1,0 +1,490 @@
+cmake_minimum_required(VERSION 3.18.0)
+
+if(POLICY CMP0146)
+    cmake_policy(SET CMP0146 OLD)
+endif()
+
+project(n0s-ryo-miner)
+
+################################################################################
+# C++ Standard & Compiler Requirements
+################################################################################
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# GCC 7+ required for C++17 support
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 7.0)
+        message(FATAL_ERROR "g++ version must be at least 7.0 for C++17 support!")
+    endif()
+endif()
+
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+    set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}" CACHE PATH "install prefix" FORCE)
+endif()
+
+# Help find CUDA/OpenCL from environment
+list(APPEND CMAKE_PREFIX_PATH "$ENV{CUDA_ROOT}" "$ENV{OCL_ROOT}" "$ENV{AMDAPPSDKROOT}" "$ENV{CMAKE_PREFIX_PATH}")
+
+################################################################################
+# Build Options
+################################################################################
+
+set(BUILD_TYPE "Release;Debug")
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build" FORCE)
+endif()
+set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "${BUILD_TYPE}")
+
+set(N0S_COMPILE "native" CACHE STRING "Select CPU compile mode (native or generic)")
+set_property(CACHE N0S_COMPILE PROPERTY STRINGS "native;generic")
+if(N0S_COMPILE STREQUAL "native")
+    if(NOT MSVC)
+        set(CMAKE_CXX_FLAGS "-march=native -mtune=native ${CMAKE_CXX_FLAGS}")
+        set(CMAKE_C_FLAGS "-march=native -mtune=native ${CMAKE_C_FLAGS}")
+    endif()
+elseif(N0S_COMPILE STREQUAL "generic")
+    add_definitions("-DCONF_ENFORCE_OpenCL_1_2=1")
+else()
+    message(FATAL_ERROR "N0S_COMPILE is set to an unknown value '${N0S_COMPILE}'")
+endif()
+
+option(CMAKE_LINK_STATIC "Link as much as possible libraries static" OFF)
+
+################################################################################
+# Find CUDA (NVIDIA Backend)
+################################################################################
+
+option(CUDA_ENABLE "Enable NVIDIA CUDA backend" ON)
+if(CUDA_ENABLE)
+    find_package(CUDA 11.0)
+
+    if(CUDA_FOUND)
+        # Find libcuda (driver API)
+        find_library(CUDA_LIB
+            NAMES libcuda cuda
+            HINTS ${CUDA_TOOLKIT_ROOT_DIR} /usr /usr/local/cuda
+            PATH_SUFFIXES lib64 lib64/stubs lib lib/x64)
+
+        # Find nvrtc (runtime compilation)
+        find_library(CUDA_NVRTC_LIB
+            NAMES libnvrtc nvrtc
+            HINTS ${CUDA_TOOLKIT_ROOT_DIR} /usr /usr/local/cuda
+            PATH_SUFFIXES lib64 lib lib/x64)
+
+        list(APPEND BACKEND_TYPES "nvidia")
+
+        # Large grid support always enabled (64-bit index, sm_60+ minimum)
+
+        # GPU Architecture Targets
+        # Minimum: Pascal (sm_61). Maximum depends on CUDA version.
+        set(DEFAULT_CUDA_ARCH "61;75;80;86")  # Pascal, Turing, Ampere
+
+        if(NOT CUDA_VERSION VERSION_LESS 11.8)
+            list(APPEND DEFAULT_CUDA_ARCH "89")  # Ada Lovelace (RTX 40xx)
+        endif()
+        if(NOT CUDA_VERSION VERSION_LESS 12.0)
+            list(APPEND DEFAULT_CUDA_ARCH "90")  # Hopper (H100)
+        endif()
+        if(NOT CUDA_VERSION VERSION_LESS 12.8)
+            list(APPEND DEFAULT_CUDA_ARCH "100;120")  # Blackwell (RTX 50xx)
+        endif()
+
+        set(CUDA_ARCH "${DEFAULT_CUDA_ARCH}" CACHE STRING "GPU architectures (semicolon list, e.g. '61;75;86')")
+
+        # Validate architectures
+        foreach(CUDA_ARCH_ELEM ${CUDA_ARCH})
+            string(REGEX MATCH "^[0-9]+$" IS_NUMBER ${CUDA_ARCH_ELEM})
+            if(NOT IS_NUMBER)
+                message(FATAL_ERROR "Invalid CUDA architecture '${CUDA_ARCH_ELEM}' — must be a number (e.g. '61')")
+            endif()
+            if(${CUDA_ARCH_ELEM} LESS 60)
+                message(FATAL_ERROR "Unsupported CUDA architecture '${CUDA_ARCH_ELEM}'. Minimum is 60 (Pascal).")
+            endif()
+        endforeach()
+
+        string(REPLACE ";" "+" STR_CUDA_ARCH "${CUDA_ARCH}")
+        add_definitions("-DN0S_CUDA_ARCH_LIST=${STR_CUDA_ARCH}")
+
+        # NVCC Flags
+        # CRITICAL: --fmad=false --prec-div=true --ftz=false required for correct cn_gpu hashes
+        set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -std=c++17")
+        set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} --fmad=false --prec-div=true --ftz=false")
+        set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} --default-stream per-thread")
+
+        foreach(CUDA_ARCH_ELEM ${CUDA_ARCH})
+            set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS}
+                "--generate-code arch=compute_${CUDA_ARCH_ELEM},code=sm_${CUDA_ARCH_ELEM}"
+                "--generate-code arch=compute_${CUDA_ARCH_ELEM},code=compute_${CUDA_ARCH_ELEM}")
+        endforeach()
+
+        option(CUDA_SHOW_REGISTER "Show registers used per kernel" OFF)
+        option(CUDA_SHOW_CODELINES "Show kernel lines in cuda-gdb" OFF)
+        option(CUDA_KEEP_FILES "Keep intermediate compilation files" OFF)
+
+        if(CUDA_SHOW_CODELINES)
+            set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS}" --source-in-ptx -lineinfo)
+            set(CUDA_KEEP_FILES ON CACHE BOOL "activate keep files" FORCE)
+        endif()
+        if(CUDA_SHOW_REGISTER)
+            set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS}" -Xptxas=-v)
+        endif()
+        if(CUDA_KEEP_FILES)
+            set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS}" --keep --keep-dir "${PROJECT_BINARY_DIR}")
+        endif()
+
+        set(CUDA_HOST_COMPILER ${CMAKE_CXX_COMPILER} CACHE FILEPATH "Host compiler for NVCC" FORCE)
+    else()
+        message(FATAL_ERROR "CUDA NOT found: use `-DCUDA_ENABLE=OFF` to build without NVIDIA support")
+    endif()
+else()
+    add_definitions("-DCONF_NO_CUDA")
+endif()
+
+################################################################################
+# Find OpenCL (AMD Backend)
+################################################################################
+
+option(OpenCL_ENABLE "Enable AMD OpenCL backend" ON)
+if(OpenCL_ENABLE)
+    if(NOT WIN32)
+        # Linux: try vendor SDK paths first, then system
+        find_path(OpenCL_INCLUDE_DIR
+            NAMES CL/cl.h OpenCL/cl.h
+            NO_DEFAULT_PATH
+            PATHS ENV "OCL_ROOT" ENV "OpenCL_ROOT" ENV AMDAPPSDKROOT /usr
+            PATH_SUFFIXES include OpenCL/common/inc)
+
+        find_library(OpenCL_LIBRARY
+            NAMES OpenCL
+            NO_DEFAULT_PATH
+            PATHS ENV "OCL_ROOT" ENV "OpenCL_ROOT" ENV AMDAPPSDKROOT
+            PATH_SUFFIXES lib/x86_64 lib/x86_64-linux-gnu lib64)
+    endif()
+
+    # Standard CMake OpenCL module works on both platforms
+    # On Windows: finds OpenCL.lib from CUDA toolkit, AMD SDK, or Khronos loader
+    find_package(OpenCL)
+    if(OpenCL_FOUND)
+        add_definitions("-DCL_TARGET_OPENCL_VERSION=120" "-DCL_USE_DEPRECATED_OPENCL_1_2_APIS")
+        list(APPEND BACKEND_TYPES "amd")
+        include_directories(SYSTEM ${OpenCL_INCLUDE_DIRS})
+        if(NOT WIN32)
+            link_directories(${OpenCL_LIBRARY})
+        endif()
+    else()
+        message(FATAL_ERROR "OpenCL NOT found: use `-DOpenCL_ENABLE=OFF` to build without AMD support")
+    endif()
+else()
+    add_definitions("-DCONF_NO_OPENCL")
+endif()
+
+# CPU mining removed — shared crypto still compiled for GPU hash verification
+add_definitions("-DCONF_NO_CPU")
+
+# AVX2 for Clang/GCC
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    set_source_files_properties(n0s/backend/cpu/crypto/cn_gpu_avx.cpp PROPERTIES COMPILE_FLAGS "-mavx2")
+elseif(MSVC)
+    set_source_files_properties(n0s/backend/cpu/crypto/cn_gpu_avx.cpp PROPERTIES COMPILE_FLAGS "/arch:AVX2")
+endif()
+
+################################################################################
+# Find Dependencies
+################################################################################
+
+# PThreads
+find_package(Threads REQUIRED)
+set(LIBS ${LIBS} ${CMAKE_THREAD_LIBS_INIT})
+
+# microhttpd (HTTP monitoring API)
+option(MICROHTTPD_ENABLE "Enable HTTP monitoring daemon" ON)
+if(MICROHTTPD_ENABLE)
+    # Try vcpkg config-mode first (MSVC builds only)
+    if(MSVC)
+        find_package(unofficial-libmicrohttpd CONFIG)
+        if(unofficial-libmicrohttpd_FOUND)
+            set(MHTD_TARGET unofficial::libmicrohttpd::libmicrohttpd)
+            message(STATUS "microhttpd found via vcpkg (config mode)")
+        else()
+            message(FATAL_ERROR "microhttpd NOT found: install via vcpkg (`vcpkg install libmicrohttpd`) or use `-DMICROHTTPD_ENABLE=OFF`")
+        endif()
+    else()
+        # Native Linux or MinGW cross-compile: find_library
+        find_path(MTHD_INCLUDE_DIR NAMES microhttpd.h PATHS /opt/local /usr/local /usr PATH_SUFFIXES include)
+        find_library(MHTD NAMES microhttpd PATHS ENV "MICROHTTPD_ROOT" PATH_SUFFIXES lib)
+        if(MHTD STREQUAL "MHTD-NOTFOUND")
+            message(FATAL_ERROR "microhttpd NOT found: use `-DMICROHTTPD_ENABLE=OFF` to build without HTTP daemon")
+        else()
+            set(LIBS ${LIBS} ${MHTD})
+            include_directories(AFTER ${MTHD_INCLUDE_DIR})
+        endif()
+    endif()
+else()
+    add_definitions("-DCONF_NO_HTTPD")
+endif()
+
+# OpenSSL
+option(OpenSSL_ENABLE "Enable OpenSSL (TLS pool connections)" ON)
+if(OpenSSL_ENABLE)
+    if(CMAKE_LINK_STATIC)
+        set(OPENSSL_USE_STATIC_LIBS ON)
+    endif()
+    find_package(OpenSSL)
+    if(OPENSSL_FOUND)
+        include_directories(${OPENSSL_INCLUDE_DIR})
+        set(LIBS ${LIBS} ${OPENSSL_LIBRARIES})
+        # Windows static OpenSSL needs additional system libs
+        if(WIN32)
+            set(LIBS ${LIBS} crypt32 ws2_32)
+        endif()
+    else()
+        message(FATAL_ERROR "OpenSSL NOT found: use `-DOpenSSL_ENABLE=OFF` to build without TLS")
+    endif()
+else()
+    add_definitions("-DCONF_NO_TLS")
+endif()
+
+# hwloc (NUMA-aware memory allocation)
+option(HWLOC_ENABLE "Enable hwloc for NUMA support" ON)
+if(HWLOC_ENABLE)
+    find_path(HWLOC_INCLUDE_DIR NAMES hwloc.h PATHS /opt/local /usr/local /usr PATH_SUFFIXES include)
+    find_library(HWLOC NAMES hwloc PATHS ENV "HWLOC_ROOT" PATH_SUFFIXES lib)
+    if(HWLOC STREQUAL "HWLOC-NOTFOUND" OR ${HWLOC_INCLUDE_DIR} STREQUAL "HWLOC_INCLUDE_DIR-NOTFOUND")
+        message(FATAL_ERROR "hwloc NOT found: use `-DHWLOC_ENABLE=OFF` to build without NUMA support")
+    else()
+        set(LIBS ${LIBS} ${HWLOC})
+        include_directories(AFTER ${HWLOC_INCLUDE_DIR})
+    endif()
+else()
+    add_definitions("-DCONF_NO_HWLOC")
+endif()
+
+################################################################################
+# Versioning
+################################################################################
+
+set(GIT_BRANCH "")
+set(GIT_COMMIT_HASH "")
+find_package(Git QUIET)
+if(GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} rev-parse --abbrev-ref HEAD
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE GIT_BRANCH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+        RESULT_VARIABLE GIT_BRANCH_RESULT)
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} log -1 --format=%h
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE GIT_COMMIT_HASH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+        RESULT_VARIABLE GIT_COMMIT_HASH_RESULT)
+
+    if(NOT GIT_BRANCH_RESULT EQUAL 0)
+        set(GIT_BRANCH "")
+    endif()
+    if(NOT GIT_COMMIT_HASH_RESULT EQUAL 0)
+        set(GIT_COMMIT_HASH "")
+    endif()
+endif()
+
+if(GIT_COMMIT_HASH)
+    add_definitions("-DGIT_COMMIT_HASH=${GIT_COMMIT_HASH}")
+endif()
+if(GIT_BRANCH)
+    add_definitions("-DGIT_BRANCH=${GIT_BRANCH}")
+endif()
+
+string(REPLACE ";" "-" STR_BACKEND_TYPES "${BACKEND_TYPES}")
+add_definitions("-DBACKEND_TYPE=${STR_BACKEND_TYPES}")
+
+################################################################################
+# Compile & Link
+################################################################################
+
+include_directories(BEFORE .)
+set(CMAKE_POSITION_INDEPENDENT_CODE TRUE)
+
+if(MSVC)
+    # MSVC: intrinsics enabled by default, use /arch:AVX2 for broader coverage
+    # SSE2/AES are always available on x86-64 MSVC targets
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /D_CRT_SECURE_NO_WARNINGS /D_WINSOCK_DEPRECATED_NO_WARNINGS /DNOMINMAX /DWIN32_LEAN_AND_MEAN")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /D_CRT_SECURE_NO_WARNINGS /D_WINSOCK_DEPRECATED_NO_WARNINGS /DNOMINMAX /DWIN32_LEAN_AND_MEAN")
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /W4")
+    endif()
+    # Static CRT for self-contained executable
+    if(CMAKE_LINK_STATIC)
+        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+else()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse2 -maes")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -msse2 -maes")
+
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
+            set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall")
+        endif()
+        # -z noexecstack is ELF-only (Linux), not supported by Windows PE linker
+        if(NOT WIN32)
+            set(CMAKE_CXX_FLAGS "-Wl,-z,noexecstack ${CMAKE_CXX_FLAGS}")
+            set(CMAKE_C_FLAGS "-Wl,-z,noexecstack ${CMAKE_C_FLAGS}")
+        endif()
+    endif()
+endif()
+
+# Static linking option
+if(CMAKE_LINK_STATIC)
+    set(BUILD_SHARED_LIBRARIES OFF)
+    if(MSVC)
+        set(CMAKE_FIND_LIBRARY_SUFFIXES ".lib")
+    else()
+        set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+        if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+            set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libgcc -static-libstdc++")
+            set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -static-libgcc -static-libstdc++")
+        endif()
+    endif()
+endif()
+
+# ASM library removed — cryptonight_v8 mainloop was only used by removed algorithms
+
+# Core backend library
+file(GLOB BACKEND_CPP
+    "n0s/*.cpp"
+    "n0s/autotune/*.cpp"
+    "n0s/backend/cpu/*.cpp"
+    "n0s/backend/*.cpp"
+    "n0s/backend/cpu/crypto/*.cpp"
+    "n0s/http/*.cpp"
+    "n0s/misc/*.cpp"
+    "n0s/net/*.cpp")
+
+# Platform-specific sources (only compile the correct platform file)
+if(WIN32)
+    list(APPEND BACKEND_CPP "n0s/platform/platform_windows.cpp")
+else()
+    list(APPEND BACKEND_CPP "n0s/platform/platform_linux.cpp")
+endif()
+
+add_library(n0s-backend STATIC ${BACKEND_CPP})
+add_dependencies(n0s-backend gui_assets)
+if(MICROHTTPD_ENABLE)
+    if(TARGET unofficial::libmicrohttpd::libmicrohttpd)
+        target_link_libraries(n0s-backend unofficial::libmicrohttpd::libmicrohttpd)
+    else()
+        target_link_libraries(n0s-backend ${MHTD})
+    endif()
+endif()
+# dlopen/dlsym for runtime NVML loading (gpu telemetry)
+target_link_libraries(n0s-backend ${CMAKE_DL_LIBS})
+# Windows: link Winsock2 + shell32
+if(WIN32)
+    target_link_libraries(n0s-backend ws2_32 shell32)
+endif()
+target_link_libraries(n0s-backend ${LIBS})
+
+# CUDA backend (static library, linked directly into executable)
+if(CUDA_FOUND)
+    file(GLOB CUDASRCFILES
+        "n0s/backend/nvidia/nvcc_code/*.cu"
+        "n0s/backend/nvidia/*.cpp")
+
+    cuda_add_library(n0s_cuda_backend STATIC ${CUDASRCFILES})
+
+    set(CUDA_LIBRARIES ${CUDA_LIB} ${CUDA_LIBRARIES} ${CUDA_NVRTC_LIB})
+    target_link_libraries(n0s_cuda_backend ${CUDA_LIBRARIES})
+    target_link_libraries(n0s_cuda_backend n0s-backend)
+endif()
+
+# OpenCL backend (static library, linked directly into executable)
+if(OpenCL_FOUND)
+    file(GLOB OPENCLSRCFILES
+        "n0s/backend/amd/amd_gpu/*.cpp"
+        "n0s/backend/amd/*.cpp")
+    add_library(n0s_opencl_backend STATIC ${OPENCLSRCFILES})
+    target_link_libraries(n0s_opencl_backend ${OpenCL_LIBRARY})
+    target_link_libraries(n0s_opencl_backend n0s-backend)
+endif()
+
+################################################################################
+# GUI Asset Embedding
+################################################################################
+
+set(GUI_ASSETS
+    ${CMAKE_SOURCE_DIR}/gui/index.html
+    ${CMAKE_SOURCE_DIR}/gui/style.css
+    ${CMAKE_SOURCE_DIR}/gui/app.js
+)
+set(EMBEDDED_ASSETS_HPP ${CMAKE_SOURCE_DIR}/n0s/http/embedded_assets.hpp)
+
+# Find a real bash (Git Bash on Windows, or system bash on Linux/Mac)
+# Avoid WSL's bash on Windows by preferring Git's bash.exe
+if(WIN32)
+    find_program(BASH_EXECUTABLE bash
+        PATHS "C:/Program Files/Git/bin" "C:/Program Files (x86)/Git/bin"
+              "$ENV{PROGRAMFILES}/Git/bin" "$ENV{ProgramW6432}/Git/bin"
+        NO_DEFAULT_PATH)
+    if(NOT BASH_EXECUTABLE)
+        find_program(BASH_EXECUTABLE bash)
+    endif()
+else()
+    find_program(BASH_EXECUTABLE bash)
+endif()
+
+if(BASH_EXECUTABLE AND EXISTS "${CMAKE_SOURCE_DIR}/scripts/embed_assets.sh")
+    add_custom_command(
+        OUTPUT ${EMBEDDED_ASSETS_HPP}
+        COMMAND "${BASH_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/scripts/embed_assets.sh"
+                "${CMAKE_SOURCE_DIR}/gui"
+                "${EMBEDDED_ASSETS_HPP}"
+        DEPENDS ${GUI_ASSETS} ${CMAKE_SOURCE_DIR}/scripts/embed_assets.sh
+        COMMENT "Embedding GUI assets into embedded_assets.hpp"
+        VERBATIM
+    )
+    add_custom_target(gui_assets DEPENDS ${EMBEDDED_ASSETS_HPP})
+elseif(EXISTS ${EMBEDDED_ASSETS_HPP})
+    # Use pre-committed embedded_assets.hpp (e.g. Windows without Git Bash / xxd)
+    message(STATUS "Using pre-committed embedded_assets.hpp (bash/xxd not available)")
+    add_custom_target(gui_assets)
+else()
+    message(FATAL_ERROR "No bash found and embedded_assets.hpp does not exist. "
+            "Install Git for Windows (includes bash) or pre-generate the file.")
+endif()
+
+# Main executable
+file(GLOB SRCFILES_CPP "n0s/cli/*.cpp")
+set_source_files_properties(${SRCFILES_CPP} PROPERTIES LANGUAGE CXX)
+add_executable(n0s-ryo-miner ${SRCFILES_CPP})
+
+set(EXECUTABLE_OUTPUT_PATH "bin" CACHE STRING "Path to executables relative to ${CMAKE_INSTALL_PREFIX}")
+set(LIBRARY_OUTPUT_PATH "bin" CACHE STRING "Path to libraries relative to ${CMAKE_INSTALL_PREFIX}")
+
+target_link_libraries(n0s-ryo-miner ${LIBS} n0s-backend)
+if(CUDA_FOUND)
+    target_link_libraries(n0s-ryo-miner n0s_cuda_backend)
+endif()
+if(OpenCL_FOUND)
+    target_link_libraries(n0s-ryo-miner n0s_opencl_backend)
+    if(WIN32)
+        # OpenCL ICD loader on Windows needs cfgmgr32 for device enumeration
+        target_link_libraries(n0s-ryo-miner cfgmgr32)
+    endif()
+endif()
+
+################################################################################
+# Install
+################################################################################
+
+if(NOT CMAKE_INSTALL_PREFIX STREQUAL PROJECT_BINARY_DIR)
+    install(TARGETS n0s-ryo-miner RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}/${EXECUTABLE_OUTPUT_PATH}")
+else()
+    install(CODE "MESSAGE(\"n0s-ryo-miner installed to folder 'bin'\")")
+endif()

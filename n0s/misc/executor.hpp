@@ -1,0 +1,213 @@
+#pragma once
+
+#include "hashrate_history.hpp"
+#include "telemetry.hpp"
+#include "thdq.hpp"
+#include "n0s/backend/iBackend.hpp"
+#include "n0s/misc/environment.hpp"
+#include "n0s/net/msgstruct.hpp"
+
+#include <array>
+#include <atomic>
+#include <chrono>
+#include <future>
+#include <list>
+#include <memory>
+#include <vector>
+
+class jpsock;
+
+namespace n0s
+{
+namespace cpu
+{
+class minethd;
+
+} // namespace cpu
+} // namespace n0s
+
+class executor
+{
+  public:
+	static executor* inst()
+	{
+		auto& env = n0s::environment::inst();
+		if(env.pExecutor == nullptr)
+		{
+			std::unique_lock<std::mutex> lck(env.update);
+			if(env.pExecutor == nullptr)
+				env.pExecutor = new executor;
+		}
+		return env.pExecutor;
+	};
+
+	void ex_start(bool daemon) { daemon ? ex_main() : std::thread(&executor::ex_main, this).detach(); }
+
+	void get_http_report(ex_event_name ev_id, std::string& data);
+
+	/// Process a pool config update request. Thread-safe — dispatches to executor thread.
+	/// @param request_json  JSON body from PUT /api/v1/config/pool
+	/// @param response_json  [out] JSON response
+	void process_pool_update(const std::string& request_json, std::string& response_json);
+
+	inline void push_event(ex_event&& ev) { oEventQ.push(std::move(ev)); }
+	void push_timed_event(ex_event&& ev, size_t sec);
+
+  private:
+	struct timed_event
+	{
+		ex_event event;
+		size_t ticks_left;
+
+		timed_event(ex_event&& ev, size_t ticks) :
+			event(std::move(ev)),
+			ticks_left(ticks) {}
+	};
+
+	inline void set_timestamp() { dev_timestamp = get_timestamp(); };
+
+	// In milliseconds, has to divide a second (1000ms) into an integer number
+	constexpr static size_t iTickTime = 500;
+
+	std::list<timed_event> lTimedEvents;
+	std::mutex timed_event_mutex;
+	thdq<ex_event> oEventQ;
+
+	std::unique_ptr<n0s::telemetry> telem;
+	std::vector<std::unique_ptr<n0s::iBackend>> pvThreads;
+
+	size_t current_pool_id = invalid_pool_id;
+	size_t last_usr_pool_id = invalid_pool_id;
+	size_t dev_timestamp;
+
+	std::list<jpsock> pools;
+
+	jpsock* pick_pool_by_id(size_t pool_id);
+
+	executor();
+
+	void ex_main();
+
+	void ex_clock_thd();
+	void pool_connect(jpsock* pool);
+
+	constexpr static size_t motd_max_length = 512;
+	[[nodiscard]] bool motd_filter_console(std::string& motd);
+	[[nodiscard]] bool motd_filter_web(std::string& motd);
+
+	void hashrate_report(std::string& out);
+	void result_report(std::string& out);
+	void connection_report(std::string& out);
+
+	void http_hashrate_report(std::string& out);
+	void http_result_report(std::string& out);
+	void http_connection_report(std::string& out);
+	void http_json_report(std::string& out);
+
+	void api_status_report(std::string& out);
+	void api_hashrate_report(std::string& out);
+	void api_hashrate_history_report(std::string& out);
+	void api_gpus_report(std::string& out);
+	void api_pool_report(std::string& out);
+	void api_config_report(std::string& out);
+	void api_autotune_report(std::string& out);
+	void api_version_report(std::string& out);
+	void api_pool_update(std::string& out);
+
+	void http_report(ex_event_name ev);
+	void print_report(ex_event_name ev);
+
+	std::string* pHttpString = nullptr;
+	std::string* pHttpRequestBody = nullptr;
+	std::promise<void> httpReady;
+	std::mutex httpMutex;
+
+	struct sck_error_log
+	{
+		std::chrono::system_clock::time_point time;
+		std::string msg;
+
+		sck_error_log(std::string&& err) :
+			msg(std::move(err))
+		{
+			time = std::chrono::system_clock::now();
+		}
+	};
+	std::vector<sck_error_log> vSocketLog;
+
+	// Element zero is always the success element.
+	// Keep in mind that this is a tally and not a log like above
+	struct result_tally
+	{
+		std::chrono::system_clock::time_point time;
+		std::string msg;
+		size_t count;
+
+		result_tally() :
+			msg("[OK]"),
+			count(0)
+		{
+			time = std::chrono::system_clock::now();
+		}
+
+		result_tally(std::string&& err) :
+			msg(std::move(err)),
+			count(1)
+		{
+			time = std::chrono::system_clock::now();
+		}
+
+		void increment()
+		{
+			count++;
+			time = std::chrono::system_clock::now();
+		}
+
+		bool compare(std::string& err)
+		{
+			if(msg == err)
+				return true;
+			else
+				return false;
+		}
+	};
+	std::vector<result_tally> vMineResults;
+
+	//More result statistics
+	std::array<size_t, 10> iTopDiff{{}}; //Initialize to zero
+
+	std::chrono::system_clock::time_point tPoolConnTime;
+	size_t iPoolHashes = 0;
+	uint64_t iPoolDiff = 0;
+
+	// Set it to 16 bit so that we can just let it grow
+	// Maximum realistic growth rate - 5MB / month
+	std::vector<uint16_t> iPoolCallTimes;
+
+	//Those stats are reset if we disconnect
+	inline void reset_stats()
+	{
+		iPoolCallTimes.clear();
+		tPoolConnTime = std::chrono::system_clock::now();
+		iPoolHashes = 0;
+	}
+
+	double fHighestHps = 0.0;
+
+	// Hashrate history ring buffer for time-series chart
+	n0s::HashrateHistory hashrateHistory;
+
+	void log_socket_error(jpsock* pool, std::string&& sError);
+	void log_result_error(std::string&& sError);
+	void log_result_ok(uint64_t iActualDiff);
+
+	void on_sock_ready(size_t pool_id);
+	void on_sock_error(size_t pool_id, std::string&& sError, bool silent);
+	void on_pool_have_job(size_t pool_id, pool_job& oPoolJob);
+	void on_miner_result(size_t pool_id, job_result& oResult);
+	void connect_to_pools(std::list<jpsock*>& eval_pools);
+	[[nodiscard]] bool get_live_pools(std::vector<jpsock*>& eval_pools);
+	void eval_pool_choice();
+
+	constexpr size_t sec_to_ticks(size_t sec) const { return sec * (1000 / iTickTime); }
+};

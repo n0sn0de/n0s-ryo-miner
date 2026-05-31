@@ -1,0 +1,164 @@
+name: Build
+
+on:
+  pull_request:
+    branches: [master]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Coverage workflow only. This keeps compile and sanity checks honest, but it
+  # does not define the release artifact set.
+
+  # Linux OpenCL remains the fastest native sanity path.
+  build-linux-opencl:
+    name: Linux OpenCL (native sanity)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            cmake g++ \
+            libmicrohttpd-dev libssl-dev libhwloc-dev \
+            ocl-icd-opencl-dev opencl-headers \
+            gzip xxd
+
+      - name: Generate embedded GUI assets
+        run: bash scripts/embed_assets.sh gui n0s/http/embedded_assets.hpp
+
+      - name: Build
+        run: |
+          mkdir -p build && cd build
+          cmake .. \
+            -DCUDA_ENABLE=OFF \
+            -DOpenCL_ENABLE=ON \
+            -DMICROHTTPD_ENABLE=ON \
+            -DHWLOC_ENABLE=ON \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DN0S_COMPILE=generic \
+            -DCMAKE_LINK_STATIC=ON
+          cmake --build . -j$(nproc)
+
+      - name: Verify single binary
+        run: |
+          ls -lh build/bin/n0s-ryo-miner
+          file build/bin/n0s-ryo-miner
+          build/bin/n0s-ryo-miner --version || true
+
+  # Container CUDA coverage keeps older and current Linux NVIDIA toolchains in
+  # CI without turning each one into a public release artifact.
+  build-linux-cuda:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux CUDA 11.8 (compile coverage)
+            image: docker.io/nvidia/cuda:11.8.0-devel-ubuntu22.04
+            cuda_arch: "61;75;80;86;89"
+          - name: Linux CUDA 12.8 (compile coverage)
+            image: docker.io/nvidia/cuda:12.8.0-devel-ubuntu24.04
+            cuda_arch: "61;75;80;86;89;90;100;120"
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq cmake g++ libmicrohttpd-dev libssl-dev gzip xxd
+
+      - name: Generate embedded GUI assets
+        run: bash scripts/embed_assets.sh gui n0s/http/embedded_assets.hpp
+
+      - name: Build
+        run: |
+          mkdir -p build && cd build
+          cmake .. \
+            -DCUDA_ENABLE=ON -DOpenCL_ENABLE=OFF \
+            -DMICROHTTPD_ENABLE=ON -DHWLOC_ENABLE=OFF \
+            -DCUDA_ARCH="${{ matrix.cuda_arch }}" \
+            -DCMAKE_BUILD_TYPE=Release -DN0S_COMPILE=generic
+          cmake --build . -j$(nproc)
+
+      - name: Verify
+        run: |
+          test -f build/bin/n0s-ryo-miner && echo "Binary exists"
+          ls -lh build/bin/n0s-ryo-miner
+          # --version requires libcuda.so.1 (NVIDIA driver) which is not in the
+          # build container. Binary existence plus size is enough here.
+          build/bin/n0s-ryo-miner --version 2>&1 || echo "Note: --version failed (expected in driverless container)"
+
+  # Native Windows coverage is the path we actually trust for release quality.
+  build-windows-cuda:
+    name: Windows x64 native CUDA + OpenCL (coverage)
+    runs-on: windows-2022
+    env:
+      VCPKG_DEFAULT_TRIPLET: x64-windows-static
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install CUDA Toolkit
+        uses: Jimver/cuda-toolkit@v0.2.35
+        with:
+          cuda: '12.8.0'
+          method: 'local'
+
+      - name: Verify CUDA
+        run: nvcc -V
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: '52f5569a8e867859fac967c1e3f10ca0a8a3cc39'
+          runVcpkgInstall: true
+
+      - name: Generate embedded GUI assets
+        shell: bash
+        run: |
+          if command -v xxd &>/dev/null; then
+            bash scripts/embed_assets.sh gui n0s/http/embedded_assets.hpp
+          else
+            echo "xxd not found, using committed embedded_assets.hpp"
+          fi
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -G "Visual Studio 17 2022" -A x64 `
+            -DCMAKE_TOOLCHAIN_FILE="${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows-static `
+            -DCUDA_ENABLE=ON `
+            -DOpenCL_ENABLE=ON `
+            -DMICROHTTPD_ENABLE=OFF `
+            -DHWLOC_ENABLE=OFF `
+            -DCUDA_ARCH="61;75;80;86;89" `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DN0S_COMPILE=generic `
+            -DCMAKE_LINK_STATIC=ON
+
+      - name: Build
+        run: cmake --build build --config Release -j $env:NUMBER_OF_PROCESSORS
+
+      - name: Verify binary
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $found = Get-ChildItem -Path build -Recurse -Filter "n0s-ryo-miner.exe" | Select-Object -First 1
+          if (-not $found) {
+            Write-Error "Binary not found"
+            exit 1
+          }
+          Write-Host "Binary: $($found.FullName)"
+          Write-Host "Size: $([math]::Round($found.Length / 1MB, 1)) MB"
+          & $found.FullName --version 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Note: --version exited $LASTEXITCODE (expected on a headless runner without GPU driver state)"
+          }
+          exit 0

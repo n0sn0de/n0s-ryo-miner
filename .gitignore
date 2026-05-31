@@ -1,0 +1,47 @@
+bin/
+obj/
+build/
+xmr-stak-cpu.layout
+xmr-stak-cpu.depend
+config-debug.txt
+
+# netbeans project files
+/nbproject/
+
+# tmp files
+*~
+
+# merge original backup files
+*.orig
+
+# KDevelop files
+.kdev4/
+xmr-stak.kdev4
+
+# Idea/Clion project files
+cmake-build-release/
+cmake-build-debug/
+\.idea/
+
+# MacOS files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbnails
+._*
+build/
+*.txt
+
+# Build artifacts
+build-*/
+*.o
+*.a
+dist/
+tests/*.o
+tests/cn_gpu_harness
+tests/test_constants
+
+build-mingw/
+build-verify/
+deps-mingw/

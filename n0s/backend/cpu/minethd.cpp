@@ -1,0 +1,546 @@
+/*
+  * This program is free software: you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License as published by
+  * the Free Software Foundation, either version 3 of the License, or
+  * any later version.
+  *
+  * This program is distributed in the hope that it will be useful,
+  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+  * GNU General Public License for more details.
+  *
+  * You should have received a copy of the GNU General Public License
+  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+  *
+  * Additional permission under GNU GPL version 3 section 7
+  *
+  * If you modify this Program, or any covered work, by linking or combining
+  * it with OpenSSL (or a modified version of that library), containing parts
+  * covered by the terms of OpenSSL License and SSLeay License, the licensors
+  * of this Program grant you additional permission to convey the resulting work.
+  *
+  */
+
+#include "crypto/cryptonight_aesni.h"
+
+#include "jconf.hpp"
+
+#include "n0s/backend/globalStates.hpp"
+#include "n0s/backend/iBackend.hpp"
+#include "n0s/misc/configEditor.hpp"
+#include "n0s/misc/console.hpp"
+#include "n0s/params.hpp"
+
+#include "minethd.hpp"
+#include "n0s/jconf.hpp"
+#include "n0s/misc/executor.hpp"
+
+#include "hwlocMemory.hpp"
+#include "n0s/backend/miner_work.hpp"
+
+#include "autoAdjust.hpp"
+#ifndef CONF_NO_HWLOC
+#include "autoAdjustHwloc.hpp"
+#endif
+
+#include <cassert>
+#include <bitset>
+#include <chrono>
+#include <cstring>
+#include <thread>
+#include <unordered_map>
+#include <unordered_set>
+
+#ifndef _WIN32
+#include <pthread.h>
+#endif
+
+namespace n0s
+{
+namespace cpu
+{
+
+namespace
+{
+
+std::mutex g_alloc_notice_mutex;
+std::unordered_set<std::string> g_alloc_notices_seen;
+
+void print_alloc_notice_once(const std::string& msg)
+{
+	if(msg.empty())
+		return;
+
+	std::lock_guard<std::mutex> lock(g_alloc_notice_mutex);
+	if(!g_alloc_notices_seen.insert(msg).second)
+		return;
+
+	printer::inst()->print_msg(L0, "MEMORY NOTICE: %s", msg.c_str());
+}
+
+} // namespace
+
+bool minethd::thd_setaffinity(std::thread::native_handle_type h, uint64_t cpu_id)
+{
+#ifdef _WIN32
+	DWORD_PTR mask = 1ULL << cpu_id;
+	return SetThreadAffinityMask(reinterpret_cast<HANDLE>(h), mask) != 0;
+#else
+	cpu_set_t mn;
+	CPU_ZERO(&mn);
+	CPU_SET(cpu_id, &mn);
+	return pthread_setaffinity_np(h, sizeof(cpu_set_t), &mn) == 0;
+#endif
+}
+
+minethd::minethd(miner_work& pWork, size_t iNo, int iMultiway, bool no_prefetch, int64_t affinity)
+{
+	this->backendType = iBackend::CPU;
+	oWork = pWork;
+	bQuit = 0;
+	iThreadNo = static_cast<uint8_t>(iNo);
+	iJobNo = 0;
+	bNoPrefetch = no_prefetch;
+	this->affinity = affinity;
+
+	std::unique_lock<std::mutex> lck(thd_aff_set);
+	std::future<void> order_guard = order_fix.get_future();
+
+	switch(iMultiway)
+	{
+	case 5:
+		oWorkThd = std::thread(&minethd::penta_work_main, this);
+		break;
+	case 4:
+		oWorkThd = std::thread(&minethd::quad_work_main, this);
+		break;
+	case 3:
+		oWorkThd = std::thread(&minethd::triple_work_main, this);
+		break;
+	case 2:
+		oWorkThd = std::thread(&minethd::double_work_main, this);
+		break;
+	case 1:
+	default:
+		oWorkThd = std::thread(&minethd::work_main, this);
+		break;
+	}
+
+	order_guard.wait();
+
+	if(affinity >= 0) //-1 means no affinity
+		if(!thd_setaffinity(oWorkThd.native_handle(), affinity))
+			printer::inst()->print_msg(L1, "WARNING setting affinity failed.");
+}
+
+cryptonight_ctx* minethd::minethd_alloc_ctx()
+{
+	cryptonight_ctx* ctx;
+	alloc_msg msg;
+
+	switch(::jconf::inst()->GetSlowMemSetting())
+	{
+	case ::jconf::never_use:
+		ctx = cryptonight_alloc_ctx(1, 1, false, &msg);
+		if(ctx == nullptr)
+			printer::inst()->print_msg(L0, "MEMORY ALLOC FAILED: %s", msg.warning.c_str());
+		else
+		{
+			print_alloc_notice_once(msg.warning);
+			ctx->hash_fn = nullptr;
+			ctx->loop_fn = nullptr;
+			ctx->fun_data = nullptr;
+			
+		}
+		return ctx;
+
+	case ::jconf::no_mlck:
+		ctx = cryptonight_alloc_ctx(1, 0, false, &msg);
+		if(ctx == nullptr)
+			printer::inst()->print_msg(L0, "MEMORY ALLOC FAILED: %s", msg.warning.c_str());
+		else
+		{
+			print_alloc_notice_once(msg.warning);
+			ctx->hash_fn = nullptr;
+			ctx->loop_fn = nullptr;
+			ctx->fun_data = nullptr;
+			
+		}
+		return ctx;
+
+	case ::jconf::print_warning:
+		ctx = cryptonight_alloc_ctx(1, 1, true, &msg);
+		if(ctx == nullptr)
+			printer::inst()->print_msg(L0, "MEMORY ALLOC FAILED: %s", msg.warning.c_str());
+		else
+			print_alloc_notice_once(msg.warning);
+
+		if(ctx != nullptr)
+		{
+			ctx->hash_fn = nullptr;
+			ctx->loop_fn = nullptr;
+			ctx->fun_data = nullptr;
+			
+		}
+		return ctx;
+
+	case ::jconf::always_use:
+		ctx = cryptonight_alloc_ctx(0, 0, true, nullptr);
+		if(ctx == nullptr)
+			printer::inst()->print_msg(L0, "MEMORY ALLOC FAILED: unable to allocate standard mining memory");
+
+		if(ctx != nullptr)
+		{
+			ctx->hash_fn = nullptr;
+			ctx->loop_fn = nullptr;
+			ctx->fun_data = nullptr;
+		}
+		
+
+		return ctx;
+
+	case ::jconf::unknown_value:
+		return nullptr; //Shut up compiler
+	}
+
+	return nullptr; //Should never happen
+}
+
+static constexpr size_t MAX_N = 5;
+bool minethd::self_test()
+{
+	alloc_msg msg;
+	size_t res;
+	bool fatal = false;
+
+	switch(::jconf::inst()->GetSlowMemSetting())
+	{
+	case ::jconf::never_use:
+		res = cryptonight_init(1, 1, &msg);
+		fatal = true;
+		break;
+
+	case ::jconf::no_mlck:
+		res = cryptonight_init(1, 0, &msg);
+		fatal = true;
+		break;
+
+	case ::jconf::print_warning:
+		res = cryptonight_init(1, 1, &msg);
+		break;
+
+	case ::jconf::always_use:
+		res = cryptonight_init(0, 0, &msg);
+		break;
+
+	case ::jconf::unknown_value:
+	default:
+		return false; //Shut up compiler
+	}
+
+	if(!msg.warning.empty())
+		print_alloc_notice_once(msg.warning);
+
+	if(res == 0 && fatal)
+		return false;
+
+	cryptonight_ctx* ctx[MAX_N] = {0};
+	for(size_t i = 0; i < MAX_N; i++)
+	{
+		if((ctx[i] = minethd_alloc_ctx()) == nullptr)
+		{
+			printer::inst()->print_msg(L0, "ERROR: miner was not able to allocate memory.");
+			for(size_t j = 0; j < i; j++)
+				cryptonight_free_ctx(ctx[j]);
+			return false;
+		}
+	}
+
+	bool bResult = true;
+
+	unsigned char out[32 * MAX_N];
+
+	// Self-test: verify cn_gpu hash of empty string
+	const auto algo = ::jconf::inst()->GetMiningAlgo();
+	{
+		func_selector(ctx, ::jconf::inst()->HaveHardwareAes(), false, algo);
+		ctx[0]->hash_fn("", 0, out, ctx, algo);
+		bResult = bResult && memcmp(out, "\x55\x5e\x0a\xee\x78\x79\x31\x6d\x7d\xef\xf7\x72\x97\x3c\xb9\x11\x8e\x38\x95\x70\x9d\xb2\x54\x7a\xc0\x72\xd5\xb9\x13\x10\x01\xd8", 32) == 0;
+
+		func_selector(ctx, ::jconf::inst()->HaveHardwareAes(), true, algo);
+		ctx[0]->hash_fn("", 0, out, ctx, algo);
+		bResult = bResult && memcmp(out, "\x55\x5e\x0a\xee\x78\x79\x31\x6d\x7d\xef\xf7\x72\x97\x3c\xb9\x11\x8e\x38\x95\x70\x9d\xb2\x54\x7a\xc0\x72\xd5\xb9\x13\x10\x01\xd8", 32) == 0;
+	}
+
+	if(!bResult)
+		printer::inst()->print_msg(L0,
+			"Cryptonight hash self-test failed. This might be caused by bad compiler optimizations.");
+
+	for(size_t i = 0; i < MAX_N; i++)
+		cryptonight_free_ctx(ctx[i]);
+
+	return bResult;
+}
+
+std::vector<std::unique_ptr<iBackend>> minethd::thread_starter(uint32_t threadOffset, miner_work& pWork)
+{
+	std::vector<std::unique_ptr<iBackend>> pvThreads;
+
+	if(!configEditor::file_exist(std::string("cpu.txt")))
+	{
+#ifndef CONF_NO_HWLOC
+		autoAdjustHwloc adjustHwloc;
+		if(!adjustHwloc.printConfig())
+		{
+			autoAdjust adjust;
+			if(!adjust.printConfig())
+			{
+				return pvThreads;
+			}
+		}
+#else
+		autoAdjust adjust;
+		if(!adjust.printConfig())
+		{
+			return pvThreads;
+		}
+#endif
+	}
+
+	if(!jconf::inst()->parse_config())
+	{
+		n0s_exit();
+	}
+
+	//Launch the requested number of single and double threads, to distribute
+	//load evenly we need to alternate single and double threads
+	size_t i, n = jconf::inst()->GetThreadCount();
+	pvThreads.reserve(n);
+
+	jconf::thd_cfg cfg;
+	for(i = 0; i < n; i++)
+	{
+		jconf::inst()->GetThreadConfig(i, cfg);
+
+		if(cfg.iCpuAff >= 0)
+		{
+			printer::inst()->print_msg(L1, "Starting %dx thread, affinity: %d.", cfg.iMultiway, static_cast<int>(cfg.iCpuAff));
+		}
+		else
+			printer::inst()->print_msg(L1, "Starting %dx thread, no affinity.", cfg.iMultiway);
+
+		pvThreads.push_back(std::make_unique<minethd>(pWork, i + threadOffset, cfg.iMultiway, cfg.bNoPrefetch, cfg.iCpuAff));
+	}
+
+	return pvThreads;
+}
+
+/** get the supported asm name
+ *
+ * @return asm type based on the number of hashes per thread the internal
+ *             evaluated cpu type
+ */
+template <size_t N>
+void minethd::func_multi_selector(cryptonight_ctx** ctx, minethd::cn_on_new_job& on_new_job,
+	bool bHaveAes, bool bNoPrefetch, [[maybe_unused]] const n0s_algo& algo)
+{
+	static_assert(N >= 1, "number of threads must be >= 1");
+
+	// Only cryptonight_gpu is supported
+	static const cn_hash_fun func_table[] = {
+		Cryptonight_hash_gpu::template hash<cryptonight_gpu, false, false>,
+		Cryptonight_hash_gpu::template hash<cryptonight_gpu, true, false>,
+		Cryptonight_hash_gpu::template hash<cryptonight_gpu, false, true>,
+		Cryptonight_hash_gpu::template hash<cryptonight_gpu, true, true>};
+
+	std::bitset<2> digit;
+	digit.set(0, !bHaveAes);
+	digit.set(1, !bNoPrefetch);
+
+	ctx[0]->hash_fn = func_table[digit.to_ulong()];
+
+	for(size_t h = 1; h < N; ++h)
+		ctx[h]->hash_fn = ctx[0]->hash_fn;
+
+	on_new_job = nullptr;
+}
+
+void minethd::func_selector(cryptonight_ctx** ctx, bool bHaveAes, bool bNoPrefetch, const n0s_algo& algo)
+{
+	minethd::cn_on_new_job dm;
+	func_multi_selector<1>(ctx, dm, bHaveAes, bNoPrefetch, algo); // for testing us eauto, must be removed before the release
+}
+
+void minethd::work_main()
+{
+	multiway_work_main<1u>();
+}
+
+void minethd::double_work_main()
+{
+	multiway_work_main<2u>();
+}
+
+void minethd::triple_work_main()
+{
+	multiway_work_main<3u>();
+}
+
+void minethd::quad_work_main()
+{
+	multiway_work_main<4u>();
+}
+
+void minethd::penta_work_main()
+{
+	multiway_work_main<5u>();
+}
+
+template <size_t N>
+void minethd::prep_multiway_work(uint8_t* bWorkBlob, uint32_t** piNonce)
+{
+	for(size_t i = 0; i < N; i++)
+	{
+		memcpy(bWorkBlob + oWork.iWorkSize * i, oWork.bWorkBlob, oWork.iWorkSize);
+		if(i > 0)
+			piNonce[i] = reinterpret_cast<uint32_t*>(bWorkBlob + oWork.iWorkSize * i + 39);
+	}
+}
+
+template <uint32_t N>
+void minethd::multiway_work_main()
+{
+	if(affinity >= 0) //-1 means no affinity
+		bindMemoryToNUMANode(affinity);
+
+	order_fix.set_value();
+	std::unique_lock<std::mutex> lck(thd_aff_set);
+	lck.unlock();
+	std::this_thread::yield();
+
+	cryptonight_ctx* ctx[MAX_N];
+	uint64_t iCount = 0;
+	uint64_t iLastCount = 0;
+	uint64_t* piHashVal[MAX_N];
+	uint32_t* piNonce[MAX_N];
+	uint8_t bHashOut[MAX_N * 32];
+	uint8_t bWorkBlob[sizeof(miner_work::bWorkBlob) * MAX_N];
+	uint32_t iNonce = 0;
+	job_result res;
+
+	for(size_t i = 0; i < N; i++)
+	{
+		ctx[i] = minethd_alloc_ctx();
+		if(ctx[i] == nullptr)
+		{
+			printer::inst()->print_msg(L0, "ERROR: miner was not able to allocate memory.");
+			for(size_t j = 0; j < i; j++)
+				cryptonight_free_ctx(ctx[j]);
+			n0s_exit(1);
+		}
+		piHashVal[i] = reinterpret_cast<uint64_t*>(bHashOut + 32 * i + 24);
+		piNonce[i] = (i == 0) ? reinterpret_cast<uint32_t*>(bWorkBlob + 39) : nullptr;
+	}
+
+	if(!oWork.bStall)
+		prep_multiway_work<N>(bWorkBlob, piNonce);
+
+	globalStates::inst().iConsumeCnt++;
+
+	// start with root algorithm and switch later if fork version is reached
+	auto miner_algo = ::jconf::inst()->GetMiningAlgo();
+	cn_on_new_job on_new_job;
+	uint8_t version = 0;
+	size_t lastPoolId = 0;
+
+	func_multi_selector<N>(ctx, on_new_job, ::jconf::inst()->HaveHardwareAes(), bNoPrefetch, miner_algo);
+	while(bQuit == 0)
+	{
+		if(oWork.bStall)
+		{
+			/*	We are stalled here because the executor didn't find a job for us yet,
+			either because of network latency, or a socket problem. Since we are
+			raison d'etre of this software it us sensible to just wait until we have something*/
+
+			while(globalStates::inst().iGlobalJobNo.load(std::memory_order_relaxed) == iJobNo)
+				std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+			globalStates::inst().consume_work(oWork, iJobNo);
+			prep_multiway_work<N>(bWorkBlob, piNonce);
+			continue;
+		}
+
+		constexpr uint32_t nonce_chunk = 4096;
+		int64_t nonce_ctr = 0;
+
+		assert(sizeof(job_result::sJobID) == sizeof(pool_job::sJobID));
+
+		if(oWork.bNiceHash)
+			iNonce = *piNonce[0];
+
+		uint8_t new_version = oWork.getVersion();
+		if(new_version != version || oWork.iPoolId != lastPoolId)
+		{
+			// cn_gpu: algorithm is always the same regardless of fork version
+			miner_algo = ::jconf::inst()->GetMiningAlgo();
+			func_multi_selector<N>(ctx, on_new_job, ::jconf::inst()->HaveHardwareAes(), bNoPrefetch, miner_algo);
+			lastPoolId = oWork.iPoolId;
+			version = new_version;
+		}
+
+		if(on_new_job != nullptr)
+			on_new_job(oWork, ctx);
+
+		while(globalStates::inst().iGlobalJobNo.load(std::memory_order_relaxed) == iJobNo)
+		{
+			if((iCount++ & 0x7) == 0) //Store stats every 8*N hashes
+			{
+				updateStats((iCount - iLastCount) * N, oWork.iPoolId);
+				iLastCount = iCount;
+			}
+
+			nonce_ctr -= N;
+			if(nonce_ctr <= 0)
+			{
+				globalStates::inst().calc_start_nonce(iNonce, oWork.bNiceHash, nonce_chunk);
+				nonce_ctr = nonce_chunk;
+				// check if the job is still valid, there is a small posibility that the job is switched
+				if(globalStates::inst().iGlobalJobNo.load(std::memory_order_relaxed) != iJobNo)
+					break;
+			}
+
+			for(size_t i = 0; i < N; i++)
+				*piNonce[i] = iNonce++;
+
+			ctx[0]->hash_fn(bWorkBlob, oWork.iWorkSize, bHashOut, ctx, miner_algo);
+
+			for(size_t i = 0; i < N; i++)
+			{
+				if(*piHashVal[i] < oWork.iTarget)
+				{
+					executor::inst()->push_event(
+						ex_event(job_result(oWork.sJobID, iNonce - N + i, bHashOut + 32 * i, iThreadNo, miner_algo),
+							oWork.iPoolId));
+				}
+			}
+
+			std::this_thread::yield();
+		}
+
+		globalStates::inst().consume_work(oWork, iJobNo);
+		prep_multiway_work<N>(bWorkBlob, piNonce);
+	}
+
+	for(size_t i = 0; i < N; i++)
+		cryptonight_free_ctx(ctx[i]);
+}
+
+// Explicit template instantiations required by OpenCL/CUDA backends
+template void minethd::func_multi_selector<1>(cryptonight_ctx**, minethd::cn_on_new_job&, bool, bool, const n0s_algo&);
+template void minethd::func_multi_selector<2>(cryptonight_ctx**, minethd::cn_on_new_job&, bool, bool, const n0s_algo&);
+template void minethd::func_multi_selector<3>(cryptonight_ctx**, minethd::cn_on_new_job&, bool, bool, const n0s_algo&);
+template void minethd::func_multi_selector<4>(cryptonight_ctx**, minethd::cn_on_new_job&, bool, bool, const n0s_algo&);
+template void minethd::func_multi_selector<5>(cryptonight_ctx**, minethd::cn_on_new_job&, bool, bool, const n0s_algo&);
+
+} // namespace cpu
+} // namespace n0s

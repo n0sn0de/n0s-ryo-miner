@@ -1,0 +1,413 @@
+/*
+  * This program is free software: you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License as published by
+  * the Free Software Foundation, either version 3 of the License, or
+  * any later version.
+  *
+  * This program is distributed in the hope that it will be useful,
+  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+  * GNU General Public License for more details.
+  *
+  * You should have received a copy of the GNU General Public License
+  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+  *
+  * Additional permission under GNU GPL version 3 section 7
+  *
+  * If you modify this Program, or any covered work, by linking or combining
+  * it with OpenSSL (or a modified version of that library), containing parts
+  * covered by the terms of OpenSSL License and SSLeay License, the licensors
+  * of this Program grant you additional permission to convey the resulting work.
+  *
+  */
+
+#ifndef CONF_NO_HTTPD
+
+#include "httpd.hpp"
+#include "embedded_assets.hpp"
+#include "webdesign.hpp"
+#include "n0s/jconf.hpp"
+#include "n0s/misc/console.hpp"
+#include "n0s/misc/executor.hpp"
+#include "n0s/net/msgstruct.hpp"
+#include "n0s/params.hpp"
+
+#include "n0s/platform/compat.hpp"
+
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <fstream>
+#include <string>
+#include <sstream>
+
+#include <microhttpd.h>
+httpd* httpd::oInst = nullptr;
+
+httpd::httpd()
+{
+}
+
+/// Per-request context for accumulating PUT/POST body data
+struct request_context
+{
+	std::string body;
+	bool initialized = true;
+};
+
+MHD_Result httpd::req_handler([[maybe_unused]] void* cls,
+	MHD_Connection* connection,
+	const char* url,
+	const char* method,
+	[[maybe_unused]] const char* version,
+	const char* upload_data,
+	size_t* upload_data_size,
+	void** ptr)
+{
+	struct MHD_Response* rsp;
+
+	bool is_get = (strcmp(method, "GET") == 0);
+	bool is_put = (strcmp(method, "PUT") == 0);
+	bool is_options = (strcmp(method, "OPTIONS") == 0);
+
+	if(!is_get && !is_put && !is_options)
+		return MHD_NO;
+
+	// Handle CORS preflight
+	if(is_options)
+	{
+		rsp = MHD_create_response_from_buffer(0, nullptr, MHD_RESPMEM_PERSISTENT);
+		MHD_add_response_header(rsp, "Access-Control-Allow-Origin", "*");
+		MHD_add_response_header(rsp, "Access-Control-Allow-Methods", "GET, PUT, OPTIONS");
+		MHD_add_response_header(rsp, "Access-Control-Allow-Headers", "Content-Type, Authorization");
+		MHD_add_response_header(rsp, "Access-Control-Max-Age", "86400");
+		MHD_Result ret = MHD_queue_response(connection, MHD_HTTP_NO_CONTENT, rsp);
+		MHD_destroy_response(rsp);
+		return ret;
+	}
+
+	// For PUT requests, accumulate body data across multiple callbacks
+	if(is_put)
+	{
+		if(*ptr == nullptr)
+		{
+			// First call — allocate context
+			auto* ctx = new request_context();
+			*ptr = ctx;
+			return MHD_YES; // Continue reading
+		}
+
+		auto* ctx = static_cast<request_context*>(*ptr);
+
+		if(*upload_data_size > 0)
+		{
+			// Accumulate body (limit to 64 KB for safety)
+			if(ctx->body.size() + *upload_data_size <= 65536)
+				ctx->body.append(upload_data, *upload_data_size);
+			*upload_data_size = 0;
+			return MHD_YES; // Continue reading
+		}
+
+		// upload_data_size == 0 means all data received — fall through to routing
+	}
+
+	// Authentication: Bearer token OR digest auth (when configured)
+	bool auth_required = (strlen(jconf::inst()->GetHttpUsername()) != 0) ||
+	                     (strlen(jconf::inst()->GetHttpApiToken()) != 0);
+	bool auth_passed = false;
+
+	if(auth_required)
+	{
+		// Check Bearer token first (simpler, preferred for API clients)
+		const char* api_token = jconf::inst()->GetHttpApiToken();
+		if(strlen(api_token) != 0)
+		{
+			const char* auth_header = MHD_lookup_connection_value(connection, MHD_HEADER_KIND, "Authorization");
+			if(auth_header != nullptr && strncmp(auth_header, "Bearer ", 7) == 0)
+			{
+				const char* provided_token = auth_header + 7;
+				if(strcmp(provided_token, api_token) == 0)
+					auth_passed = true;
+			}
+		}
+
+		// Fall back to digest auth if Bearer didn't pass
+		if(!auth_passed && strlen(jconf::inst()->GetHttpUsername()) != 0)
+		{
+			char* username;
+			MHD_Result ret;
+
+			username = MHD_digest_auth_get_username(connection);
+			if(username == nullptr)
+			{
+				rsp = MHD_create_response_from_buffer(sHtmlAccessDeniedSize, const_cast<char*>(sHtmlAccessDenied), MHD_RESPMEM_PERSISTENT);
+				ret = MHD_queue_auth_fail_response(connection, sHttpAuthRealm, sHttpAuthOpaque, rsp, MHD_NO);
+				MHD_destroy_response(rsp);
+				return ret;
+			}
+			free(username);
+
+			ret = (MHD_Result)MHD_digest_auth_check(connection, sHttpAuthRealm, jconf::inst()->GetHttpUsername(), jconf::inst()->GetHttpPassword(), 300);
+			if(ret == MHD_INVALID_NONCE || ret == MHD_NO)
+			{
+				rsp = MHD_create_response_from_buffer(sHtmlAccessDeniedSize, const_cast<char*>(sHtmlAccessDenied), MHD_RESPMEM_PERSISTENT);
+				ret = MHD_queue_auth_fail_response(connection, sHttpAuthRealm, sHttpAuthOpaque, rsp, (ret == MHD_INVALID_NONCE) ? MHD_YES : MHD_NO);
+				MHD_destroy_response(rsp);
+				return ret;
+			}
+			auth_passed = true;
+		}
+
+		// If Bearer token is the only auth method and it failed
+		if(!auth_passed)
+		{
+			const char* unauthorized = "{\"error\":\"unauthorized\",\"message\":\"Valid Bearer token or digest auth required\"}";
+			rsp = MHD_create_response_from_buffer(strlen(unauthorized), const_cast<char*>(unauthorized), MHD_RESPMEM_PERSISTENT);
+			MHD_add_response_header(rsp, "Content-Type", "application/json; charset=utf-8");
+			MHD_add_response_header(rsp, "WWW-Authenticate", "Bearer realm=\"n0s-ryo-miner\"");
+			MHD_Result ret = MHD_queue_response(connection, MHD_HTTP_UNAUTHORIZED, rsp);
+			MHD_destroy_response(rsp);
+			return ret;
+		}
+	}
+
+	if(!is_put)
+		*ptr = nullptr;
+	std::string str;
+
+	// Helper lambda: serve JSON API response with CORS headers
+	auto serve_api_json = [&](ex_event_name ev) -> MHD_Result {
+		executor::inst()->get_http_report(ev, str);
+		rsp = MHD_create_response_from_buffer(str.size(), const_cast<char*>(str.c_str()), MHD_RESPMEM_MUST_COPY);
+		MHD_add_response_header(rsp, "Content-Type", "application/json; charset=utf-8");
+		MHD_add_response_header(rsp, "Access-Control-Allow-Origin", "*");
+		MHD_add_response_header(rsp, "Cache-Control", "no-cache");
+		MHD_Result ret = MHD_queue_response(connection, MHD_HTTP_OK, rsp);
+		MHD_destroy_response(rsp);
+		return ret;
+	};
+
+	// Helper lambda: clean up PUT request context
+	auto cleanup_put_context = [&]() {
+		if(is_put && *ptr != nullptr)
+		{
+			delete static_cast<request_context*>(*ptr);
+			*ptr = nullptr;
+		}
+	};
+
+	// Helper lambda: serve PUT API response
+	auto serve_put_response = [&](const std::string& body, unsigned int status_code = MHD_HTTP_OK) -> MHD_Result {
+		executor::inst()->process_pool_update(body, str);
+		rsp = MHD_create_response_from_buffer(str.size(), const_cast<char*>(str.c_str()), MHD_RESPMEM_MUST_COPY);
+		MHD_add_response_header(rsp, "Content-Type", "application/json; charset=utf-8");
+		MHD_add_response_header(rsp, "Access-Control-Allow-Origin", "*");
+		MHD_add_response_header(rsp, "Cache-Control", "no-cache");
+		MHD_Result ret = MHD_queue_response(connection, status_code, rsp);
+		MHD_destroy_response(rsp);
+		cleanup_put_context();
+		return ret;
+	};
+
+	// REST API v1 endpoints
+	if(n0s_strncasecmp(url, "/api/v1/", 8) == 0)
+	{
+		const char* endpoint = url + 8;
+
+		// PUT endpoints
+		if(is_put)
+		{
+			auto* ctx = static_cast<request_context*>(*ptr);
+			if(n0s_strcasecmp(endpoint, "config/pool") == 0)
+				return serve_put_response(ctx->body);
+			else
+			{
+				const char* notAllowed = "{\"error\":\"method_not_allowed\"}";
+				rsp = MHD_create_response_from_buffer(strlen(notAllowed), const_cast<char*>(notAllowed), MHD_RESPMEM_PERSISTENT);
+				MHD_add_response_header(rsp, "Content-Type", "application/json; charset=utf-8");
+				MHD_Result ret = MHD_queue_response(connection, MHD_HTTP_METHOD_NOT_ALLOWED, rsp);
+				MHD_destroy_response(rsp);
+				cleanup_put_context();
+				return ret;
+			}
+		}
+
+		// GET endpoints
+		if(n0s_strcasecmp(endpoint, "status") == 0)
+			return serve_api_json(EV_API_STATUS);
+		else if(n0s_strcasecmp(endpoint, "hashrate/history") == 0)
+			return serve_api_json(EV_API_HASHRATE_HISTORY);
+		else if(n0s_strcasecmp(endpoint, "hashrate") == 0)
+			return serve_api_json(EV_API_HASHRATE);
+		else if(n0s_strcasecmp(endpoint, "gpus") == 0)
+			return serve_api_json(EV_API_GPUS);
+		else if(n0s_strcasecmp(endpoint, "pool") == 0)
+			return serve_api_json(EV_API_POOL);
+		else if(n0s_strcasecmp(endpoint, "config") == 0)
+			return serve_api_json(EV_API_CONFIG);
+		else if(n0s_strcasecmp(endpoint, "config/pool") == 0)
+			return serve_api_json(EV_API_CONFIG); // GET config/pool returns same as config
+		else if(n0s_strcasecmp(endpoint, "autotune") == 0)
+			return serve_api_json(EV_API_AUTOTUNE);
+		else if(n0s_strcasecmp(endpoint, "version") == 0)
+			return serve_api_json(EV_API_VERSION);
+		else
+		{
+			// Unknown API endpoint — 404
+			const char* notFound = "{\"error\":\"not_found\"}";
+			rsp = MHD_create_response_from_buffer(strlen(notFound), const_cast<char*>(notFound), MHD_RESPMEM_PERSISTENT);
+			MHD_add_response_header(rsp, "Content-Type", "application/json; charset=utf-8");
+			MHD_Result ret = MHD_queue_response(connection, MHD_HTTP_NOT_FOUND, rsp);
+			MHD_destroy_response(rsp);
+			return ret;
+		}
+	}
+	// GUI dashboard assets: /gui/* and root /
+	else if(n0s_strcasecmp(url, "/") == 0 || n0s_strcasecmp(url, "/gui") == 0 || n0s_strcasecmp(url, "/gui/") == 0)
+	{
+		// Redirect to /gui/index.html
+		rsp = MHD_create_response_from_buffer(0, nullptr, MHD_RESPMEM_PERSISTENT);
+		MHD_add_response_header(rsp, "Location", "/gui/index.html");
+		MHD_Result ret = MHD_queue_response(connection, MHD_HTTP_TEMPORARY_REDIRECT, rsp);
+		MHD_destroy_response(rsp);
+		return ret;
+	}
+	else if(n0s_strncasecmp(url, "/gui/", 5) == 0)
+	{
+		// Dev mode: serve from filesystem
+		if(n0s::params::inst().guiDev)
+		{
+			std::string filepath = n0s::params::inst().guiDevPath + "/" + (url + 5);
+			std::ifstream file(filepath, std::ios::binary);
+			if(file.good())
+			{
+				std::ostringstream ss;
+				ss << file.rdbuf();
+				str = ss.str();
+
+				const char* ctype = "application/octet-stream";
+				if(filepath.find(".html") != std::string::npos) ctype = "text/html; charset=utf-8";
+				else if(filepath.find(".css") != std::string::npos) ctype = "text/css; charset=utf-8";
+				else if(filepath.find(".js") != std::string::npos) ctype = "application/javascript; charset=utf-8";
+
+				rsp = MHD_create_response_from_buffer(str.size(), const_cast<char*>(str.c_str()), MHD_RESPMEM_MUST_COPY);
+				MHD_add_response_header(rsp, "Content-Type", ctype);
+				MHD_add_response_header(rsp, "Cache-Control", "no-cache");
+				MHD_Result ret = MHD_queue_response(connection, MHD_HTTP_OK, rsp);
+				MHD_destroy_response(rsp);
+				return ret;
+			}
+		}
+
+		// Embedded mode: serve pre-gzipped assets
+		const auto* asset = n0s_gui_findAsset(url);
+		if(asset != nullptr)
+		{
+			rsp = MHD_create_response_from_buffer(asset->size,
+				const_cast<uint8_t*>(asset->data), MHD_RESPMEM_PERSISTENT);
+			MHD_add_response_header(rsp, "Content-Type", asset->content_type);
+			MHD_add_response_header(rsp, "Content-Encoding", "gzip");
+			MHD_add_response_header(rsp, "Cache-Control", "no-cache");
+			MHD_Result ret = MHD_queue_response(connection, MHD_HTTP_OK, rsp);
+			MHD_destroy_response(rsp);
+			return ret;
+		}
+
+		// 404 for unknown GUI paths
+		const char* notFound = "<h1>404 Not Found</h1>";
+		rsp = MHD_create_response_from_buffer(strlen(notFound), const_cast<char*>(notFound), MHD_RESPMEM_PERSISTENT);
+		MHD_Result ret = MHD_queue_response(connection, MHD_HTTP_NOT_FOUND, rsp);
+		MHD_destroy_response(rsp);
+		return ret;
+	}
+	// Legacy endpoints preserved
+	else if(n0s_strcasecmp(url, "/style.css") == 0)
+	{
+		const char* req_etag = MHD_lookup_connection_value(connection, MHD_HEADER_KIND, "If-None-Match");
+
+		if(req_etag != nullptr && strcmp(req_etag, sHtmlCssEtag) == 0)
+		{
+			rsp = MHD_create_response_from_buffer(0, nullptr, MHD_RESPMEM_PERSISTENT);
+			MHD_Result ret = MHD_queue_response(connection, MHD_HTTP_NOT_MODIFIED, rsp);
+			MHD_destroy_response(rsp);
+			return ret;
+		}
+
+		rsp = MHD_create_response_from_buffer(sHtmlCssSize, const_cast<char*>(sHtmlCssFile), MHD_RESPMEM_PERSISTENT);
+		MHD_add_response_header(rsp, "ETag", sHtmlCssEtag);
+		MHD_add_response_header(rsp, "Content-Type", "text/css; charset=utf-8");
+	}
+	else if(n0s_strcasecmp(url, "/api.json") == 0)
+	{
+		executor::inst()->get_http_report(EV_HTML_JSON, str);
+
+		rsp = MHD_create_response_from_buffer(str.size(), const_cast<char*>(str.c_str()), MHD_RESPMEM_MUST_COPY);
+		MHD_add_response_header(rsp, "Content-Type", "application/json; charset=utf-8");
+	}
+	else if(n0s_strcasecmp(url, "/h") == 0 || n0s_strcasecmp(url, "/hashrate") == 0)
+	{
+		executor::inst()->get_http_report(EV_HTML_HASHRATE, str);
+
+		rsp = MHD_create_response_from_buffer(str.size(), const_cast<char*>(str.c_str()), MHD_RESPMEM_MUST_COPY);
+		MHD_add_response_header(rsp, "Content-Type", "text/html; charset=utf-8");
+	}
+	else if(n0s_strcasecmp(url, "/c") == 0 || n0s_strcasecmp(url, "/connection") == 0)
+	{
+		executor::inst()->get_http_report(EV_HTML_CONNSTAT, str);
+
+		rsp = MHD_create_response_from_buffer(str.size(), const_cast<char*>(str.c_str()), MHD_RESPMEM_MUST_COPY);
+		MHD_add_response_header(rsp, "Content-Type", "text/html; charset=utf-8");
+	}
+	else if(n0s_strcasecmp(url, "/r") == 0 || n0s_strcasecmp(url, "/results") == 0)
+	{
+		executor::inst()->get_http_report(EV_HTML_RESULTS, str);
+
+		rsp = MHD_create_response_from_buffer(str.size(), const_cast<char*>(str.c_str()), MHD_RESPMEM_MUST_COPY);
+		MHD_add_response_header(rsp, "Content-Type", "text/html; charset=utf-8");
+	}
+	else
+	{
+		// Unknown path — redirect to GUI dashboard
+		rsp = MHD_create_response_from_buffer(0, nullptr, MHD_RESPMEM_PERSISTENT);
+		MHD_add_response_header(rsp, "Location", "/gui/index.html");
+		MHD_Result ret = MHD_queue_response(connection, MHD_HTTP_TEMPORARY_REDIRECT, rsp);
+		MHD_destroy_response(rsp);
+		return ret;
+	}
+
+	MHD_Result ret = MHD_queue_response(connection, MHD_HTTP_OK, rsp);
+	MHD_destroy_response(rsp);
+	return ret;
+}
+
+static void request_completed_callback([[maybe_unused]] void* cls,
+	[[maybe_unused]] MHD_Connection* connection,
+	void** con_cls,
+	[[maybe_unused]] enum MHD_RequestTerminationCode toe)
+{
+	if(*con_cls != nullptr)
+	{
+		delete static_cast<request_context*>(*con_cls);
+		*con_cls = nullptr;
+	}
+}
+
+bool httpd::start_daemon()
+{
+	d = MHD_start_daemon(MHD_USE_THREAD_PER_CONNECTION,
+		jconf::inst()->GetHttpdPort(), nullptr, nullptr,
+		&httpd::req_handler,
+		nullptr,
+		MHD_OPTION_NOTIFY_COMPLETED, &request_completed_callback, nullptr,
+		MHD_OPTION_END);
+
+	if(d == nullptr)
+	{
+		printer::inst()->print_str("HTTP Daemon failed to start.");
+		return false;
+	}
+
+	return true;
+}
+
+#endif
